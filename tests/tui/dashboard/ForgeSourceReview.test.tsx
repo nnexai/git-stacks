@@ -16,17 +16,23 @@ const resolution: Extract<WebForgeResolveResponse, { resolved: true }> = {
   revision: "12",
   source: {
     provider: "github", change_kind: "pull_request", change_number: 42, web_url: url, host: "github.com",
-    target_repository: "acme/repo", source_repository: "fork/repo", source_branch: "feature/very-long-reviewed-source", target_branch: "main",
+    target_repository: "acme/repo", source_repository: "fork/very-long-reviewed-source-repository-name", source_branch: "feature/very-long-reviewed-source", target_branch: "main",
     head_sha: "a".repeat(40), cross_repository: true, confidence: "provider",
   },
   terminology: { provider: "github", change: "Pull request", source_branch: "Head branch", target_branch: "Base branch" },
   candidates: {
-    templates: [{ name: "default", repositories: [{ repository_id: "11111111-1111-4111-8111-111111111111", name: "repo", mode: "worktree", matched_source: true }] }],
+    templates: [{ name: "default", repositories: [
+      { repository_id: "11111111-1111-4111-8111-111111111111", name: "repo", mode: "worktree", matched_source: true },
+      { repository_id: "22222222-2222-4222-8222-222222222222", name: "worker-with-a-very-long-repository-name", mode: "worktree", matched_source: false },
+    ] }],
     source_repositories: [{ repository_id: "11111111-1111-4111-8111-111111111111", name: "repo", mode: "worktree", matched_source: true }],
   },
   draft: {
     workspace_name: "review-42", template_name: "default", matched_source_repository_id: "11111111-1111-4111-8111-111111111111",
-    repositories: [{ repository_id: "11111111-1111-4111-8111-111111111111", included: true, branch: { base_branch: "main", workspace_branch: "feature/very-long-reviewed-source" } }],
+    repositories: [
+      { repository_id: "11111111-1111-4111-8111-111111111111", included: true, branch: { base_branch: "main", workspace_branch: "feature/very-long-reviewed-source" } },
+      { repository_id: "22222222-2222-4222-8222-222222222222", included: true, branch: { base_branch: "develop", workspace_branch: "feature/worker-with-a-very-long-branch-name" } },
+    ],
   },
 }
 
@@ -81,9 +87,16 @@ describe("ForgeSourceReviewDialog", () => {
     expect(accepted).toEqual(["op_1234567890abcdef"])
   })
 
-  test("reviewed creation observation delegates terminal failures to the shared coordinator", () => {
+  test("reviewed creation reconnects by known operation ID and refreshes before recovery", () => {
     const appSource = readFileSync(new URL("../../../packages/tui/src/App.tsx", import.meta.url), "utf8")
+    expect(appSource).toContain("officialService.fetchWebOperation(operationId)")
+    expect(appSource).toContain("Reconnecting to ${operationId}")
     expect(appSource).toContain("forgeReview.observeOperation(operation)")
+    const observeIndex = appSource.indexOf("forgeReview.observeOperation(operation)")
+    const refreshIndex = appSource.indexOf("await reload()", observeIndex)
+    const recoveryIndex = appSource.indexOf('setView({ view: "forge-source-review" })', observeIndex)
+    expect(refreshIndex).toBeGreaterThan(observeIndex)
+    expect(recoveryIndex).toBeGreaterThan(refreshIndex)
   })
 
   test("failed and cancelled reviewed operations restore editable Review when recoverable", async () => {
@@ -113,17 +126,57 @@ describe("ForgeSourceReviewDialog", () => {
     }
   })
 
-  test("narrow review stacks safely and too-small terminals allow Back only", async () => {
+  test("edits every repository row and restores the originating row after typed rejection", async () => {
+    const create = mock(async () => { throw { code: "branch_conflict", recovery: "change_branch", message: "Change the worker branch." } })
+    const coordinator = createForgeReviewCoordinator({ resolve: mock(async () => resolution), create })
+    coordinator.setUrl(url)
+    await coordinator.resolve()
+    const review = await testRender(
+      () => <ForgeSourceReviewDialog coordinator={coordinator} onAccepted={() => {}} onBack={() => {}} />,
+      { width: 90, height: 30, kittyKeyboard: true },
+    )
+    await review.renderOnce()
+    expect(review.captureCharFrame()).toContain("Include worker-with-a-very-long-repository-name")
+    expect(review.captureCharFrame()).toContain("Branch mapping · worker-with-a-very-long-repository-name")
+    for (let index = 0; index < 6; index += 1) review.mockInput.pressArrow("down")
+    await review.renderOnce()
+    review.mockInput.pressEnter()
+    await review.renderOnce()
+    await review.mockInput.typeText("-recovered")
+    review.mockInput.pressEnter()
+    await review.renderOnce()
+    review.mockInput.pressKey("c")
+    await Bun.sleep(1)
+    await review.renderOnce()
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(coordinator.state()).toMatchObject({
+      phase: "review",
+      draft: { repositories: [{}, { branch: { workspace_branch: "feature/worker-with-a-very-long-branch-name-recovered" } }] },
+      failure: { code: "branch_conflict" },
+    })
+    expect(review.captureCharFrame()).toContain("> Branch mapping · worker-with-a-very-long-repository-name")
+    expect(review.captureCharFrame()).toContain("Change the worker branch.")
+  })
+
+  test("review uses real stacked layouts at widths 79, 55, and 40 and too-small terminals allow Back only", async () => {
     const coordinator = createForgeReviewCoordinator({ resolve: mock(async () => resolution), create: mock(async () => ({ operationId: "op_1234567890abcdef" })) })
     coordinator.setUrl(url)
     await coordinator.resolve()
-    const narrow = await testRender(
-      () => <ForgeSourceReviewDialog coordinator={coordinator} onAccepted={() => {}} onBack={() => {}} />,
-      { width: 52, height: 18, kittyKeyboard: true },
-    )
-    await narrow.renderOnce()
-    expect(narrow.captureCharFrame()).toContain("Review workspace")
-    expect(narrow.captureCharFrame()).toContain("[c] Create workspace")
+    for (const width of [79, 55, 40]) {
+      const narrow = await testRender(
+        () => <ForgeSourceReviewDialog coordinator={coordinator} onAccepted={() => {}} onBack={() => {}} />,
+        { width, height: 40, kittyKeyboard: true },
+      )
+      await narrow.renderOnce()
+      const frame = narrow.captureCharFrame()
+      expect(frame).toContain("Review workspace")
+      expect(frame).toContain("Workspace name")
+      expect(frame).toContain("review-42")
+      expect(frame).toContain("Include worker")
+      expect(frame).toContain("[c] Create")
+      expect(frame).toContain("workspace")
+      if (width === 55) expect(frame).toContain("…")
+    }
 
     let backed = 0
     const small = await testRender(

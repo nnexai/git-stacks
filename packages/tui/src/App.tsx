@@ -52,6 +52,7 @@ import type {
   DirtyRemovalContext,
   LifecycleAction,
   WorkspaceLifecycleTarget,
+  WorkspaceActionTarget,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
 import {
@@ -66,6 +67,7 @@ import {
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
 import { officialService } from "./official-service"
+import { createWorkspaceActionInventoryGate, createWorkspaceNotesResponseGate } from "./workspace-action-inventory"
 import type {
   Operation,
   WebOperation,
@@ -275,9 +277,11 @@ export default function App() {
   const [workspaceActionInventoryState, setWorkspaceActionInventoryState] = createSignal<"loading" | "ready" | "error">("loading")
   const [workspaceActionInventoryError, setWorkspaceActionInventoryError] = createSignal("")
   const [workspaceActionRegistry, setWorkspaceActionRegistry] = createSignal<WorkspaceActionRegistry>()
+  const [workspaceActionTarget, setWorkspaceActionTarget] = createSignal<WorkspaceActionTarget>()
+  const workspaceActionInventoryGate = createWorkspaceActionInventoryGate()
   const [canonicalConfirmation, setCanonicalConfirmation] = createSignal<{
     descriptor: WebWorkspaceAction
-    index: number
+    target: WorkspaceActionTarget
     resolve: (confirmed: boolean) => void
   }>()
   const [operationTracker, setOperationTracker] = createSignal<OperationTracker<WebOperationMutation>>()
@@ -288,6 +292,7 @@ export default function App() {
   const [notesLoading, setNotesLoading] = createSignal(false)
   const [notesError, setNotesError] = createSignal("")
   const [notesMutationError, setNotesMutationError] = createSignal("")
+  const notesResponseGate = createWorkspaceNotesResponseGate()
   const forgeReview = createForgeReviewCoordinator({
     resolve: (request) => officialService.resolveForgeSourceReview(request),
     create: async (request) => {
@@ -506,6 +511,31 @@ export default function App() {
     if (operation.state === "running" && operation.progress.message) appendSystemLine(operation.progress.message)
   }
 
+  function workspaceEntryForTarget(target: WorkspaceActionTarget): WorkspaceEntry | undefined {
+    return entries().find((candidate) => candidate.workspaceId === target.workspaceId)
+  }
+
+  function inventoryMatchesTarget(actions: readonly WebWorkspaceAction[], target: WorkspaceActionTarget): boolean {
+    return actions.length > 0 && actions.every((descriptor) => descriptor.subject.workspace_id === target.workspaceId)
+  }
+
+  async function authorizeCurrentWorkspaceAction(
+    target: WorkspaceActionTarget | WorkspaceLifecycleTarget,
+    actionId: WebWorkspaceActionId,
+  ): Promise<WebWorkspaceAction | undefined> {
+    const revision = core.state()?.revision
+    const workspaceId = "workspaceId" in target ? target.workspaceId : target.id
+    if (!revision) return undefined
+    try {
+      const inventory = await officialService.fetchWorkspaceActionInventory({ workspace_id: workspaceId, expected_revision: revision })
+      if (!inventory.every((descriptor) => descriptor.subject.workspace_id === workspaceId)) return undefined
+      const descriptor = inventory.find((candidate) => candidate.action_id === actionId)
+      return descriptor?.availability.available ? descriptor : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   function lifecycleTarget(entry: WorkspaceEntry | undefined): WorkspaceLifecycleTarget | undefined {
     const revision = core.state()?.revision
     if (!entry || !revision) return undefined
@@ -560,6 +590,18 @@ export default function App() {
     target: WorkspaceLifecycleTarget,
     confirmationName?: string,
   ): Promise<void> {
+    const actionId = `workspace.${action}` as Extract<WebWorkspaceActionId, `workspace.${string}`>
+    const descriptor = await authorizeCurrentWorkspaceAction(target, actionId)
+    if (!descriptor || descriptor.confirmation !== (action === "force-remove" ? "exact-name" : action === "remove" ? "confirm" : "none")) {
+      setRefreshFlash("Workspace action is no longer authorized. Refresh and try again.")
+      setView({ view: "list" })
+      return
+    }
+    if (action === "force-remove" && confirmationName !== target.name) {
+      setRefreshFlash("Exact, case-sensitive workspace name required.")
+      setView({ view: "list" })
+      return
+    }
     const request: WorkspaceLifecycleMutation = action === "force-remove"
       ? {
           kind: "workspace.force-remove",
@@ -668,61 +710,73 @@ export default function App() {
     finishCommandOutput(exitCode === 0 ? "success" : "failed")
   }
 
-  async function confirmCanonicalWorkspaceAction(descriptor: WebWorkspaceAction, index: number): Promise<boolean> {
+  async function confirmCanonicalWorkspaceAction(descriptor: WebWorkspaceAction, target: WorkspaceActionTarget): Promise<boolean> {
     if (descriptor.confirmation === "none") return true
-    const entry = filteredEntries()[index]
+    const entry = workspaceEntryForTarget(target)
     if (!entry) return false
-    if (descriptor.action_id === "workspace.remove") {
-      const target = lifecycleTarget(entry)
-      if (target) setView({ view: "remove-confirm", target })
-      return false
-    }
     if (descriptor.action_id === "workspace.notes.clear") {
       setNotesMutationError("")
-      setView({ view: "workspace-notes", workspaceId: entry.workspaceId, workspaceName: entry.workspace.name, initialMode: "clear" })
-      await loadWorkspaceNotes(entry)
+      setNotesResponse(undefined)
+      setView({ view: "workspace-notes", workspaceId: target.workspaceId, workspaceName: target.workspaceName, initialMode: "clear" })
+      try { await loadWorkspaceNotes(entry) } catch {}
       return false
     }
     if (descriptor.action_id === "workspace.force-remove") return false
     return new Promise<boolean>((resolve) => {
-      setCanonicalConfirmation({ descriptor, index, resolve })
+      setCanonicalConfirmation({ descriptor, target, resolve })
     })
   }
 
   async function openWorkspaceActionMenu(index: number): Promise<void> {
-    setWorkspaceActions(undefined)
-    setWorkspaceActionRegistry(undefined)
-    setWorkspaceActionInventoryError("")
-    setWorkspaceActionInventoryState("loading")
-    setView({ view: "action-menu", index })
     const entry = filteredEntries()[index]
     const revision = core.state()?.revision
+    const token = workspaceActionInventoryGate.begin(entry?.workspaceId ?? "missing")
+    setWorkspaceActions(undefined)
+    setWorkspaceActionRegistry(undefined)
+    setWorkspaceActionTarget(undefined)
+    setWorkspaceActionInventoryError("")
+    setWorkspaceActionInventoryState("loading")
     if (!entry || !revision) {
+      setView({ view: "action-menu", index })
       setWorkspaceActionInventoryError("Workspace actions could not be loaded.")
       setWorkspaceActionInventoryState("error")
       return
     }
+    const target: WorkspaceActionTarget = {
+      workspaceId: entry.workspaceId,
+      workspaceName: entry.workspace.name,
+      originIndex: index,
+    }
+    setWorkspaceActionTarget(target)
+    setView({ view: "action-menu", index, workspaceId: target.workspaceId, workspaceName: target.workspaceName })
     try {
       const actions = await officialService.fetchWorkspaceActionInventory({
-        workspace_id: entry.workspaceId,
+        workspace_id: target.workspaceId,
         expected_revision: revision,
       })
-      if (view().view !== "action-menu") return
+      const activeTarget = workspaceActionTarget()
+      if (!workspaceActionInventoryGate.isCurrent(token, target.workspaceId) || view().view !== "action-menu" || activeTarget?.workspaceId !== target.workspaceId) return
+      if (!workspaceActionInventoryGate.accepts(token, target.workspaceId, actions) || !inventoryMatchesTarget(actions, target)) {
+        throw new Error("Workspace action inventory subject mismatch")
+      }
       const callbacks = Object.fromEntries(actions.map((descriptor) => [
         descriptor.action_id,
         async () => {
-          await runCanonicalWorkspaceAction(descriptor.action_id, index)
+          await runCanonicalWorkspaceAction(descriptor, target)
           return { kind: "terminal" as const }
         },
       ])) as unknown as Parameters<typeof createWorkspaceActionRegistry>[1]
       const registry = createWorkspaceActionRegistry(actions, callbacks, {
-        confirm: (descriptor) => confirmCanonicalWorkspaceAction(descriptor, index),
+        confirm: (descriptor) => confirmCanonicalWorkspaceAction(descriptor, target),
       })
       setWorkspaceActions(actions)
       setWorkspaceActionRegistry(registry)
       setWorkspaceActionInventoryState("ready")
     } catch {
-      if (view().view !== "action-menu") return
+      const activeTarget = workspaceActionTarget()
+      if (!workspaceActionInventoryGate.isCurrent(token, target.workspaceId) || view().view !== "action-menu" || activeTarget?.workspaceId !== target.workspaceId) return
+      setWorkspaceActions(undefined)
+      setWorkspaceActionRegistry(undefined)
       setWorkspaceActionInventoryError("Workspace actions could not be loaded. Retry from the workspace list.")
       setWorkspaceActionInventoryState("error")
     }
@@ -806,71 +860,115 @@ export default function App() {
     setCreateDone(false)
     setCreateSummary({ text: "", color: "green" })
     setView({ view: "create-progress", workspaceName })
-    try {
-      let operation = await officialService.fetchWebOperation(operationId)
-      while (operation.state === "accepted" || operation.state === "running") {
-        const detail = operation.progress?.message ?? (operation.state === "accepted" ? "Waiting to start" : "Creating from reviewed source")
-        setCreateRows([{ repo: "Reviewed workspace", status: "creating-worktree", detail }])
-        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+    let operation: WebOperation | undefined
+    while (!operation || operation.state === "accepted" || operation.state === "running") {
+      try {
         operation = await officialService.fetchWebOperation(operationId)
-      }
-      forgeReview.observeOperation(operation)
-      if (operation.state !== "succeeded") {
-        const recovery = forgeReview.state()
-        if (recovery.phase === "review" || recovery.phase === "resolve") {
-          setView({ view: "forge-source-review" })
-          return
+        if (operation.operation_id !== operationId) throw new Error("Operation identity mismatch")
+        if (operation.state === "accepted" || operation.state === "running") {
+          const detail = operation.progress?.message ?? (operation.state === "accepted" ? "Waiting to start" : "Creating from reviewed source")
+          setCreateRows([{ repo: "Reviewed workspace", status: "creating-worktree", detail }])
+          await new Promise<void>((resolve) => setTimeout(resolve, 250))
         }
-        throw new Error(operation.error?.message ?? "Reviewed workspace creation did not complete.")
+      } catch {
+        operation = undefined
+        setCreateRows([{ repo: "Reviewed workspace", status: "creating-worktree", detail: `Reconnecting to ${operationId}…` }])
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
       }
+    }
+
+    forgeReview.observeOperation(operation)
+    setCreateRows([{
+      repo: "Reviewed workspace",
+      status: operation.state === "succeeded" ? "done" : "failed",
+      detail: operation.state === "succeeded"
+        ? `Created ${operation.result?.workspace_name ?? workspaceName}`
+        : operation.error?.message ?? "Reviewed workspace creation did not complete.",
+    }])
+
+    for (;;) {
+      try {
+        await reload()
+        await reloadSignals()
+        break
+      } catch {
+        setCreateSummary({ text: "Authoritative refresh failed. Reconnecting before recovery…", color: "red" })
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+      }
+    }
+
+    if (operation.state === "succeeded") {
       const createdName = operation.result?.workspace_name ?? workspaceName
-      setCreateRows([{ repo: "Reviewed workspace", status: "done", detail: `Created ${createdName}` }])
-      await reload()
-      await reloadSignals()
       forgeReview.reconcile()
       setCreateSummary({ text: `Created ${createdName}. Press any key to continue.`, color: "green" })
-    } catch (error) {
-      setCreateRows([{ repo: "Reviewed workspace", status: "failed", detail: "Creation failed" }])
-      setCreateSummary({
-        text: `${error instanceof Error ? error.message : "Reviewed workspace creation failed."} Press any key to continue.`,
-        color: "red",
-      })
-    } finally {
       setCreateDone(true)
+      return
     }
+
+    const recovery = forgeReview.state()
+    if (recovery.phase === "review" || recovery.phase === "resolve") {
+      setCreateDone(true)
+      setView({ view: "forge-source-review" })
+      return
+    }
+    setCreateSummary({ text: `${operation.error?.message ?? "Reviewed workspace creation did not complete."} Press any key to continue.`, color: "red" })
+    setCreateDone(true)
   }
 
-  async function loadWorkspaceNotes(entry: WorkspaceEntry): Promise<void> {
-    const revision = core.state()?.revision
-    if (!revision) return
+  async function loadWorkspaceNotes(entry: WorkspaceEntry, expectedRevision = core.state()?.revision): Promise<WebNotesResponse> {
+    const workspaceId = entry.workspaceId
+    const token = notesResponseGate.begin(workspaceId, expectedRevision ?? "missing")
+    if (notesResponse()?.workspace_id !== workspaceId) setNotesResponse(undefined)
+    if (!expectedRevision || typeof officialService.fetchWorkspaceNotesProjection !== "function") {
+      setNotesError("Workspace notes could not be loaded. Retry without changing stored notes.")
+      throw new Error("Workspace notes transport is unavailable")
+    }
     setNotesLoading(true)
     setNotesError("")
     try {
-      setNotesResponse(await officialService.fetchWorkspaceNotesProjection({
-        workspace_id: entry.workspaceId,
-        expected_revision: revision,
-      }))
-    } catch {
-      setNotesError("Workspace notes could not be loaded. Retry without changing stored notes.")
+      const response = await officialService.fetchWorkspaceNotesProjection({
+        workspace_id: workspaceId,
+        expected_revision: expectedRevision,
+      })
+      const currentView = view()
+      if (!notesResponseGate.isCurrent(token) || currentView.view !== "workspace-notes" || currentView.workspaceId !== workspaceId) {
+        throw new Error("Workspace notes response was superseded")
+      }
+      if (!notesResponseGate.accepts(token, response)) {
+        throw new Error("Workspace notes response did not match the requested workspace revision")
+      }
+      setNotesResponse(response)
+      return response
+    } catch (error) {
+      if (notesResponseGate.isCurrent(token)) setNotesError("Workspace notes could not be loaded. Retry without changing stored notes.")
+      throw error
     } finally {
-      setNotesLoading(false)
+      if (notesResponseGate.isCurrent(token)) setNotesLoading(false)
     }
   }
 
   async function mutateWorkspaceNotes(kind: "workspace.notes.add" | "workspace.notes.clear", text?: string): Promise<void> {
     const v = view()
-    if (v.view !== "workspace-notes") return
+    if (v.view !== "workspace-notes") throw new Error("Workspace notes are not open")
     const response = notesResponse()
     const revision = core.state()?.revision
-    if (!response || !revision) return
+    const entry = entries().find((candidate) => candidate.workspaceId === v.workspaceId)
     setNotesMutationError("")
     try {
+      if (!response || !revision || !entry || notesError() || response.workspace_id !== v.workspaceId || response.revision !== revision) {
+        throw new Error("Matching authoritative workspace notes and revision are required")
+      }
+      if (typeof officialService.submitWebOperation !== "function" || typeof officialService.fetchWebOperation !== "function") {
+        throw new Error("Workspace notes transport is unavailable")
+      }
       const request = kind === "workspace.notes.add"
         ? { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision, text: text ?? "" }
         : { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision }
       await waitForWebOperation(await officialService.submitWebOperation({ kind, request } as WebOperationMutation))
-      const entry = entries().find((candidate) => candidate.workspaceId === v.workspaceId)
-      if (entry) await loadWorkspaceNotes(entry)
+      await reload()
+      const authoritativeRevision = core.state()?.revision
+      if (!authoritativeRevision) throw new Error("Workspace note mutation did not reconcile an authoritative revision")
+      await loadWorkspaceNotes(entry, authoritativeRevision)
     } catch {
       setNotesMutationError(kind === "workspace.notes.clear"
         ? "Workspace notes were not cleared. Refresh the list before retrying."
@@ -879,8 +977,10 @@ export default function App() {
     }
   }
 
-  async function runCanonicalWorkspaceAction(actionId: WebWorkspaceActionId, index: number): Promise<void> {
-    const entry = filteredEntries()[index]
+  async function runCanonicalWorkspaceAction(descriptor: WebWorkspaceAction, target: WorkspaceActionTarget): Promise<void> {
+    const actionId = descriptor.action_id
+    if (descriptor.subject.workspace_id !== target.workspaceId) return
+    const entry = workspaceEntryForTarget(target)
     if (!entry) return
     if (actionId === "operation.cancel") {
       const tracker = operationTracker()
@@ -890,8 +990,9 @@ export default function App() {
     if (actionId === "workspace.notes.list" || actionId === "workspace.notes.add" || actionId === "workspace.notes.clear") {
       const initialMode = actionId === "workspace.notes.add" ? "add" : actionId === "workspace.notes.clear" ? "clear" : "list"
       setNotesMutationError("")
+      setNotesResponse(undefined)
       setView({ view: "workspace-notes", workspaceId: entry.workspaceId, workspaceName: entry.workspace.name, initialMode })
-      await loadWorkspaceNotes(entry)
+      try { await loadWorkspaceNotes(entry) } catch {}
       return
     }
     if (actionId === "workspace.files.inspect") {
@@ -903,6 +1004,11 @@ export default function App() {
       return
     }
     if (actionId === "workspace.pin" || actionId === "workspace.unpin") {
+      if (!await authorizeCurrentWorkspaceAction(target, actionId)) {
+        setRefreshFlash("Workspace action is no longer authorized. Refresh and try again.")
+        setView({ view: "list" })
+        return
+      }
       const state = core.state()
       if (!state) return
       const pinned = state.workspaces
@@ -917,16 +1023,22 @@ export default function App() {
       return
     }
     if (["workspace.open", "workspace.close", "workspace.sync", "workspace.pull", "workspace.push", "workspace.merge"].includes(actionId)) {
+      if (!await authorizeCurrentWorkspaceAction(target, actionId)) {
+        setRefreshFlash("Workspace action is no longer authorized. Refresh and try again.")
+        setView({ view: "list" })
+        return
+      }
       await startTrackedWorkspaceOperation(actionId, entry)
       return
     }
-    const legacy: Partial<Record<WebWorkspaceActionId, Action>> = {
-      "workspace.archive": "archive",
-      "workspace.remove": "remove",
-      "workspace.rename": "rename",
+    if (actionId === "workspace.rename") {
+      setView({ view: "inline-input", index: target.originIndex, purpose: "rename", prefill: entry.workspace.name, workspaceId: target.workspaceId })
+      return
     }
-    const action = legacy[actionId]
-    if (action) await runAction(action, index)
+    if (actionId === "workspace.archive" || actionId === "workspace.remove") {
+      const lifecycle = lifecycleTarget(entry)
+      if (lifecycle) await executeWorkspaceLifecycle(actionId === "workspace.archive" ? "archive" : "remove", lifecycle)
+    }
   }
 
   async function runAction(action: Action, index: number) {
@@ -1202,13 +1314,22 @@ export default function App() {
   }
 
   async function handleInlineInputConfirm(value: string) {
-    const v = view() as { view: "inline-input"; index: number; purpose: string; prefill: string }
+    const v = view() as { view: "inline-input"; index: number; purpose: string; prefill: string; workspaceId?: string }
     const trimmed = value.trim()
     if (!trimmed) { setView({ view: "list" }); return }
 
     if (v.purpose === "rename") {
-      const oldName = filteredEntries()[v.index]?.workspace.name
-      if (!oldName) { setView({ view: "list" }); return }
+      const entry = v.workspaceId
+        ? entries().find((candidate) => candidate.workspaceId === v.workspaceId)
+        : filteredEntries()[v.index]
+      const oldName = entry?.workspace.name
+      if (!entry || !oldName) { setView({ view: "list" }); return }
+      const target: WorkspaceActionTarget = { workspaceId: entry.workspaceId, workspaceName: oldName, originIndex: v.index }
+      if (!await authorizeCurrentWorkspaceAction(target, "workspace.rename")) {
+        setRefreshFlash("Rename is no longer authorized. Refresh and try again.")
+        setView({ view: "list" })
+        return
+      }
       resetCommandOutput()
       setView({ view: "progress", message: `Renaming ${oldName} → ${trimmed}...` })
       try {
@@ -1838,16 +1959,23 @@ export default function App() {
         <Switch>
           <Match when={tab() === "workspaces"}>
             <ActionMenu
-              workspaceName={currentEntry()?.workspace.name ?? ""}
+              workspaceName={workspaceActionTarget()?.workspaceName ?? ""}
               inventoryState={workspaceActionInventoryState()}
               inventoryError={workspaceActionInventoryError() || undefined}
               descriptors={workspaceActions()}
               issueDisabledReason={issueDisabledReason()}
               commandsDisabledReason={commandsDisabledReason()}
-              onAction={(action) => runAction(action, (view() as any).index)}
+              onAction={(action) => {
+                const target = workspaceActionTarget()
+                const index = target ? filteredEntries().findIndex((entry) => entry.workspaceId === target.workspaceId) : -1
+                if (index >= 0) void runAction(action, index)
+              }}
               onInvoke={invokeCanonicalWorkspaceAction}
               onCancel={() => setView({ view: "list" })}
-              onRun={() => handleRun(selectedName())}
+              onRun={() => {
+                const target = workspaceActionTarget()
+                if (target) void handleRun(target.workspaceName)
+              }}
             />
           </Match>
           <Match when={tab() === "templates"}>
@@ -1863,16 +1991,22 @@ export default function App() {
       <Show when={!helpOpen() && !signalsOpen() && canonicalConfirmation()}>
         {(() => {
           const pending = canonicalConfirmation()!
-          const entry = filteredEntries()[pending.index]
+          const entry = workspaceEntryForTarget(pending.target)
           const targetBranch = entry?.workspace.repos.find((repo) => repo.mode === "worktree")?.base_branch ?? "main"
           const label = pending.descriptor.action_id === "workspace.merge"
-            ? `Merge ${entry?.workspace.name ?? "workspace"} into ${targetBranch}?`
-            : `${pending.descriptor.action_id} ${entry?.workspace.name ?? "workspace"}?`
+            ? `Merge ${pending.target.workspaceName} into ${targetBranch}?`
+            : `${pending.descriptor.action_id} ${pending.target.workspaceName}?`
           const settle = (confirmed: boolean) => {
             setCanonicalConfirmation(undefined)
             pending.resolve(confirmed)
           }
-          return (
+          return pending.descriptor.action_id === "workspace.remove" ? (
+            <WorkspaceRemovalDialog
+              workspaceName={pending.target.workspaceName}
+              onConfirm={() => settle(true)}
+              onCancel={() => settle(false)}
+            />
+          ) : (
             <ConfirmDialog
               title={pending.descriptor.action_id === "workspace.merge" ? "Merge workspace" : "Confirm workspace action"}
               message={label}
@@ -2037,7 +2171,7 @@ export default function App() {
               onClear={() => mutateWorkspaceNotes("workspace.notes.clear")}
               onRetry={async () => {
                 const entry = entries().find((candidate) => candidate.workspaceId === v.workspaceId)
-                if (entry) await loadWorkspaceNotes(entry)
+                if (entry) { try { await loadWorkspaceNotes(entry) } catch {} }
               }}
               onBack={() => setView({ view: "action-menu", index: tabCursor.workspaces[0]() })}
             />

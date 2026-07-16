@@ -1,285 +1,162 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
+import type { WebWorkspaceAction, WebWorkspaceActionId } from "@git-stacks/protocol"
 import { ActionMenu } from "../../../packages/tui/src/ActionMenu"
 
-// Use kitty keyboard protocol so escape sends \x1B[27u (unambiguous CSI)
-// instead of bare \x1B which the parser holds to disambiguate from escape
-// sequence prefixes. This eliminates the flaky setTimeout delay entirely.
 const renderOpts = { kittyKeyboard: true }
+const workspaceId = "00000000-0000-4000-8000-000000000001"
+
+function descriptor(action_id: WebWorkspaceActionId, available = true): WebWorkspaceAction {
+  return {
+    action_id,
+    subject: action_id === "operation.cancel"
+      ? { kind: "operation", workspace_id: workspaceId, operation_id: "op_1234567890123456" }
+      : { kind: "workspace", workspace_id: workspaceId },
+    availability: available
+      ? { available: true }
+      : { available: false, reason: "capability_unavailable", message: "Unavailable for this workspace." },
+    confirmation: action_id === "workspace.force-remove"
+      ? "exact-name"
+      : action_id === "workspace.remove" || action_id === "workspace.merge" || action_id === "workspace.notes.clear"
+        ? "confirm"
+        : "none",
+  }
+}
+
+const canonical = [
+  descriptor("workspace.open"),
+  descriptor("workspace.close"),
+  descriptor("workspace.rename"),
+  descriptor("workspace.archive"),
+  descriptor("workspace.remove"),
+  descriptor("workspace.merge"),
+  descriptor("workspace.sync"),
+  descriptor("workspace.push"),
+]
+
+function menuProps(overrides: Record<string, unknown> = {}) {
+  return {
+    workspaceName: "ws",
+    inventoryState: "ready" as const,
+    descriptors: canonical,
+    onInvoke: () => {},
+    onAction: () => {},
+    onCancel: () => {},
+    ...overrides,
+  }
+}
 
 describe("ActionMenu", () => {
-  test("renders all action labels", async () => {
+  test("renders canonical and adapted action labels", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
-      renderOpts
+      () => <ActionMenu {...menuProps()} />,
+      renderOpts,
     )
     await renderOnce()
     const frame = captureCharFrame()
-    expect(frame).toContain("Open")
-    expect(frame).toContain("Close")
-    expect(frame).toContain("Rename")
-    expect(frame).toContain("Edit")
-    expect(frame).toContain("Clean")
-    expect(frame).toContain("Archive")
-    expect(frame).toContain("Remove")
-    expect(frame).toContain("Merge")
-    expect(frame).toContain("Sync")
-    expect(frame).toContain("Push")
-    expect(frame).toContain("Issue...")
-    expect(frame).toContain("Commands...")
+    for (const label of ["Open workspace", "Close workspace", "Rename workspace", "Edit", "Clean", "Archive workspace", "Remove workspace", "Merge workspace", "Sync workspace", "Push workspace", "Issue...", "Commands..."]) {
+      expect(frame).toContain(label)
+    }
   })
 
-  test("shows cursor indicator on first item initially", async () => {
-    const { renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
-      renderOpts
-    )
-    await renderOnce()
-    const frame = captureCharFrame()
-    expect(frame).toContain("> [o] Open")
-  })
-
-  test("down arrow moves cursor to second item", async () => {
+  test("shows the first canonical row and moves the cursor", async () => {
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
-      renderOpts
+      () => <ActionMenu {...menuProps()} />,
+      renderOpts,
     )
     await renderOnce()
+    expect(captureCharFrame()).toContain("> [o] Open workspace")
     mockInput.pressArrow("down")
     await renderOnce()
-    const frame = captureCharFrame()
-    expect(frame).toContain("> [x] Close")
-  })
-
-  test("up arrow after multiple downs moves cursor back", async () => {
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
-      renderOpts
-    )
-    await renderOnce()
-    for (let i = 0; i < 5; i++) {
-      mockInput.pressArrow("down")
-      await renderOnce()
-    }
+    expect(captureCharFrame()).toContain("> [x] Close workspace")
     mockInput.pressArrow("up")
     await renderOnce()
-    const frame = captureCharFrame()
-    // cursor should be at index 4 (Clean) after 5 downs (→ Remove at idx 5) then 1 up
-    expect(frame).toContain("> [c] Clean")
+    expect(captureCharFrame()).toContain("> [o] Open workspace")
   })
 
-  test("enter dispatches action at cursor position (first item)", async () => {
-    let received = ""
+  test("Enter and canonical letter shortcuts use onInvoke", async () => {
+    const invoked: string[] = []
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
-      renderOpts
+      () => <ActionMenu {...menuProps({ onInvoke: (actionId: string) => { invoked.push(actionId) } })} />,
+      renderOpts,
     )
     await renderOnce()
     mockInput.pressEnter()
     await renderOnce()
-    expect(received).toBe("open")
-  })
-
-  test("enter dispatches action at moved cursor position", async () => {
-    let received = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
-      renderOpts
-    )
+    mockInput.pressKey("r")
     await renderOnce()
-    // 3 downs from open(0): close(1) -> rename(2) -> edit(3)
-    mockInput.pressArrow("down")
+    mockInput.pressKey("s")
     await renderOnce()
-    mockInput.pressArrow("down")
+    mockInput.pressKey("p")
     await renderOnce()
-    mockInput.pressArrow("down")
-    await renderOnce()
-    mockInput.pressEnter()
-    await renderOnce()
-    expect(received).toBe("edit")
+    expect(invoked).toEqual(["workspace.open", "workspace.remove", "workspace.sync", "workspace.push"])
   })
 
   test("escape calls onCancel", async () => {
     let cancelled = false
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => { cancelled = true }} />,
-      renderOpts
+      () => <ActionMenu {...menuProps({ onCancel: () => { cancelled = true } })} />,
+      renderOpts,
     )
     await renderOnce()
     mockInput.pressEscape()
-    // kitty keyboard sends \x1B[27u — parser recognizes it immediately, no delay needed
     await renderOnce()
     expect(cancelled).toBe(true)
   })
 
-  test("letter shortcut r dispatches remove", async () => {
-    let received = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
-      renderOpts
+  test("adapted issue and command rows dispatch only when enabled", async () => {
+    const dispatched: string[] = []
+    const enabled = await testRender(
+      () => <ActionMenu {...menuProps({ onAction: (action: string) => { dispatched.push(action) } })} />,
+      renderOpts,
     )
-    await renderOnce()
-    mockInput.pressKey("r")
-    await renderOnce()
-    expect(received).toBe("remove")
+    await enabled.renderOnce()
+    enabled.mockInput.pressKey("i")
+    enabled.mockInput.pressKey("d")
+    await enabled.renderOnce()
+    expect(dispatched).toEqual(["issue", "commands"])
+
+    const disabled = await testRender(
+      () => <ActionMenu {...menuProps({ issueDisabledReason: "none linked", commandsDisabledReason: "none configured", onAction: (action: string) => { dispatched.push(action) } })} />,
+      renderOpts,
+    )
+    await disabled.renderOnce()
+    expect(disabled.captureCharFrame()).toContain("Issue... (none linked)")
+    expect(disabled.captureCharFrame()).toContain("Commands... (none configured)")
+    disabled.mockInput.pressKey("i")
+    disabled.mockInput.pressKey("d")
+    await disabled.renderOnce()
+    expect(dispatched).toEqual(["issue", "commands"])
   })
 
-  test("letter shortcut a dispatches archive", async () => {
-    let received = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
-      renderOpts
-    )
-    await renderOnce()
-    mockInput.pressKey("a")
-    await renderOnce()
-    expect(received).toBe("archive")
-  })
-
-  test("letter shortcut o dispatches open", async () => {
-    let received = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
-      renderOpts
-    )
-    await renderOnce()
-    mockInput.pressKey("o")
-    await renderOnce()
-    expect(received).toBe("open")
-  })
-
-  test("s key dispatches sync action", async () => {
-    let dispatched = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { dispatched = a }} onCancel={() => {}} />,
-      renderOpts
-    )
-    await renderOnce()
-    mockInput.pressKey("s")
-    await renderOnce()
-    expect(dispatched).toBe("sync")
-  })
-
-  test("p key dispatches push action", async () => {
-    let dispatched = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { dispatched = a }} onCancel={() => {}} />,
-      renderOpts
-    )
-    await renderOnce()
-    mockInput.pressKey("p")
-    await renderOnce()
-    expect(dispatched).toBe("push")
-  })
-
-  test("renders enabled issue row and dispatches i shortcut", async () => {
-    let dispatched = ""
+  test("undefined inventory is explicit and every legacy action key dispatches zero requests", async () => {
+    const requests: string[] = []
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => (
-        <ActionMenu
-          workspaceName="ws"
-          issueDisabledReason={undefined}
-          onAction={(a) => { dispatched = a }}
-          onCancel={() => {}}
-        />
-      ),
-      renderOpts
+      () => <ActionMenu workspaceName="ws" onAction={(action) => { requests.push(action) }} onInvoke={(action) => { requests.push(action) }} onCancel={() => {}} />,
+      renderOpts,
     )
     await renderOnce()
-    expect(captureCharFrame()).toContain("[i] Issue...")
-    mockInput.pressKey("i")
-    await renderOnce()
-    expect(dispatched).toBe("issue")
-  })
-
-  test("disabled issue row is visible and cannot be activated", async () => {
-    let dispatched = ""
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => (
-        <ActionMenu
-          workspaceName="ws"
-          issueDisabledReason="none linked"
-          onAction={(a) => { dispatched = a }}
-          onCancel={() => {}}
-        />
-      ),
-      renderOpts
-    )
-    await renderOnce()
-    const frame = captureCharFrame()
-    expect(frame).toContain("[i] Issue... (none linked)")
-    mockInput.pressKey("i")
-    await renderOnce()
-    expect(dispatched).toBe("")
-  })
-
-  test("renders enabled commands row and dispatches d shortcut", async () => {
-    let dispatched = ""
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => (
-        <ActionMenu
-          workspaceName="ws"
-          commandsDisabledReason={undefined}
-          onAction={(a) => { dispatched = a }}
-          onCancel={() => {}}
-        />
-      ),
-      renderOpts
-    )
-    await renderOnce()
-    expect(captureCharFrame()).toContain("[d] Commands...")
-    mockInput.pressKey("d")
-    await renderOnce()
-    expect(dispatched).toBe("commands")
-  })
-
-  test("disabled commands row is visible and cannot be activated", async () => {
-    let dispatched = ""
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => (
-        <ActionMenu
-          workspaceName="ws"
-          commandsDisabledReason="none configured"
-          onAction={(a) => { dispatched = a }}
-          onCancel={() => {}}
-        />
-      ),
-      renderOpts
-    )
-    await renderOnce()
-    expect(captureCharFrame()).toContain("[d] Commands... (none configured)")
-    mockInput.pressKey("d")
-    await renderOnce()
-    expect(dispatched).toBe("")
-  })
-
-  test("disabled grouped rows cannot be activated with Enter", async () => {
-    let dispatched = ""
-    const { mockInput, renderOnce } = await testRender(
-      () => (
-        <ActionMenu
-          workspaceName="ws"
-          issueDisabledReason="none linked"
-          commandsDisabledReason="none configured"
-          onAction={(a) => { dispatched = a }}
-          onCancel={() => {}}
-        />
-      ),
-      renderOpts
-    )
-    await renderOnce()
-    for (let i = 0; i < 10; i++) {
-      mockInput.pressArrow("down")
-      await renderOnce()
+    expect(captureCharFrame()).toContain("Workspace actions could not be loaded")
+    expect(captureCharFrame()).not.toContain("[o] Open")
+    for (const key of ["o", "x", "n", "e", "c", "a", "r", "m", "s", "p", "i", "d", "u", "return"]) {
+      key === "return" ? mockInput.pressEnter() : mockInput.pressKey(key)
     }
+    await renderOnce()
+    expect(requests).toEqual([])
+  })
+
+  test("malformed ready inventory is explicit and non-actionable", async () => {
+    const requests: string[] = []
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <ActionMenu workspaceName="ws" inventoryState="ready" descriptors={undefined} onInvoke={(action) => { requests.push(action) }} onCancel={() => {}} />,
+      renderOpts,
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Workspace actions could not be loaded")
+    mockInput.pressKey("o")
     mockInput.pressEnter()
     await renderOnce()
-    expect(dispatched).toBe("")
-    mockInput.pressArrow("down")
-    await renderOnce()
-    mockInput.pressEnter()
-    await renderOnce()
-    expect(dispatched).toBe("")
+    expect(requests).toEqual([])
   })
 })

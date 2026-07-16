@@ -22,6 +22,7 @@ key-files:
     - packages/tui/src/WorkspaceNotesDialog.tsx
     - packages/tui/src/WorkspaceFileStatusDialog.tsx
     - packages/tui/src/official-service.ts
+    - packages/tui/src/workspace-action-inventory.ts
   modified:
     - packages/tui/src/App.tsx
     - packages/tui/src/ActionMenu.tsx
@@ -136,18 +137,33 @@ None.
 
 ## Reviewed Repair Evidence
 
-A subsequent independent review found authority and recovery gaps in the original implementation. The repair was developed RED/GREEN on `codex/phase126-06` without claiming review closure:
+Two independent reviews found authority, race, recovery, and constrained-layout gaps in the original implementation. Both repair rounds were developed RED/GREEN on `codex/phase126-06` without claiming review closure:
 
-- `6ad1dcf1` adds failing regressions for fail-closed inventory states, shared action policy wiring, adapted legacy-only rows, submit-unknown Back, note rejection handling, and reviewed-create recovery.
-- `5a648e3d` routes canonical menu invocations through `createWorkspaceActionRegistry`, restores Merge confirmation, removes the local menu latch, preserves Edit/Clean/Run/Issue/Commands rows, makes Pin/Unpin shortcuts unique, handles note mutation rejections, allows submit-unknown Back, and delegates reviewed terminal failures to `forgeReview.observeOperation`.
-- `61b8e786` records the independent-review repairs and the then-open full-suite blocker without overstating completion.
-- The full-suite closure migrates action-menu, sync-progress, and lifecycle App fixtures to complete canonical inventories. Sync now exercises the authoritative operation contract rather than the removed legacy confirmation path.
-- Fixture success exposed and repaired the loading/error-to-ready reactive transition in `ActionMenu`; absent, loading, malformed-ready, and failed inventory states remain non-actionable.
-- All final focused, full-suite, package, architecture, authority, whitespace, and runtime gates listed above pass.
+- `6ad1dcf1` adds the first failing regressions for fail-closed inventory states, shared action policy wiring, adapted legacy-only rows, submit-unknown Back, note rejection handling, and reviewed-create recovery.
+- `5a648e3d` closes that first authority set by routing canonical menu invocations through `createWorkspaceActionRegistry`, restoring Merge confirmation, preserving adapted local rows, handling note mutation rejections, and delegating reviewed terminal failures to `forgeReview.observeOperation`.
+- `61b8e786` records the first review repair and its then-open full-suite blocker; `f8210e8f` closes the canonical fixture blocker.
+- The second verified repair removes `LegacyActionMenu` completely. Undefined, loading, failed, empty, malformed, and subject-mismatched inventories are explicit non-actionable states, while normal tests now supply canonical inventories.
+- Action inventory loads now use generation plus immutable workspace identity. Late results, reordered rows, switched targets, empty results, and mismatched descriptor subjects cannot install callbacks.
+- Lifecycle and rename execution re-check current service descriptors before mutation. Remove, Force Remove, Rename, Unarchive, Undo, generic confirmations, and inputs have synchronous one-shot guards; exact-name Force Remove remains case-sensitive.
+- Reviewed creation reconnects only by its accepted operation ID, ignores transport failures as terminal outcomes, and refreshes authoritative state before success unlock or typed review recovery.
+- Forge review now exposes inclusion for every selected-template repository and branch mapping for every included worktree repository. Row identity survives typed rejection, and real stacked rendering is exercised at widths 79, 55, and 40.
+- Notes responses are generation-, workspace-, and revision-keyed. Add/Clear reject absent, failed, mismatched, stale, or unavailable transport prerequisites while preserving editable draft/confirmation state; successful mutation refreshes before accepting the new authoritative response.
+- `WorkspaceOperationView` uses one shared recoverable-Back predicate for rendering and key handling, so refresh-failed is retry-only.
+- Final runtime verification used an isolated real managed service: canonical unavailable actions remained non-actionable; rapid Enter added one note and refreshed the authoritative count; rapid `y` cleared once; a real GitHub PR rendered editable two-repository review rows at 79/55/40 columns; toggling the second repository restored its row; and rapid `y` removed one isolated workspace once.
+
+## Final Verification After Second Repair
+
+- `npm run test:tui` — pass; all OpenTUI files isolated by the repository runner. Existing non-failing `TerminalConsoleCache` listener warnings remain.
+- Focused OpenTUI — ActionMenu 7/7, WorkspaceParity 16/16, ForgeSourceReview 6/6, action-menu integration 12/12, lifecycle archive/remove 7/7.
+- `npx vitest run tests/lib/client-workspace-actions.test.ts tests/lib/service/workspace-action-authority.test.ts tests/service/web-workflow-authority.test.ts` — 22/22 pass.
+- TUI, client, and service workspace typechecks — pass.
+- `npm run tui:build` — pass.
+- `npm run test:deps` and `npm run test:architecture` — pass (`Package architecture: OK`).
+- `git diff --check`, stale-index/legacy-fallback scan, descriptor-subject scan, and TUI safe-authority/path scan — pass.
 
 ## Next Phase Readiness
 
-The local Plan 06 full-suite blocker is closed and the branch is ready for independent re-review. Do not merge until that review is clean; this summary does not claim review or release approval.
+The eight verified Plan 06 review fixes are implemented and locally verified. The branch is ready for independent re-review only; do not merge until that review is clean, and this summary does not claim review or release approval.
 
 ---
 *Phase: 126-web-workflow-and-forge-source-parity*

@@ -35,6 +35,14 @@ const labels: Partial<Record<WebOperationSummary["action_id"], string>> = {
   "workspace.notes.clear": "Clear workspace notes",
 }
 
+export function recoverableWorkspaceOperationBack(
+  state: OperationTrackerState,
+  operation: WebOperationSummary | undefined,
+): boolean {
+  const terminal = operation && operation.state !== "accepted" && operation.state !== "running"
+  return state.phase === "submit-unknown" || Boolean(terminal && state.phase === "ready")
+}
+
 function terminalText(operation: WebOperationSummary): string | undefined {
   if (operation.state === "succeeded") return `${labels[operation.action_id] ?? "Operation"} completed.`
   if (operation.state === "cancelled") return `${labels[operation.action_id] ?? "Operation"} was cancelled. Authoritative workspace state has been refreshed.`
@@ -63,10 +71,7 @@ export function WorkspaceOperationView(props: Props) {
       else if (props.state.phase === "reconnecting") void props.onReconnect()
       return
     }
-    const operation = current()
-    const terminal = operation && operation.state !== "accepted" && operation.state !== "running"
-    const recoverableBack = props.state.phase === "submit-unknown" || (terminal && props.state.phase === "ready")
-    if ((key.name === "escape" || key.name === "return") && recoverableBack) props.onBack()
+    if ((key.name === "escape" || key.name === "return") && recoverableWorkspaceOperationBack(props.state, current())) props.onBack()
   })
 
   return (
@@ -92,7 +97,9 @@ export function WorkspaceOperationView(props: Props) {
         ? <text fg="yellow">  {cancelPending() ? "Cancelling…" : `[c] Cancel ${labels[current()!.action_id] ?? "operation"}`}</text>
         : current()?.state === "accepted" || current()?.state === "running"
           ? <text fg="gray">  Finishing current step — cancellation unavailable</text>
-          : <text fg="gray">  [Enter/Esc] Back</text>}
+          : recoverableWorkspaceOperationBack(props.state, current())
+            ? <text fg="gray">  [Enter/Esc] Back</text>
+            : null}
     </CenteredDialog>
   )
 }

@@ -62,7 +62,7 @@ export function WorkspaceNotesDialog(props: Props) {
     }
     if (key.name === "escape") { props.onBack(); return }
     if (key.name === "r" && props.error) { void props.onRetry(); return }
-    if (key.name === "a" && !props.loading) {
+    if (key.name === "a" && !props.loading && !props.error && props.response) {
       setDraft("")
       setInputFocused(false)
       setMode("add")

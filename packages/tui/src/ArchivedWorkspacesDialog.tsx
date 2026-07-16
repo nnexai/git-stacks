@@ -15,9 +15,11 @@ type Props = {
 
 export function ArchivedWorkspacesDialog(props: Props) {
   const [cursor, setCursor] = createSignal(0)
+  const [submitted, setSubmitted] = createSignal(false)
 
   useKeyboard((key) => {
-    if (key.name === "escape") { props.onCancel(); return }
+    if (submitted()) return
+    if (key.name === "escape") { setSubmitted(true); props.onCancel(); return }
     if (key.name === "down" || key.name === "j") {
       setCursor(current => Math.min(current + 1, Math.max(0, props.rows.length - 1)))
       return
@@ -28,7 +30,7 @@ export function ArchivedWorkspacesDialog(props: Props) {
     }
     if (key.name === "return" || key.name === "u") {
       const row = props.rows[cursor()]
-      if (row) props.onUnarchive(row)
+      if (row) { setSubmitted(true); props.onUnarchive(row) }
     }
   })
 
@@ -58,9 +60,11 @@ export function ArchivedWorkspaceUndoDialog(props: {
   onUndo: () => void
   onClose: () => void
 }) {
+  const [settled, setSettled] = createSignal(false)
   useKeyboard((key) => {
-    if (key.name === "u") { props.onUndo(); return }
-    if (key.name === "escape" || key.name === "return") props.onClose()
+    if (settled()) return
+    if (key.name === "u") { setSettled(true); props.onUndo(); return }
+    if (key.name === "escape" || key.name === "return") { setSettled(true); props.onClose() }
   })
 
   return (

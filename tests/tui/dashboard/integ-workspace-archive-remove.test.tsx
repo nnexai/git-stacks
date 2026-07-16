@@ -117,6 +117,7 @@ let currentState = coreState([
 ])
 let reloadedState = currentState
 let lifecycleScenario: "success" | "dirty" | "stale" | "terminal-failure" = "success"
+let forceAuthorized = false
 let callOrder: string[] = []
 
 function lifecycleActionInventory(workspaceId: string): WebWorkspaceAction[] {
@@ -143,7 +144,9 @@ function lifecycleActionInventory(workspaceId: string): WebWorkspaceAction[] {
   }
 
   disable("workspace.unarchive", "workspace_active", "This action does not apply to the active workspace state.")
-  disable("workspace.force-remove", "dirty_worktree", "Force Remove requires a fresh dirty-worktree check.")
+  if (!forceAuthorized) {
+    disable("workspace.force-remove", "dirty_worktree", "Force Remove requires a fresh dirty-worktree check.")
+  }
   if (active.definition.pinned === true) {
     disable("workspace.pin", "workspace_active", "This action does not apply to the active workspace state.")
   } else {
@@ -175,6 +178,7 @@ const lifecycleMutationMock = mock(async (
   })
 
   if (lifecycleScenario === "dirty" && request.kind === "workspace.remove") {
+    forceAuthorized = true
     throw Object.assign(new Error("Dirty worktrees block removal"), {
       code: "workspace_dirty",
       lifecycle: {
@@ -338,6 +342,7 @@ async function settle(renderOnce: () => Promise<void>) {
 
 beforeEach(() => {
   lifecycleScenario = "success"
+  forceAuthorized = false
   callOrder = []
   lifecycleMutationMock.mockClear()
   fetchCoreStateMock.mockClear()

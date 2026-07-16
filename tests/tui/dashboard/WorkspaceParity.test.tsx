@@ -10,6 +10,7 @@ import { ActionMenu } from "../../../packages/tui/src/ActionMenu"
 import { WorkspaceOperationView } from "../../../packages/tui/src/WorkspaceOperationView"
 import { WorkspaceNotesDialog } from "../../../packages/tui/src/WorkspaceNotesDialog"
 import { WorkspaceFileStatusDialog } from "../../../packages/tui/src/WorkspaceFileStatusDialog"
+import { createWorkspaceActionInventoryGate, createWorkspaceNotesResponseGate } from "../../../packages/tui/src/workspace-action-inventory"
 
 const renderOptions = { width: 92, height: 30, kittyKeyboard: true }
 const workspaceId = "00000000-0000-4000-8000-000000000126"
@@ -40,6 +41,20 @@ describe("OpenTUI workspace parity", () => {
     const appSource = readFileSync(new URL("../../../packages/tui/src/App.tsx", import.meta.url), "utf8")
     expect(appSource).toContain("createWorkspaceActionRegistry")
     expect(appSource).toContain("registry.invoke(actionId, \"menu\")")
+  })
+
+  test("inventory generations reject workspace-switch, reorder, late, and subject-mismatch results", () => {
+    const gate = createWorkspaceActionInventoryGate()
+    const first = gate.begin(workspaceId)
+    const reordered = gate.begin(workspaceId)
+    expect(gate.accepts(first, workspaceId, [descriptor("workspace.open")])).toBe(false)
+    expect(gate.accepts(reordered, workspaceId, [descriptor("workspace.open")])).toBe(true)
+
+    const otherWorkspace = "00000000-0000-4000-8000-000000000127"
+    const switched = gate.begin(otherWorkspace)
+    expect(gate.accepts(reordered, workspaceId, [descriptor("workspace.open")])).toBe(false)
+    expect(gate.accepts(switched, otherWorkspace, [descriptor("workspace.open")])).toBe(false)
+    expect(gate.isCurrent(switched, otherWorkspace)).toBe(true)
   })
 
   test("fails closed while canonical inventory is loading or unavailable", async () => {
@@ -100,6 +115,7 @@ describe("OpenTUI workspace parity", () => {
       () => (
         <ActionMenu
           workspaceName="parity-ws"
+          inventoryState="ready"
           descriptors={actions}
           onInvoke={(actionId) => { invoked.push(actionId) }}
           onCancel={() => {}}
@@ -171,6 +187,7 @@ describe("OpenTUI workspace parity", () => {
       () => (
         <ActionMenu
           workspaceName="parity-ws"
+          inventoryState="ready"
           descriptors={[pull]}
           onInvoke={(actionId) => registry.invoke(actionId, "menu").then(() => undefined)}
           onCancel={() => {}}
@@ -261,6 +278,10 @@ describe("OpenTUI workspace parity", () => {
     expect(frame).toContain("Pull failed safely.")
     expect(frame).toContain("Authoritative refresh failed")
     expect(frame).not.toContain("[c] Cancel")
+    expect(frame).not.toContain("[Enter/Esc] Back")
+    mockInput.pressEscape()
+    await renderOnce()
+    expect(reconnects).toBe(0)
     mockInput.pressKey("r")
     await renderOnce()
     expect(reconnects).toBe(1)
@@ -291,6 +312,31 @@ describe("OpenTUI workspace parity", () => {
 })
 
 describe("OpenTUI authoritative workspace details", () => {
+  test("notes responses are keyed by workspace and authoritative revision", () => {
+    const gate = createWorkspaceNotesResponseGate()
+    const first = gate.begin(workspaceId, "7")
+    const response = { workspace_id: workspaceId, revision: "7", notes_revision: "notes-7", count: 0, records: [] }
+    expect(gate.accepts(first, response)).toBe(true)
+    const switched = gate.begin("00000000-0000-4000-8000-000000000127", "8")
+    expect(gate.accepts(first, response)).toBe(false)
+    expect(gate.accepts(switched, response)).toBe(false)
+    expect(gate.accepts(switched, { ...response, workspace_id: switched.workspaceId, revision: "wrong" })).toBe(false)
+    expect(gate.accepts(switched, { ...response, workspace_id: switched.workspaceId, revision: switched.revision })).toBe(true)
+  })
+
+  test("notes load failure rejects Add before transport", async () => {
+    let adds = 0
+    const failed = await testRender(
+      () => <WorkspaceNotesDialog workspaceName="parity-ws" error="Workspace notes could not be loaded." onAdd={() => { adds += 1 }} onClear={() => {}} onRetry={() => {}} onBack={() => {}} />,
+      renderOptions,
+    )
+    await failed.renderOnce()
+    failed.mockInput.pressKey("a")
+    await failed.renderOnce()
+    expect(failed.captureCharFrame()).not.toContain("New workspace note")
+    expect(adds).toBe(0)
+  })
+
   test("notes retain a stable empty frame and validate note input before transport", async () => {
     let adds = 0
     const response = {

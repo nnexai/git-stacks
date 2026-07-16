@@ -13,9 +13,11 @@ type ConfirmProps = {
 }
 
 export function WorkspaceRemovalDialog(props: ConfirmProps) {
+  const [settled, setSettled] = createSignal(false)
   useKeyboard((key) => {
-    if (key.name === "y") props.onConfirm()
-    if (key.name === "n" || key.name === "escape") props.onCancel()
+    if (settled()) return
+    if (key.name === "y") { setSettled(true); props.onConfirm(); return }
+    if (key.name === "n" || key.name === "escape") { setSettled(true); props.onCancel() }
   })
 
   return (
@@ -41,9 +43,11 @@ type DirtyProps = {
 }
 
 export function WorkspaceDirtyBlockedDialog(props: DirtyProps) {
+  const [settled, setSettled] = createSignal(false)
   useKeyboard((key) => {
-    if (key.name === "escape") { props.onCancel(); return }
-    if (key.name === "f") props.onForce()
+    if (settled()) return
+    if (key.name === "escape") { setSettled(true); props.onCancel(); return }
+    if (key.name === "f") { setSettled(true); props.onForce() }
   })
 
   return (
@@ -71,6 +75,7 @@ type ForceProps = {
 export function WorkspaceForceRemoveDialog(props: ForceProps) {
   const [confirmation, setConfirmation] = createSignal("")
   const [inputFocused, setInputFocused] = createSignal(false)
+  const [submitted, setSubmitted] = createSignal(false)
   const exact = () => confirmation() === props.workspaceName
 
   onMount(() => {
@@ -79,7 +84,7 @@ export function WorkspaceForceRemoveDialog(props: ForceProps) {
   })
 
   useKeyboard((key) => {
-    if (key.name === "escape") props.onCancel()
+    if (key.name === "escape" && !submitted()) props.onCancel()
   })
 
   return (
@@ -97,7 +102,8 @@ export function WorkspaceForceRemoveDialog(props: ForceProps) {
             value={confirmation()}
             onInput={(value) => setConfirmation(typeof value === "string" ? value : "")}
             onSubmit={() => {
-              if (exact()) props.onConfirm(confirmation())
+              if (submitted()) return
+              if (exact()) { setSubmitted(true); props.onConfirm(confirmation()) }
               else setConfirmation("")
             }}
           />

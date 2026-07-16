@@ -47,6 +47,12 @@ export type WorkspaceLifecycleTarget = {
   expectedRevision: string
 }
 
+export type WorkspaceActionTarget = {
+  workspaceId: string
+  workspaceName: string
+  originIndex: number
+}
+
 export type DirtyRemovalContext = {
   kind: "workspace_dirty"
   blockingRepositories: string[]
@@ -62,7 +68,7 @@ export type IssueCandidate = {
 
 export type UIView =
   | { view: "list" }
-  | { view: "action-menu"; index: number }
+  | { view: "action-menu"; index: number; workspaceId?: string; workspaceName?: string }
   | { view: "archived-workspaces"; rows: ArchivedWorkspaceSummary[] }
   | { view: "archive-undo"; target: WorkspaceLifecycleTarget }
   | { view: "remove-confirm"; target: WorkspaceLifecycleTarget }
@@ -78,7 +84,7 @@ export type UIView =
   | { view: "progress"; message: string }
   | { view: "sync-progress"; message: string }
   | { view: "push-progress"; message: string }
-  | { view: "inline-input"; index: number; purpose: "rename" | "clone-template" | "add-label"; prefill: string }
+  | { view: "inline-input"; index: number; purpose: "rename" | "clone-template" | "add-label"; prefill: string; workspaceId?: string }
   | { view: "issue-picker"; index: number; candidates: IssueCandidate[] }
   | { view: "command-picker"; index: number; commands: string[] }
   | { view: "messages"; workspaceName: string }

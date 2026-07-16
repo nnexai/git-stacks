@@ -367,10 +367,13 @@ describe("integration: action menu dispatch", () => {
 
     // Confirm the removal with 'y'
     mockInput.pressKey("y")
+    mockInput.pressKey("y")
+    await new Promise(resolve => setTimeout(resolve, 20))
     await renderOnce()
     await renderOnce()
     await renderOnce()
 
+    expect(workspaceLifecycleMutationMock).toHaveBeenCalledTimes(1)
     expect(workspaceLifecycleMutationMock).toHaveBeenCalledWith({
       kind: "workspace.remove",
       workspace_id: "00000000-0000-4000-8000-000000000001",
