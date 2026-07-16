@@ -50,7 +50,12 @@ describe("browser-safe service projection", () => {
         status: [{ repository_id: repositoryId, name: "repo", exists: true, dirty: true, branch: "feature/web", default_branch: "main", mode: "worktree", ahead: 1, behind: 2, additions: 3, removals: 4, remote: "available", degraded: false }],
         file_status: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
         launch: {
-          commands: ["SECRET_COMMAND"], environment: { TOKEN: "SECRET_ENV" }, redacted: ["TOKEN"], references: { TOKEN: "vault:path" }, cwd: "/secret/cwd", ports: { api: 9999 },
+          commands: ["SECRET_COMMAND"], environment: {
+            TOKEN: "SECRET_ENV",
+            PATH: "/phase124/refreshed/bin",
+            SSH_AUTH_SOCK: "/tmp/phase124-agent.sock",
+            SHELL: "/phase124/shells/bash",
+          }, redacted: ["TOKEN"], references: { TOKEN: "vault:path" }, cwd: "/secret/cwd", ports: { api: 9999 },
           named: [{ id: "cmd_abcdefghijklmnop", name: "Tests", scope: "repository", repository_id: repositoryId, steps: [{ bucket: "main", scope: "repo", command: "SECRET_STEP", cwd: "/secret/step", repository_id: repositoryId, repository_name: "repo", environment: { TOKEN: "SECRET_STEP_ENV" } }] }],
         },
       },
@@ -62,7 +67,10 @@ describe("browser-safe service projection", () => {
     expect(projected.workspaces[0]?.activity_at).toBe("2026-07-13T11:00:00.000Z")
     expect(projected.workspaces[0]?.commands).toEqual([{ id: "cmd_abcdefghijklmnop", name: "Tests", scope: "repository", repository_id: repositoryId }])
     const encoded = JSON.stringify(projected)
-    for (const secret of ["/secret/path", "SECRET_COMMAND", "SECRET_ENV", "vault:path", "/secret/cwd", "9999", "SECRET_STEP", "SECRET_STEP_ENV"]) expect(encoded).not.toContain(secret)
+    for (const secret of [
+      "/secret/path", "SECRET_COMMAND", "SECRET_ENV", "vault:path", "/secret/cwd", "9999", "SECRET_STEP", "SECRET_STEP_ENV",
+      "/phase124/refreshed/bin", "/tmp/phase124-agent.sock", "/phase124/shells/bash", "shell-initialization-diagnostic",
+    ]) expect(encoded).not.toContain(secret)
   })
 
   test("allowlists operation progress, result, and error fields", () => {

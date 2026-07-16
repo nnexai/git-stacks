@@ -99,6 +99,16 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
 
     const descriptor = JSON.parse(await readFile(join(root, "descriptor.json"), "utf8"))
     const tui = await connect(descriptor, "tui", descriptor.tui_launch.token)
+    const refresh = { PATH: "/phase124/runtime/bin", SSH_AUTH_SOCK: "/tmp/phase124-runtime-agent.sock" }
+    let tuiRefresh
+    try { tuiRefresh = await tui.rpc.request("environment.refresh", refresh) } catch (error) { tuiRefresh = { error: error.code } }
+    let browserRefresh
+    try { browserRefresh = await browser.rpc.request("environment.refresh", { ...refresh, TOKEN: "never-parse-this" }) } catch (error) { browserRefresh = { error: error.code } }
+    const refreshTranscript = JSON.stringify({ descriptor, tuiRefresh, browserRefresh })
+    assert.equal(refreshTranscript.includes(refresh.PATH), false)
+    assert.equal(refreshTranscript.includes(refresh.SSH_AUTH_SOCK), false)
+    assert.equal(refreshTranscript.includes("never-parse-this"), false)
+    if (!("error" in browserRefresh)) assert.fail("browser environment refresh must never be accepted")
     await assert.rejects(tui.rpc.request("operation.get", { operation_id: first.operation_id }), (error) => error.code === "not_found")
     await tui.rpc.close("ownership verified")
     await browser.rpc.close("contract verified")

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "@test/api"
 import { readFileSync } from "fs"
 import { join } from "path"
+import * as serviceProtocol from "../../../packages/protocol/src/service"
 import {
   TerminalLaunchResolutionRequestSchema,
   TerminalLaunchResolutionSchema,
@@ -19,6 +20,37 @@ const fixtures = join(import.meta.dirname, "../../fixtures/service-v1")
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(fixtures, name), "utf8"))
 
 describe("service v1 contract", () => {
+  test("PHASE124_RED refresh authorization TUI ordering contract", () => {
+    const schema = (serviceProtocol as Record<string, unknown>).DynamicEnvironmentRefreshSchema as
+      | { safeParse(value: unknown): { success: boolean; data?: unknown } }
+      | undefined
+    const parse = (value: unknown) => schema?.safeParse(value)
+    const pathAtLimit = "/opt/runtime/bin:".repeat(1_024).slice(0, 16_384)
+    const socketAtLimit = `/tmp/${"s".repeat(4_091)}`
+
+    const observations = {
+      schema_exists: schema !== undefined,
+      replaces_allowlist: parse({ PATH: "/phase124/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent.sock" })?.success === true,
+      omission_means_clear: parse({})?.success === true,
+      exact_path_bound: parse({ PATH: pathAtLimit })?.success === true
+        && parse({ PATH: `${pathAtLimit}x` })?.success === false,
+      exact_socket_bound: parse({ SSH_AUTH_SOCK: socketAtLimit })?.success === true
+        && parse({ SSH_AUTH_SOCK: `${socketAtLimit}x` })?.success === false,
+      rejects_unknown_keys: parse({ PATH: "/bin", TOKEN: "must-not-cross" })?.success === false,
+      rejects_control_bytes: parse({ PATH: "/bin\0/hidden" })?.success === false,
+    }
+
+    expect(observations, "PHASE124_RED refresh authorization TUI ordering contract").toEqual({
+      schema_exists: true,
+      replaces_allowlist: true,
+      omission_means_clear: true,
+      exact_path_bound: true,
+      exact_socket_bound: true,
+      rejects_unknown_keys: true,
+      rejects_control_bytes: true,
+    })
+  })
+
   test("parses and exactly round-trips golden fixtures", () => {
     for (const [name, schema] of [
       ["discovery.json", DiscoveryResponseSchema],
