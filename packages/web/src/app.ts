@@ -1100,6 +1100,7 @@ function renderScope(): void {
         if (row.disabledReason) { toast(`${row.label} unavailable — ${row.disabledReason}`, true); return }
         menu.hidden = true
         toggle.setAttribute("aria-expanded", "false")
+        pendingOverlayInvoker = control
         row.run()
       })
       menu.append(control)

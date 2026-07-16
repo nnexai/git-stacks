@@ -116,6 +116,23 @@ describe("web canonical workspace action surface", () => {
     expect(appSource).toContain("requestAnimationFrame")
     expect(appSource).toContain("focusInvalidForgeField")
   })
+
+  test("restores overlays to the concrete scope-menu control rather than the row context-menu invoker", () => {
+    const contextMenuClick = appSource.slice(
+      appSource.indexOf('control.addEventListener("click", () => {'),
+      appSource.indexOf("contextMenu.append(control)"),
+    )
+    const scopeMenuStart = appSource.indexOf('const menu = element("div", "scope-menu")')
+    const scopeMenuClick = appSource.slice(
+      appSource.indexOf('control.addEventListener("click", () => {', scopeMenuStart),
+      appSource.indexOf("menu.append(control)", scopeMenuStart),
+    )
+
+    expect(contextMenuClick).toContain("pendingOverlayInvoker = contextMenuInvoker")
+    expect(scopeMenuClick).toContain("pendingOverlayInvoker = control")
+    expect(scopeMenuClick.indexOf("pendingOverlayInvoker = control")).toBeLessThan(scopeMenuClick.indexOf("row.run()"))
+    expect(appSource).toContain("returnTarget: pendingOverlayInvoker ?? activeTerminalId")
+  })
 })
 
 describe("web authoritative notes and path-free file details", () => {

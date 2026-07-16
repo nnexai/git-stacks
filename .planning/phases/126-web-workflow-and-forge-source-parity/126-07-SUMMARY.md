@@ -191,6 +191,12 @@ The review repair followed an additional adversarial RED/GREEN cycle: `75bea09a`
 
 Review verification passed 16 focused files / 188 tests, `npm run web:build`, `npm run test:deps`, package typechecks, and `git diff --check`. In the isolated worktree, service/web were additionally typechecked through temporary local-path configs because its shared `node_modules` link resolved workspace packages from the parent checkout; those temporary configs and the link were removed before commit. Standard workspace typechecks should be rerun after integration.
 
+## Residual Scope-Menu Focus Repair
+
+A placement-specific RED test distinguished the selected workspace scope menu from the separate row context-menu path. The scope-menu action now records its concrete menu-item control in `pendingOverlayInvoker` before invoking the shared descriptor, so a resulting overlay closes or replaces back to that control instead of falling through to the active terminal. The row context-menu continues to capture its own `contextMenuInvoker`; singleton overlay replacement and xterm fallback ordering are unchanged.
+
+Verification for this residual repair passed 44 focused tests across `web-workspace-actions`, `web-keyboard-navigation`, and `web-keyboard-overlays`; `npm run web:build`; branch-local web source typecheck; client and protocol package typechecks; `npm run test:deps`; placement-specific source assertions; and `git diff --check`. The ordinary isolated-worktree web typecheck initially resolved stale client declarations through the parent checkout's shared `node_modules`; the branch-local source-alias typecheck passed, and all temporary config/link files were removed. Real browser/xterm focus observation remains part of the explicitly deferred Phase 127 manual verification boundary and is not claimed here.
+
 ## User Setup Required
 
 None for local implementation. Authenticated provider access and live browser/OpenTUI approval remain Phase 127 pre-tag work.
