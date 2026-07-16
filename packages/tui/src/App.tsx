@@ -54,7 +54,15 @@ import type {
   WorkspaceLifecycleTarget,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
-import { createForgeReviewCoordinator, createOperationTracker, issueTrackerLabels, type OperationTracker, type OperationTrackerState } from "@git-stacks/client"
+import {
+  createForgeReviewCoordinator,
+  createOperationTracker,
+  createWorkspaceActionRegistry,
+  issueTrackerLabels,
+  type OperationTracker,
+  type OperationTrackerState,
+  type WorkspaceActionRegistry,
+} from "@git-stacks/client"
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
 import { officialService } from "./official-service"
@@ -264,6 +272,14 @@ export default function App() {
   const [workspaceGroupingMode, setWorkspaceGroupingMode] = createSignal<WorkspaceGroupingMode>("none")
   const [detailScrollRequest, setDetailScrollRequest] = createSignal<{ sequence: number; direction: -1 | 1 }>({ sequence: 0, direction: 1 })
   const [workspaceActions, setWorkspaceActions] = createSignal<readonly WebWorkspaceAction[]>()
+  const [workspaceActionInventoryState, setWorkspaceActionInventoryState] = createSignal<"loading" | "ready" | "error">("loading")
+  const [workspaceActionInventoryError, setWorkspaceActionInventoryError] = createSignal("")
+  const [workspaceActionRegistry, setWorkspaceActionRegistry] = createSignal<WorkspaceActionRegistry>()
+  const [canonicalConfirmation, setCanonicalConfirmation] = createSignal<{
+    descriptor: WebWorkspaceAction
+    index: number
+    resolve: (confirmed: boolean) => void
+  }>()
   const [operationTracker, setOperationTracker] = createSignal<OperationTracker<WebOperationMutation>>()
   const [operationState, setOperationState] = createSignal<OperationTrackerState>({ phase: "ready" })
   const [operationCards, setOperationCards] = createSignal<WebOperationSummary[]>([])
@@ -652,21 +668,71 @@ export default function App() {
     finishCommandOutput(exitCode === 0 ? "success" : "failed")
   }
 
+  async function confirmCanonicalWorkspaceAction(descriptor: WebWorkspaceAction, index: number): Promise<boolean> {
+    if (descriptor.confirmation === "none") return true
+    const entry = filteredEntries()[index]
+    if (!entry) return false
+    if (descriptor.action_id === "workspace.remove") {
+      const target = lifecycleTarget(entry)
+      if (target) setView({ view: "remove-confirm", target })
+      return false
+    }
+    if (descriptor.action_id === "workspace.notes.clear") {
+      setNotesMutationError("")
+      setView({ view: "workspace-notes", workspaceId: entry.workspaceId, workspaceName: entry.workspace.name, initialMode: "clear" })
+      await loadWorkspaceNotes(entry)
+      return false
+    }
+    if (descriptor.action_id === "workspace.force-remove") return false
+    return new Promise<boolean>((resolve) => {
+      setCanonicalConfirmation({ descriptor, index, resolve })
+    })
+  }
+
   async function openWorkspaceActionMenu(index: number): Promise<void> {
     setWorkspaceActions(undefined)
+    setWorkspaceActionRegistry(undefined)
+    setWorkspaceActionInventoryError("")
+    setWorkspaceActionInventoryState("loading")
     setView({ view: "action-menu", index })
     const entry = filteredEntries()[index]
     const revision = core.state()?.revision
-    if (!entry || !revision || typeof officialService.fetchWorkspaceActionInventory !== "function") return
+    if (!entry || !revision) {
+      setWorkspaceActionInventoryError("Workspace actions could not be loaded.")
+      setWorkspaceActionInventoryState("error")
+      return
+    }
     try {
       const actions = await officialService.fetchWorkspaceActionInventory({
         workspace_id: entry.workspaceId,
         expected_revision: revision,
       })
-      if (view().view === "action-menu") setWorkspaceActions(actions)
-    } catch (error) {
-      setRefreshFlash(error instanceof Error ? error.message : "Workspace actions could not be loaded.")
+      if (view().view !== "action-menu") return
+      const callbacks = Object.fromEntries(actions.map((descriptor) => [
+        descriptor.action_id,
+        async () => {
+          await runCanonicalWorkspaceAction(descriptor.action_id, index)
+          return { kind: "terminal" as const }
+        },
+      ])) as unknown as Parameters<typeof createWorkspaceActionRegistry>[1]
+      const registry = createWorkspaceActionRegistry(actions, callbacks, {
+        confirm: (descriptor) => confirmCanonicalWorkspaceAction(descriptor, index),
+      })
+      setWorkspaceActions(actions)
+      setWorkspaceActionRegistry(registry)
+      setWorkspaceActionInventoryState("ready")
+    } catch {
+      if (view().view !== "action-menu") return
+      setWorkspaceActionInventoryError("Workspace actions could not be loaded. Retry from the workspace list.")
+      setWorkspaceActionInventoryState("error")
     }
+  }
+
+  async function invokeCanonicalWorkspaceAction(actionId: WebWorkspaceActionId): Promise<void> {
+    const registry = workspaceActionRegistry()
+    if (!registry) return
+    const result = await registry.invoke(actionId, "menu")
+    if (result.status === "unavailable") setRefreshFlash(result.reason)
   }
 
   function syncTrackedOperation(tracker: OperationTracker<WebOperationMutation>): void {
@@ -748,7 +814,13 @@ export default function App() {
         await new Promise<void>((resolve) => setTimeout(resolve, 250))
         operation = await officialService.fetchWebOperation(operationId)
       }
+      forgeReview.observeOperation(operation)
       if (operation.state !== "succeeded") {
+        const recovery = forgeReview.state()
+        if (recovery.phase === "review" || recovery.phase === "resolve") {
+          setView({ view: "forge-source-review" })
+          return
+        }
         throw new Error(operation.error?.message ?? "Reviewed workspace creation did not complete.")
       }
       const createdName = operation.result?.workspace_name ?? workspaceName
@@ -1762,16 +1834,18 @@ export default function App() {
       </Show>
 
       {/* Action menus — full-screen CenteredDialog overlays */}
-      <Show when={!helpOpen() && !signalsOpen() && view().view === "action-menu"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "action-menu" && !canonicalConfirmation()}>
         <Switch>
           <Match when={tab() === "workspaces"}>
             <ActionMenu
               workspaceName={currentEntry()?.workspace.name ?? ""}
+              inventoryState={workspaceActionInventoryState()}
+              inventoryError={workspaceActionInventoryError() || undefined}
               descriptors={workspaceActions()}
               issueDisabledReason={issueDisabledReason()}
               commandsDisabledReason={commandsDisabledReason()}
               onAction={(action) => runAction(action, (view() as any).index)}
-              onInvoke={(actionId) => runCanonicalWorkspaceAction(actionId, (view() as any).index)}
+              onInvoke={invokeCanonicalWorkspaceAction}
               onCancel={() => setView({ view: "list" })}
               onRun={() => handleRun(selectedName())}
             />
@@ -1784,6 +1858,29 @@ export default function App() {
             />
           </Match>
         </Switch>
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && canonicalConfirmation()}>
+        {(() => {
+          const pending = canonicalConfirmation()!
+          const entry = filteredEntries()[pending.index]
+          const targetBranch = entry?.workspace.repos.find((repo) => repo.mode === "worktree")?.base_branch ?? "main"
+          const label = pending.descriptor.action_id === "workspace.merge"
+            ? `Merge ${entry?.workspace.name ?? "workspace"} into ${targetBranch}?`
+            : `${pending.descriptor.action_id} ${entry?.workspace.name ?? "workspace"}?`
+          const settle = (confirmed: boolean) => {
+            setCanonicalConfirmation(undefined)
+            pending.resolve(confirmed)
+          }
+          return (
+            <ConfirmDialog
+              title={pending.descriptor.action_id === "workspace.merge" ? "Merge workspace" : "Confirm workspace action"}
+              message={label}
+              onConfirm={() => settle(true)}
+              onCancel={() => settle(false)}
+            />
+          )
+        })()}
       </Show>
 
       <Show when={!helpOpen() && !signalsOpen() && view().view === "command-picker"}>

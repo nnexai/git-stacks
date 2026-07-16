@@ -38,6 +38,8 @@ export function WorkspaceNotesDialog(props: Props) {
       setDraft("")
       setMode("list")
       setValidation("")
+    }).catch(() => {
+      // The parent exposes the authoritative mutation error; keep the draft editable.
     }).finally(() => setPending(false))
   }
 
@@ -50,7 +52,9 @@ export function WorkspaceNotesDialog(props: Props) {
     if (mode() === "clear") {
       if (key.name === "y" && !pending()) {
         setPending(true)
-        void Promise.resolve(props.onClear()).then(() => setMode("list")).finally(() => setPending(false))
+        void Promise.resolve(props.onClear()).then(() => setMode("list")).catch(() => {
+          // Retain the confirmation and authoritative list after a rejected clear.
+        }).finally(() => setPending(false))
         return
       }
       if (key.name === "n" || key.name === "escape") setMode("list")

@@ -8,6 +8,8 @@ import { CenteredDialog } from "./CenteredDialog"
 
 type Props = {
   workspaceName: string
+  inventoryState?: "loading" | "ready" | "error"
+  inventoryError?: string
   descriptors?: readonly WebWorkspaceAction[]
   issueDisabledReason?: "none linked" | "no opener"
   commandsDisabledReason?: "none configured"
@@ -17,20 +19,23 @@ type Props = {
   onRun?: () => void
 }
 
+type CanonicalGroup = "Workspace" | "Git" | "Details" | "Lifecycle"
+
 type CanonicalRow = {
-  action: WebWorkspaceActionId
+  id: string
   key: string
   label: string
-  group: "Workspace" | "Git" | "Details" | "Lifecycle"
+  group: CanonicalGroup
   disabledReason?: string
+  activate: () => void | Promise<void>
 }
 
-const canonicalPresentation: Record<WebWorkspaceActionId, Omit<CanonicalRow, "action" | "disabledReason">> = {
+const canonicalPresentation: Record<WebWorkspaceActionId, { key: string; label: string; group: CanonicalGroup }> = {
   "workspace.open": { key: "o", label: "Open workspace", group: "Workspace" },
   "workspace.close": { key: "x", label: "Close workspace", group: "Workspace" },
   "workspace.rename": { key: "n", label: "Rename workspace", group: "Workspace" },
   "workspace.pin": { key: "v", label: "Pin workspace", group: "Workspace" },
-  "workspace.unpin": { key: "v", label: "Unpin workspace", group: "Workspace" },
+  "workspace.unpin": { key: "g", label: "Unpin workspace", group: "Workspace" },
   "workspace.sync": { key: "s", label: "Sync workspace", group: "Git" },
   "workspace.pull": { key: "l", label: "Pull workspace", group: "Git" },
   "workspace.push": { key: "p", label: "Push workspace", group: "Git" },
@@ -40,29 +45,57 @@ const canonicalPresentation: Record<WebWorkspaceActionId, Omit<CanonicalRow, "ac
   "workspace.notes.clear": { key: "z", label: "Clear notes", group: "Details" },
   "workspace.files.inspect": { key: "f", label: "View file status", group: "Details" },
   "workspace.archive": { key: "a", label: "Archive workspace", group: "Lifecycle" },
-  "workspace.unarchive": { key: "a", label: "Unarchive workspace", group: "Lifecycle" },
+  "workspace.unarchive": { key: "h", label: "Unarchive workspace", group: "Lifecycle" },
   "workspace.remove": { key: "r", label: "Remove workspace", group: "Lifecycle" },
   "workspace.force-remove": { key: "!", label: "Force remove workspace", group: "Lifecycle" },
   "operation.cancel": { key: "c", label: "Cancel operation", group: "Lifecycle" },
 }
 
-function CanonicalActionMenu(props: Required<Pick<Props, "workspaceName" | "descriptors" | "onInvoke" | "onCancel">>) {
-  const rows = (): CanonicalRow[] => props.descriptors.map((descriptor) => ({
+function InventoryUnavailableMenu(props: Pick<Props, "workspaceName" | "inventoryState" | "inventoryError" | "onCancel">) {
+  useKeyboard((key) => {
+    if (key.name === "escape") props.onCancel()
+  })
+  return (
+    <CenteredDialog title={props.workspaceName} size="medium">
+      <text fg={props.inventoryState === "loading" ? "cyan" : "red"}>
+        {props.inventoryState === "loading"
+          ? "  Loading authoritative workspace actions…"
+          : `  ${props.inventoryError ?? "Workspace actions could not be loaded."}`}
+      </text>
+      <text fg="gray">{"\n"}  No workspace action is available until the service inventory loads.</text>
+      <text fg="gray">{"\n"}  [Esc] Back</text>
+    </CenteredDialog>
+  )
+}
+
+function CanonicalActionMenu(props: Required<Pick<Props, "workspaceName" | "descriptors" | "onInvoke" | "onCancel">> & Pick<Props, "issueDisabledReason" | "commandsDisabledReason" | "onAction" | "onRun">) {
+  const canonicalRows = (): CanonicalRow[] => props.descriptors.map((descriptor) => ({
     ...canonicalPresentation[descriptor.action_id],
-    action: descriptor.action_id,
+    id: descriptor.action_id,
     ...(!descriptor.availability.available ? { disabledReason: descriptor.availability.message } : {}),
+    activate: () => props.onInvoke(descriptor.action_id),
   }))
+  const adaptedRows = (): CanonicalRow[] => {
+    const invokeLegacy = (action: Action) => () => props.onAction?.(action)
+    return [
+      ...(props.onAction ? [
+        { id: "legacy.edit", key: "e", label: "Edit ($EDITOR)", group: "Workspace" as const, activate: invokeLegacy("edit") },
+        { id: "legacy.clean", key: "k", label: "Clean", group: "Git" as const, activate: invokeLegacy("clean") },
+        { id: "legacy.issue", key: "i", label: "Issue...", group: "Details" as const, disabledReason: props.issueDisabledReason, activate: invokeLegacy("issue") },
+        { id: "legacy.commands", key: "d", label: "Commands...", group: "Details" as const, disabledReason: props.commandsDisabledReason, activate: invokeLegacy("commands") },
+      ] : []),
+      ...(props.onRun ? [{ id: "legacy.run", key: "u", label: "Run", group: "Workspace" as const, activate: props.onRun }] : []),
+    ]
+  }
+  const rows = (): CanonicalRow[] => [...canonicalRows(), ...adaptedRows()]
   const firstAvailable = () => Math.max(0, rows().findIndex((row) => !row.disabledReason))
   const [cursor, setCursor] = createSignal(firstAvailable())
   const [announcement, setAnnouncement] = createSignal("")
-  const pending = new Set<WebWorkspaceActionId>()
 
   const activate = (row: CanonicalRow | undefined) => {
     if (!row) return
     if (row.disabledReason) { setAnnouncement(row.disabledReason); return }
-    if (pending.has(row.action)) return
-    pending.add(row.action)
-    Promise.resolve(props.onInvoke(row.action)).finally(() => pending.delete(row.action))
+    void row.activate()
   }
 
   useKeyboard((key) => {
@@ -81,7 +114,7 @@ function CanonicalActionMenu(props: Required<Pick<Props, "workspaceName" | "desc
             <text fg="cyan">  {group}</text>
             <For each={rows().filter((row) => row.group === group)}>
               {(row) => {
-                const index = () => rows().findIndex((candidate) => candidate.action === row.action)
+                const index = () => rows().findIndex((candidate) => candidate.id === row.id)
                 return (
                   <text fg={row.disabledReason ? "gray" : index() === cursor() ? "cyan" : "white"}>
                     {index() === cursor() ? "> " : "  "}[{row.key}] {row.label}{row.disabledReason ? ` (${row.disabledReason})` : ""}
@@ -113,10 +146,7 @@ const actions: ActionItem[] = [
   { key: "p", action: "push", label: "Push" },
 ]
 
-export function ActionMenu(props: Props) {
-  if (props.descriptors && props.onInvoke) {
-    return <CanonicalActionMenu workspaceName={props.workspaceName} descriptors={props.descriptors} onInvoke={props.onInvoke} onCancel={props.onCancel} />
-  }
+function LegacyActionMenu(props: Props) {
   const issueItem = (): ActionItem => ({
     key: "i",
     action: "issue",
@@ -149,7 +179,6 @@ export function ActionMenu(props: Props) {
       props.onAction?.(item.action as Action)
       return
     }
-    // Letter-key shortcuts (backward compatible)
     if (key.name === "u" && props.onRun) { props.onRun(); return }
     const match = fullActions().find((a) => a.key === key.name)
     if (match?.disabled) return
@@ -168,4 +197,20 @@ export function ActionMenu(props: Props) {
       <text fg="gray">{"\n"}  [Esc] Back</text>
     </CenteredDialog>
   )
+}
+
+export function ActionMenu(props: Props) {
+  if (props.inventoryState === "loading" || props.inventoryState === "error") {
+    return <InventoryUnavailableMenu workspaceName={props.workspaceName} inventoryState={props.inventoryState} inventoryError={props.inventoryError} onCancel={props.onCancel} />
+  }
+  if (props.inventoryState === "ready") {
+    if (!props.descriptors || !props.onInvoke) {
+      return <InventoryUnavailableMenu workspaceName={props.workspaceName} inventoryState="error" inventoryError="Workspace actions could not be loaded." onCancel={props.onCancel} />
+    }
+    return <CanonicalActionMenu {...props} descriptors={props.descriptors} onInvoke={props.onInvoke} />
+  }
+  if (props.descriptors && props.onInvoke) {
+    return <CanonicalActionMenu {...props} descriptors={props.descriptors} onInvoke={props.onInvoke} />
+  }
+  return <LegacyActionMenu {...props} />
 }

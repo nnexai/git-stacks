@@ -65,7 +65,8 @@ export function WorkspaceOperationView(props: Props) {
     }
     const operation = current()
     const terminal = operation && operation.state !== "accepted" && operation.state !== "running"
-    if ((key.name === "escape" || key.name === "return") && terminal && props.state.phase === "ready") props.onBack()
+    const recoverableBack = props.state.phase === "submit-unknown" || (terminal && props.state.phase === "ready")
+    if ((key.name === "escape" || key.name === "return") && recoverableBack) props.onBack()
   })
 
   return (
@@ -84,6 +85,7 @@ export function WorkspaceOperationView(props: Props) {
       </For>
       {(props.overflowCount ?? 0) > 0 ? <text fg="gray">  +{props.overflowCount} earlier operation rows omitted</text> : null}
       {props.state.phase === "reconnecting" ? <text fg="yellow">  Reconnecting… observing the known operation only.</text> : null}
+      {props.state.phase === "submit-unknown" ? <text fg="yellow">  The submission outcome is unknown. The action will not be replayed. Return Back and refresh before retrying.</text> : null}
       {props.state.phase === "refreshing" ? <text fg="cyan">  Refreshing authoritative workspace state…</text> : null}
       {props.state.phase === "refresh-failed" ? <text fg="red">  Authoritative refresh failed. [r] Retry refresh</text> : null}
       {cancellable()

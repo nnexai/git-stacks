@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { testRender } from "@opentui/solid"
+import { createWorkspaceActionRegistry } from "@git-stacks/client"
 import type { WebOperationSummary, WebWorkspaceAction } from "@git-stacks/protocol"
 
 import { ActionMenu } from "../../../packages/tui/src/ActionMenu"
@@ -162,12 +163,16 @@ describe("OpenTUI workspace parity", () => {
     let calls = 0
     let release!: () => void
     const pending = new Promise<void>((resolve) => { release = resolve })
+    const pull = descriptor("workspace.pull")
+    const registry = createWorkspaceActionRegistry([pull], {
+      "workspace.pull": async () => { calls += 1; await pending; return { kind: "terminal" } },
+    } as Parameters<typeof createWorkspaceActionRegistry>[1])
     const { renderOnce, mockInput } = await testRender(
       () => (
         <ActionMenu
           workspaceName="parity-ws"
-          descriptors={[descriptor("workspace.pull")]}
-          onInvoke={async () => { calls += 1; await pending }}
+          descriptors={[pull]}
+          onInvoke={(actionId) => registry.invoke(actionId, "menu").then(() => undefined)}
           onCancel={() => {}}
         />
       ),
@@ -325,6 +330,8 @@ describe("OpenTUI authoritative workspace details", () => {
     )
     await add.renderOnce()
     add.mockInput.pressKey("a")
+    await add.renderOnce()
+    await Bun.sleep(1)
     await add.renderOnce()
     await add.mockInput.typeText("operator note")
     add.mockInput.pressEnter()

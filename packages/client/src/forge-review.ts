@@ -7,7 +7,7 @@ import {
   type WebForgeResolveRequest,
   type WebForgeResolveResponse,
   type WebForgeTerminology,
-  type WebOperationSummary,
+  type WebForgeErrorDetails,
   type WebReviewedWorkspaceCreateRequest,
   type WebReviewedWorkspaceDraft,
   type ForgeSourceIdentity,
@@ -49,6 +49,12 @@ export type ForgeReviewEdit =
   | { kind: "repository_included"; repositoryId: string; included: boolean }
   | { kind: "repository_branch"; repositoryId: string; workspaceBranch: string; baseBranch?: string }
 
+export type ForgeReviewOperationObservation = {
+  operation_id: string
+  state: "accepted" | "running" | "succeeded" | "failed" | "cancelled"
+  error?: { message: string; forge?: WebForgeErrorDetails }
+}
+
 export type ForgeReviewCoordinatorCallbacks = {
   resolve(request: WebForgeResolveRequest): Promise<WebForgeResolveResponse>
   create(request: WebReviewedWorkspaceCreateRequest): Promise<{ operationId: string }>
@@ -61,7 +67,7 @@ export type ForgeReviewCoordinator = {
   resolve(): Promise<unknown>
   edit(action: ForgeReviewEdit): void
   create(): Promise<unknown>
-  observeOperation(operation: WebOperationSummary): void
+  observeOperation(operation: ForgeReviewOperationObservation): void
   reconcile(): void
 }
 
@@ -295,7 +301,7 @@ export function createForgeReviewCoordinator(
     create,
     observeOperation(operation) {
       if (current.phase !== "accepted" || operation.operation_id !== current.operationId) return
-      if ((operation.state !== "failed" && operation.state !== "cancelled") || !operation.error.forge) return
+      if ((operation.state !== "failed" && operation.state !== "cancelled") || !operation.error?.forge) return
       const failure = classifyForgeReviewFailure({ message: operation.error.message, details: operation.error.forge })
       if (!failure) return
       const accepted = current
