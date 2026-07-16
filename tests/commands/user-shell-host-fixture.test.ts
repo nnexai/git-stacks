@@ -182,6 +182,7 @@ describe("host user-shell fixtures", () => {
     const bash = executable("bash")!
     const release = join(fixtureRoot, "release-a")
     const serviceEnvironment = createDynamicEnvironmentStore({ PATH: process.env.PATH, SSH_AUTH_SOCK: agentA.SSH_AUTH_SOCK })
+    const processAController = new AbortController()
     let outputA = ""
     let processAError: unknown
     const processA = executeUserShellCommand({
@@ -190,38 +191,49 @@ describe("host user-shell fixtures", () => {
       shellEnvironment: { ...process.env, SHELL: bash },
       inheritedEnvironment: process.env,
       overlay: { ...serviceEnvironment.snapshot() },
+      signal: processAController.signal,
       onOutput: ({ chunk }) => { outputA += Buffer.from(chunk).toString("utf8") },
     }).catch((error) => { processAError = error; return undefined })
-    await waitFor(() => outputA.includes("agent:A:before") || processAError !== undefined, "process A did not validate agent A")
-    if (processAError) throw processAError
-    serviceEnvironment.replace({ PATH: process.env.PATH, SSH_AUTH_SOCK: agentB.SSH_AUTH_SOCK })
-    const outputB = await executeUserShellCommand({
-      command: "ssh-add -l | grep -q phase124-agent-b && printf 'agent:B:command\\n'",
-      cwd: fixtureRoot,
-      shellEnvironment: { ...process.env, SHELL: bash },
-      inheritedEnvironment: process.env,
-      overlay: { ...serviceEnvironment.snapshot() },
-    })
-    const ptyB = await runPty(bash, { ...process.env, ...serviceEnvironment.snapshot() }, fixtureRoot, "ssh-add -l | grep -q phase124-agent-b && printf 'agent:B:pty\\n'")
-    await writeFile(release, "release\n")
-    expect((await processA)?.exitCode).toBe(0)
-    expect(outputA).toContain("agent:A:before")
-    expect(outputA).toContain("agent:A:after")
-    expect(outputB.stdout.toString("utf8")).toContain("agent:B:command")
-    expect(ptyB).toContain("agent:B:pty")
-    serviceEnvironment.replace({ PATH: process.env.PATH })
-    const inheritedWithoutSocket = { ...process.env }
-    delete inheritedWithoutSocket.SSH_AUTH_SOCK
-    const cleared = await executeUserShellCommand({
-      command: "ssh-add -l",
-      cwd: fixtureRoot,
-      shellEnvironment: { ...process.env, SHELL: bash },
-      inheritedEnvironment: inheritedWithoutSocket,
-      overlay: { ...serviceEnvironment.snapshot() },
-    })
-    expect(cleared.exitCode).not.toBe(0)
-    receipt.ssh.agent_cases = 2
-    receipt.ssh.ssh_add_cases = 4
+    try {
+      await waitFor(() => outputA.includes("agent:A:before") || processAError !== undefined, "process A did not validate agent A")
+      if (processAError) throw processAError
+      serviceEnvironment.replace({ PATH: process.env.PATH, SSH_AUTH_SOCK: agentB.SSH_AUTH_SOCK })
+      const outputB = await executeUserShellCommand({
+        command: "ssh-add -l | grep -q phase124-agent-b && printf 'agent:B:command\\n'",
+        cwd: fixtureRoot,
+        shellEnvironment: { ...process.env, SHELL: bash },
+        inheritedEnvironment: process.env,
+        overlay: { ...serviceEnvironment.snapshot() },
+      })
+      const ptyB = await runPty(bash, { ...process.env, ...serviceEnvironment.snapshot() }, fixtureRoot, "ssh-add -l | grep -q phase124-agent-b && printf 'agent:B:pty\\n'")
+      await writeFile(release, "release\n")
+      expect((await processA)?.exitCode).toBe(0)
+      expect(outputA).toContain("agent:A:before")
+      expect(outputA).toContain("agent:A:after")
+      expect(outputB.stdout.toString("utf8")).toContain("agent:B:command")
+      expect(ptyB).toContain("agent:B:pty")
+      serviceEnvironment.replace({ PATH: process.env.PATH })
+      const inheritedWithoutSocket = { ...process.env }
+      delete inheritedWithoutSocket.SSH_AUTH_SOCK
+      const cleared = await executeUserShellCommand({
+        command: "ssh-add -l",
+        cwd: fixtureRoot,
+        shellEnvironment: { ...process.env, SHELL: bash },
+        inheritedEnvironment: inheritedWithoutSocket,
+        overlay: { ...serviceEnvironment.snapshot() },
+      })
+      expect(cleared.exitCode).not.toBe(0)
+      receipt.ssh.agent_cases = 2
+      receipt.ssh.ssh_add_cases = 4
+    } finally {
+      await writeFile(release, "release\n").catch(() => undefined)
+      const stopped = await Promise.race([
+        processA.then(() => true),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), 2_000)),
+      ])
+      if (!stopped) processAController.abort()
+      await processA
+    }
   })
 
   test.skipIf(!executable("bash"))("cancellation removes a real host command child and grandchild", async () => {
@@ -245,7 +257,9 @@ describe("host user-shell fixtures", () => {
     expect(executionError).toMatchObject({ diagnostic: { category: "cancellation" } })
     const childPid = Number((await readFile(childFile, "utf8")).trim())
     const grandchildPid = Number((await readFile(grandchildFile, "utf8")).trim())
-    for (const pid of [childPid, grandchildPid]) expect(() => process.kill(pid, 0)).toThrow()
+    const pids = [childPid, grandchildPid]
+    const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
+    await waitFor(() => pids.every((pid) => !alive(pid)), "cancelled process tree still has live descendants")
     receipt.process_tree.case_count = 1
   })
 })
