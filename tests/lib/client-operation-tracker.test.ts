@@ -56,6 +56,21 @@ describe("durable operation tracker", () => {
     expect(tracker.state()).toMatchObject({ phase: "observing", operationId })
   })
 
+  test("hydrates a known operation after reload and reconnects by ID without submitting intent", async () => {
+    const get = vi.fn(async () => running())
+    const submit = vi.fn()
+    const tracker = createOperationTracker({ submit, get, cancel: vi.fn(), refresh: vi.fn() })
+
+    await tracker.hydrate(operationId)
+    expect(get).toHaveBeenCalledWith(operationId)
+    expect(submit).not.toHaveBeenCalled()
+    expect(tracker.state()).toEqual({ phase: "observing", operationId })
+
+    await tracker.reconnect()
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
   test.each([
     ["requested", "running"],
     ["too-late", "running"],

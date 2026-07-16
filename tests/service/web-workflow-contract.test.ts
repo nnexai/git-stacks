@@ -214,6 +214,14 @@ describe("web workflow protocol contract", () => {
     expect(WebOperationMutationSchema.parse({ kind: "workspace.notes.clear", request: {
       workspace_id: workspaceId, expected_revision: "7", expected_notes_revision: "3",
     } }).kind).toBe("workspace.notes.clear")
+    expect(WebOperationMutationSchema.parse({
+      kind: "workspace.rename",
+      request: { workspace_id: workspaceId, expected_revision: "7", new_name: "renamed-demo" },
+    })).toEqual({ kind: "workspace.rename", request: { workspace_id: workspaceId, expected_revision: "7", new_name: "renamed-demo" } })
+    expect(WebOperationMutationSchema.safeParse({
+      kind: "workspace.rename",
+      request: { workspace: "demo", new_name: "renamed-demo" },
+    }).success).toBe(false)
   })
 })
 

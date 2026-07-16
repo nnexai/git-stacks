@@ -148,6 +148,10 @@ describe("canonical workspace action authority", () => {
       availability: { available: true },
       pending_operation_id: "op_1234567890abcdef",
     })
+    for (const action of constrained) {
+      const isBlocked = !action.availability.available && action.availability.reason === "operation_in_progress"
+      expect(action.pending_operation_id !== undefined).toBe(isBlocked || action.action_id === "operation.cancel")
+    }
 
     const stale = deriveWorkspaceActionInventory({ state: state(), workspaceId: ACTIVE_ID, staleRevision: true })
     expect(byId(stale, "workspace.remove").availability).toMatchObject({ available: false, reason: "stale_revision" })

@@ -58,4 +58,11 @@ describe("web reviewed forge creation", () => {
     expect(cssSource).toMatch(/\.modal[^}]*max-width:\s*100%/)
     expect(cssSource).toMatch(/\.forge-review[^}]*min-width:\s*0/)
   })
+
+  test("renders explicit terminal recovery instead of trapping failed accepted operations", () => {
+    for (const seam of ["terminal-error", "Back to review", "Change URL", "Close", "backToReview"]) {
+      expect(appSource).toContain(seam)
+    }
+    expect(appSource).not.toContain("for (let attempt = 0; attempt < 300; attempt += 1)")
+  })
 })

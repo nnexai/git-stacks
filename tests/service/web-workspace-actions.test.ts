@@ -93,6 +93,29 @@ describe("web canonical workspace action surface", () => {
     ]) expect(appSource).toContain(seam)
     expect(appSource).not.toMatch(/workspace\.pull[\s\S]{0,120}(?:child_process|spawn|exec)/)
   })
+
+  test("caches one registry and latch for every authoritative workspace inventory generation", () => {
+    expect(appSource).toContain("workspaceActionRegistryCache")
+    expect(appSource).toContain("inventoryGeneration")
+    expect(appSource).not.toMatch(/function actionRegistryFor[\s\S]{0,300}return createWorkspaceActionRegistry/)
+    expect(appSource).not.toContain("showDirtyRemovalFailure(current, details)")
+  })
+
+  test("hydrates pending operations and reconnects them by identity on reload and stream closure", () => {
+    expect(appSource).toContain("operationTracker.hydrate")
+    expect(appSource).toContain("reconnectKnownOperation")
+    expect(appSource).toMatch(/subscribeSecureEvents[\s\S]*reconnectKnownOperation/)
+    expect(appSource).not.toMatch(/operation\.get[\s\S]{0,500}summarizeOperation/)
+  })
+
+  test("uses stable rename intent and restores concrete context-menu and overlay nodes", () => {
+    expect(appSource).toContain('kind: "workspace.rename"')
+    expect(appSource).toContain("new_name: nextName")
+    expect(appSource).not.toContain('request: { workspace: workspace.name, new_name: nextName }')
+    expect(appSource).toContain("contextMenuInvoker")
+    expect(appSource).toContain("requestAnimationFrame")
+    expect(appSource).toContain("focusInvalidForgeField")
+  })
 })
 
 describe("web authoritative notes and path-free file details", () => {

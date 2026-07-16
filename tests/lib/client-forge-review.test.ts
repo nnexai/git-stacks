@@ -165,4 +165,28 @@ describe("forge resolve-review-create coordinator", () => {
       failure: { code: "branch_conflict", recovery: "change_branch" },
     })
   })
+
+  test.each(["failed", "cancelled"] as const)("recovers generic %s operations without polling or resubmitting", async (outcome) => {
+    const create = vi.fn(async () => ({ operationId: "op_1234567890abcdef" }))
+    const coordinator = createForgeReviewCoordinator({ resolve: vi.fn(async () => resolution), create })
+    coordinator.setUrl(url)
+    await coordinator.resolve()
+    await coordinator.create()
+
+    coordinator.observeOperation({
+      operation_id: "op_1234567890abcdef",
+      action_id: "workspace.create.reviewed",
+      workspace_name: "review-42",
+      state: outcome,
+      accepted_at: "2026-07-16T12:00:00.000Z",
+      finished_at: "2026-07-16T12:00:01.000Z",
+      cancellation: { state: "unavailable", reason: "finished" },
+      error: { code: "operation_failed", message: "Workspace creation failed safely.", retryable: false },
+    })
+    expect(coordinator.state()).toMatchObject({ phase: "terminal-error", outcome, message: "Workspace creation failed safely." })
+
+    expect(coordinator.backToReview()).toEqual({ status: "review" })
+    expect(coordinator.state()).toMatchObject({ phase: "review" })
+    expect(create).toHaveBeenCalledTimes(1)
+  })
 })
