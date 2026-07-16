@@ -29,4 +29,23 @@ describe("workspace definition pin metadata", () => {
   test("rejects identities that are not backed by a workspace definition", () => {
     expect(() => setWorkspacePins(["33333333-3333-4333-8333-333333333333"], { listWorkspaces: () => [], writeWorkspace: () => {} })).toThrow("Unknown workspace identity")
   })
+
+  test("active pin replacement preserves archived pin and priority metadata", () => {
+    const archived = {
+      ...workspace("11111111-1111-4111-8111-111111111111", "archived", true),
+      priority: 99,
+      archived: true,
+      archived_at: "2026-07-16T06:00:00.000Z",
+    } as Workspace
+    const active = workspace("22222222-2222-4222-8222-222222222222", "active")
+    const written: Workspace[] = []
+
+    setWorkspacePins([active.id!], {
+      listWorkspaces: () => [archived, active],
+      writeWorkspace: (value) => written.push(value),
+    })
+
+    expect(written).toEqual([expect.objectContaining({ id: active.id, pinned: true })])
+    expect(archived).toMatchObject({ pinned: true, priority: 99, archived: true })
+  })
 })

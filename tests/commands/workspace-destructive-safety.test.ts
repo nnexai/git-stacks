@@ -101,6 +101,18 @@ describe("workspace destructive command safety", () => {
     expect(existsSync(untouched.repo.taskPath)).toBe(true)
   })
 
+  test("force removal does not bypass an unparseable workspace definition", () => {
+    const target = setupWorkspace(tmpDir, configDir, "remove-invalid")
+    writeFileSync(target.yaml, "{{{not valid yaml:::")
+
+    const result = runCli(["remove", target.wsName, "--force"], { baseDir: tmpDir, configDir })
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toMatch(/Cannot parse workspace YAML|not found/)
+    expect(existsSync(target.yaml)).toBe(true)
+    expect(existsSync(target.repo.taskPath)).toBe(true)
+  })
+
   test("merge dry-run preserves branch, worktree, and workspace YAML", () => {
     const fixture = setupWorkspace(tmpDir, configDir, "merge-dry")
     writeFileSync(join(fixture.repo.taskPath, "feature.txt"), "feature\n")

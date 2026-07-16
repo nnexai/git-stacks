@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "@test/api"
-import { existsSync, mkdirSync, readFileSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, renameSync } from "fs"
 import { join } from "path"
 import {
   applyTestGitEnv,
@@ -22,7 +22,7 @@ function wsYaml(cfgDir: string, wsName: string) {
 }
 
 function setupWorkspace(tmpDir: string, cfgDir: string, wsName = "life-ws", hooks?: Record<string, string[]>) {
-  const repo = makeRepoWithRemote(tmpDir, "api", `feat/${wsName}`)
+  const repo = makeRepoWithRemote(tmpDir, `api-${wsName}`, `feat/${wsName}`)
   const wsRoot = join(tmpDir, "workspaces")
   mkdirSync(join(wsRoot, "tasks", wsName), { recursive: true })
   makeWorkspaceFixture(cfgDir, wsName, [
@@ -158,6 +158,20 @@ describe("workspace lifecycle CLI", () => {
       const result = runCli(["list"], { baseDir: tmpDir, configDir: cfgDir })
       expectSuccessful(result)
       expect(result.stdout).not.toContain(wsName)
+    })
+
+    test("remove deletes the resolved drifted YAML and leaves unrelated definitions untouched", () => {
+      const target = setupWorkspace(tmpDir, cfgDir, "drift-target")
+      const unrelated = setupWorkspace(tmpDir, cfgDir, "drift-untouched")
+      const driftedYaml = join(cfgDir, "workspaces", "historical-filename.yml")
+      renameSync(wsYaml(cfgDir, target.wsName), driftedYaml)
+
+      const result = runCli(["remove", target.wsName, "--force"], { baseDir: tmpDir, configDir: cfgDir })
+
+      expectSuccessful(result)
+      expect(existsSync(driftedYaml)).toBe(false)
+      expect(existsSync(unrelated.repo.taskPath)).toBe(true)
+      expect(existsSync(wsYaml(cfgDir, unrelated.wsName))).toBe(true)
     })
   })
 

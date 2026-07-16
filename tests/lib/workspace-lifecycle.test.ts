@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "@test/api"
+import { existsSync, mkdirSync } from "fs"
+import { join } from "path"
 import { runProcess } from "../process"
 import { cleanup, makeConfigMock, makeTmpDir } from "../helpers"
 
@@ -12,10 +14,13 @@ const readGlobalConfigMock = mock(() => ({
   integrations: {},
   ports: { range_start: 10000, range_end: 65000 },
 }))
+const deleteWorkspaceMock = mock((_name: string) => {})
+const workspaceFilePathMock = mock((name: string) => `/tmp/phase-75-config/workspaces/${name}.yml`)
 
 // ─── Git mocks ────────────────────────────────────────────────────────────────
 const getMergeConflictsMock = mock(async () => ({ status: "clean" } as any))
 const checkBranchExistsMock = mock(async () => false)
+const removeWorktreeMock = mock(async (_mainPath: string, _taskPath: string) => {})
 
 // ─── Integration runner mock ──────────────────────────────────────────────────
 const runIntegrationCleanupMock = mock(async () => {})
@@ -43,6 +48,8 @@ mock.module("@/lib/config", () =>
     workspaceExists: workspaceExistsMock,
     readWorkspace: readWorkspaceMock,
     readGlobalConfig: readGlobalConfigMock,
+    deleteWorkspace: deleteWorkspaceMock,
+    workspaceFilePath: workspaceFilePathMock,
     isWorktreeRepo: mock((repo: any) => repo.mode === "worktree"),
   })
 )
@@ -50,7 +57,7 @@ mock.module("@/lib/config", () =>
 mock.module("@/lib/git", () => ({
   getMergeConflicts: getMergeConflictsMock,
   checkBranchExists: checkBranchExistsMock,
-  removeWorktree: mock(async () => {}),
+  removeWorktree: removeWorktreeMock,
   mergeNoFF: mock(async () => ({ ok: true })),
   deleteLocalBranch: mock(async () => {}),
 }))
@@ -101,7 +108,12 @@ mock.module("@/lib/observability", () => ({
   logDebug: mock(() => {}),
 }))
 
-const { closeWorkspace, _exec } = await import("../../packages/core/src/workspace-lifecycle")
+const {
+  closeWorkspace,
+  inspectWorkspaceRemoval,
+  commitWorkspaceRemoval,
+  _exec,
+} = await import("../../packages/core/src/workspace-lifecycle")
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -128,11 +140,17 @@ describe("workspace-lifecycle exec seam", () => {
     readWorkspaceMock.mockReset()
     getDirtyWorktreesMock.mockReset()
     runIntegrationCleanupMock.mockReset()
+    removeWorktreeMock.mockReset()
+    deleteWorkspaceMock.mockReset()
+    workspaceFilePathMock.mockReset()
     buildBaseEnvMock.mockReset()
 
     workspaceExistsMock.mockImplementation(() => true)
     getDirtyWorktreesMock.mockImplementation(async () => [])
     runIntegrationCleanupMock.mockImplementation(async () => {})
+    removeWorktreeMock.mockImplementation(async () => {})
+    deleteWorkspaceMock.mockImplementation(() => {})
+    workspaceFilePathMock.mockImplementation((name: string) => `/tmp/phase-75-config/workspaces/${name}.yml`)
     buildBaseEnvMock.mockImplementation((_workspace: any, _tasksDir: string, triggeredBy: string) => ({
       GS_WORKSPACE_NAME: "test-ws",
       GS_WORKSPACE_BRANCH: "feature/test",
@@ -216,5 +234,79 @@ describe("workspace-lifecycle exec seam", () => {
     expect(result.ok).toBe(true)
     expect(progressLines).toContain("PRE_CLOSE")
     expect(progressLines).toContain("Closed 'test-ws'.")
+  })
+
+  test("inspectWorkspaceRemoval reports every dirty blocker with zero mutation", async () => {
+    const workspace = makeTestWorkspace()
+    readWorkspaceMock.mockImplementation(() => workspace)
+    getDirtyWorktreesMock.mockImplementation(async () => ["api", "worker"])
+
+    const inspected = await inspectWorkspaceRemoval("test-ws")
+
+    expect(inspected).toMatchObject({
+      ok: false,
+      code: "workspace_dirty",
+      blocking_repositories: ["api", "worker"],
+    })
+    expect(inspected).toHaveProperty("plan")
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(deleteWorkspaceMock).not.toHaveBeenCalled()
+    expect(runIntegrationCleanupMock).not.toHaveBeenCalled()
+  })
+
+  test("commitWorkspaceRemoval bypasses only an inspected dirty guard when explicitly authorized", async () => {
+    const taskPath = join(tempRoot, "tasks", "test-ws", "api")
+    mkdirSync(taskPath, { recursive: true })
+    getTasksDirMock.mockImplementation(() => join(tempRoot, "tasks"))
+    readWorkspaceMock.mockImplementation(() => ({
+      ...makeTestWorkspace({ pre_close: ["exit 23"] }),
+      repos: [{ name: "api", repo: "api", type: "other", mode: "worktree", main_path: join(tempRoot, "main", "api"), task_path: taskPath }],
+    }))
+    getDirtyWorktreesMock.mockImplementation(async () => ["api"])
+    _exec.spawn = () => ({ exited: Promise.resolve(23), stdout: null, stderr: null }) as any
+
+    const inspected = await inspectWorkspaceRemoval("test-ws")
+    expect(inspected.ok).toBe(false)
+    if (inspected.ok || inspected.code !== "workspace_dirty") throw new Error("expected dirty inspection")
+
+    const refused = await commitWorkspaceRemoval(inspected.plan)
+    expect(refused).toMatchObject({ ok: false, code: "workspace_dirty", blocking_repositories: ["api"] })
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+
+    const forced = await commitWorkspaceRemoval(inspected.plan, { allow_dirty: true })
+    expect(forced.ok).toBe(false)
+    expect(forced.error).toContain("pre_close")
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(deleteWorkspaceMock).not.toHaveBeenCalled()
+    expect(existsSync(taskPath)).toBe(true)
+  })
+
+  test("commitWorkspaceRemoval reports phases immediately before their destructive calls", async () => {
+    const taskPath = join(tempRoot, "tasks", "test-ws", "api")
+    mkdirSync(taskPath, { recursive: true })
+    getTasksDirMock.mockImplementation(() => join(tempRoot, "tasks"))
+    readWorkspaceMock.mockImplementation(() => ({
+      ...makeTestWorkspace({}),
+      repos: [{ name: "api", repo: "api", type: "other", mode: "worktree", main_path: join(tempRoot, "main", "api"), task_path: taskPath }],
+    }))
+    const calls: string[] = []
+    removeWorktreeMock.mockImplementation(async () => { calls.push("removeWorktree") })
+    deleteWorkspaceMock.mockImplementation(() => { calls.push("deleteWorkspace") })
+
+    const inspected = await inspectWorkspaceRemoval("test-ws")
+    expect(inspected.ok).toBe(true)
+    if (!inspected.ok) throw new Error("expected clean inspection")
+
+    const committed = await commitWorkspaceRemoval(inspected.plan, {
+      onPhase: async (phase) => { calls.push(phase) },
+    })
+
+    expect(committed.ok).toBe(true)
+    expect(calls).toEqual([
+      "removing_worktrees",
+      "removeWorktree",
+      "deleting_workspace_files",
+      "deleteWorkspace",
+    ])
   })
 })
