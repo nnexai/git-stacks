@@ -114,13 +114,19 @@ None - plan executed exactly as written.
 
 - The isolated worktree had no dependency directory. A temporary symlink to the main worktree's installed dependencies enabled tests and was removed before commit.
 
+## Review Resolution
+
+- `6f90d30c` added adversarial RED coverage for lifecycle state leakage, path-bearing file messages, file state/count mismatches, forge identity/linkage drift, and idle-versus-cancellable action inventories.
+- `a1b4c8a5` made operation summaries truly state-discriminated, derived file summaries from strict state mappings, bound reviewed forge drafts to canonical source candidates, and made `operation.cancel` conditional on a matching pending operation.
+- The repaired contract remains protocol-only and passes the focused legacy protocol bundle plus protocol/service typechecks.
+
 ## User Setup Required
 
 None - no external service configuration required.
 
 ## Verification
 
-- `./node_modules/.bin/vitest run tests/service/web-workflow-contract.test.ts` — 13 passed.
+- `./node_modules/.bin/vitest run tests/service/web-workflow-contract.test.ts` — 14 passed.
 - Focused legacy plus new protocol run — 4 files, 37 tests passed.
 - `npm run typecheck --workspace @git-stacks/protocol` — passed.
 - `npm run typecheck --workspace @git-stacks/service` — passed.
