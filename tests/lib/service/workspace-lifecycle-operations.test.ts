@@ -164,12 +164,35 @@ describe("service workspace lifecycle coordinator", () => {
 
     const converged = await runExecution(state.coordinator, mutation("workspace.archive", WORKSPACE_A, "1"))
     expect(converged.execution.result).toMatchObject({ workspace_name: "alpha", revision: "2", terminals_stopped: true })
-    expect(state.calls.some((call) => call.startsWith("terminals:"))).toBe(false)
+    expect(converged.phases).toEqual(["stopping_terminals"])
+    expect(state.calls).toContain(`terminals:${WORKSPACE_A}`)
     expect(state.calls).not.toContain("archive:alpha")
 
     await expect(runExecution(state.coordinator, mutation("workspace.remove", WORKSPACE_A, "1"))).rejects.toMatchObject({ code: "conflict" })
     expect(state.calls.some((call) => call.startsWith("inspect:"))).toBe(false)
     expect(state.calls.some((call) => call.startsWith("commit:"))).toBe(false)
+  })
+
+  test("keeps an already-archived definition unchanged when terminal shutdown cannot be confirmed", async () => {
+    const state = harness({
+      terminals: {
+        async closeWorkspace(id) {
+          state.calls.push(`terminals:failed:${id}`)
+          return { ok: false, status: "cleanup_failed", requested: 1, closed: 0, failed: 1 }
+        },
+      },
+    })
+    state.targets[0]!.archived = true
+    state.setRevision("2")
+
+    await expect(runExecution(state.coordinator, mutation("workspace.archive", WORKSPACE_A, "1"))).rejects.toMatchObject({
+      code: "operation_failed",
+      details: { kind: "terminal_cleanup_failed", terminals_stopped: false, force_allowed: false },
+    })
+    expect(state.calls).toContain(`terminals:failed:${WORKSPACE_A}`)
+    expect(state.calls).not.toContain("archive:alpha")
+    expect(state.revision()).toBe("2")
+    expect(state.targets[0]).toMatchObject({ id: WORKSPACE_A, archived: true })
   })
 
   test("carries the catalog stable ID into archive and removal core boundaries", async () => {

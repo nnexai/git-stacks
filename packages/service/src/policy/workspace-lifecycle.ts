@@ -113,16 +113,9 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
                 if (!desiredAlreadySatisfied) {
                   throw failure("conflict", "Authoritative workspace revision is stale", "stale_revision", false)
                 }
-                Object.assign(result, {
-                  workspace_name: target.name,
-                  snapshot_changed: false,
-                  revision: before.revision,
-                  terminals_stopped: true,
-                })
-                return
               }
 
-              if (desiredAlreadySatisfied) {
+              if (desiredAlreadySatisfied && mutation.kind === "workspace.unarchive") {
                 Object.assign(result, {
                   workspace_name: target.name,
                   snapshot_changed: false,
@@ -139,6 +132,16 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
                   throw failure("operation_failed", "Workspace terminals did not stop", "terminal_cleanup_failed", false)
                 }
                 terminalsStopped = true
+              }
+
+              if (desiredAlreadySatisfied) {
+                Object.assign(result, {
+                  workspace_name: target.name,
+                  snapshot_changed: false,
+                  revision: before.revision,
+                  terminals_stopped: terminalsStopped,
+                })
+                return
               }
 
               if (mutation.kind === "workspace.archive") {
