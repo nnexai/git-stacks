@@ -5,15 +5,15 @@ milestone_name: Workspace Productivity
 current_phase: 123
 current_phase_name: Archived Workspaces and Safe Removal
 status: executing
-stopped_at: Completed 123-05-PLAN.md
-last_updated: "2026-07-16T07:03:46.309Z"
+stopped_at: Completed 123-06-PLAN.md
+last_updated: "2026-07-16T07:18:52.037Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-07-16 — Phase 123 execution started
 
@@ -66,6 +66,9 @@ Last activity: 2026-07-16 — Phase 123 execution started
 - [Phase 123]: Lifecycle schemas stay separate from legacy name-based core mutations; service clients carry stable-ID/revision intent while daemonless CLI authority remains unchanged. — Prevents a second destructive transport shape from owning lifecycle policy.
 - [Phase 123]: Trusted operation.submit is single-attempt; reconnection resumes observation only after a durable operation ID is received. — A transport retry must never replay destructive intent.
 - [Phase 123]: The router constructs the sole terminal manager with shared admission, then the composition factory creates the coordinator from that exact manager and aggregate snapshot. — Preserves terminal idle accounting and one lifecycle authority.
+- [Phase 123]: Browser lifecycle submission is attempted once; only the returned durable operation ID is observed afterward. — Prevents destructive intent from being replayed after reconnect or stale state.
+- [Phase 123]: Every lifecycle terminal state refreshes authoritative catalog, terminal, and signal replacement sets before presentation settles. — Service-side terminal state may change even when persisted workspace mutation fails.
+- [Phase 123]: The browser web.snapshot route consumes the aggregate catalog. — Archive-only and all-archived revisions must not fall back to zero.
 
 ## Validated Inputs
 
@@ -135,9 +138,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 123 P03 | 7 min | 2 tasks | 3 files |
 | Phase 123 P04 | 7 min | 2 tasks | 5 files |
 | Phase 123 P05 | 10 min | 2 tasks | 6 files |
+| Phase 123 P06 | 9 min | 3 tasks | 6 files |
 
 ## Session
 
-**Last session:** 2026-07-16T07:03:46.301Z
-**Stopped at:** Completed 123-05-PLAN.md
+**Last session:** 2026-07-16T07:18:52.021Z
+**Stopped at:** Completed 123-06-PLAN.md
 **Resume file:** None
