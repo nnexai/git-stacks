@@ -74,3 +74,19 @@ Fourth-pass focused verification:
 - `npm run typecheck -w @git-stacks/service` — pass.
 - `npm run test:deps` — package architecture pass.
 - `git diff --check` — pass.
+
+## Fifth adversarial repair pass
+
+The profile-tracing disclosure is contained without suppressing profile startup or configured-command output:
+
+- Bash and zsh execute every authoritative expansion, equality check, and readiness write inside a grammar-level block whose stdout and stderr are redirected. Bash first moves `BASH_XTRACEFD` to fd 2 and verifies the assignment before entering that block, so a profile-selected alternate trace descriptor cannot bypass the boundary; the original trace target is restored before the configured command runs. A readonly trace descriptor fails closed because readiness is never created.
+- Fish trace output bypasses ordinary block redirections. Fish therefore reads each authoritative value from a mode-0600, NUL-terminated file with the reserved `builtin read` dispatcher. Its trace contains only the builtin invocation and private filename, never the file content. Fish no longer receives duplicate random shadow variables in its spawn environment.
+- The silent boundary also contains profile DEBUG hooks or helper functions that write ordinary stdout/stderr during initialization. Profile startup output remains outside the boundary, and configured-command output, aliases, functions, input, resize, status capture, and process-group cleanup are unchanged.
+- Captured stdout-plus-stderr fixtures enable Bash xtrace on a dedicated fd and fish tracing while retaining the hostile dispatcher functions. They assert that command output and readiness survive while the raw authoritative sentinel is absent. The same regression runs for zsh when the executable is installed; local zsh remains the single explicit capability skip.
+
+Fifth-pass focused verification:
+
+- `npx vitest run tests/service/web-terminal.test.ts tests/lib/user-shell-adapter.test.ts tests/commands/user-shell-host-fixture.test.ts` — 39 passed, 1 explicit local zsh capability skip.
+- `npm run typecheck -w @git-stacks/service` — pass.
+- `npm run test:deps` — package architecture pass.
+- `git diff --check` — pass.
