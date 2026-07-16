@@ -358,6 +358,7 @@ export const WebOperationSchema = z.strictObject({
     code: utf8BoundedString(96, 1),
     message: utf8BoundedString(500, 1),
     lifecycle: WorkspaceLifecycleFailureDetailsSchema.optional(),
+    forge: z.lazy(() => WebForgeErrorDetailsSchema).optional(),
   }).optional(),
 })
 export type WebOperation = z.infer<typeof WebOperationSchema>
@@ -730,6 +731,13 @@ export const WebForgeFailureDetailsSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("repositories"), candidates: z.array(WebForgeRepositoryCandidateSchema).max(32) }),
   z.strictObject({ kind: z.literal("retry"), retry_after_seconds: z.number().int().positive().max(86_400) }),
 ])
+export const WebForgeErrorDetailsSchema = z.strictObject({
+  kind: z.literal("forge_failure"),
+  reason: WebForgeFailureCodeSchema,
+  recovery: WebForgeRecoverySchema,
+  context: WebForgeFailureDetailsSchema.optional(),
+})
+export type WebForgeErrorDetails = z.infer<typeof WebForgeErrorDetailsSchema>
 export const WebForgeFailureSchema = z.strictObject({
   code: WebForgeFailureCodeSchema,
   recovery: WebForgeRecoverySchema,

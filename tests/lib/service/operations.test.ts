@@ -140,6 +140,40 @@ describe("OperationRegistry lifecycle", () => {
     expect(terminal.rollback_errors.map((error) => error.message)).toEqual(["undo broke"])
   })
 
+  test("retains only allowlisted forge recovery details on terminal failures", async () => {
+    const dir = await root()
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_forge12345678901",
+      publishOperationEvent: async () => ({} as ServiceEvent),
+    })
+    const accepted = await registry.accept(execution([{
+      name: "review.fetch",
+      stage: "executing",
+      message: "Fetching reviewed source",
+      run: async () => {
+        throw Object.assign(new Error("The provider source changed after review. Resolve the change again."), {
+          code: "operation_failed",
+          details: {
+            kind: "forge_failure",
+            reason: "source_changed",
+            recovery: "resolve_again",
+            context: { kind: "provider", provider: "github" },
+          },
+        })
+      },
+    }]))
+    await registry.wait(accepted.operation_id)
+    const terminal = registry.get(accepted.operation_id)
+    expect(terminal?.state).toBe("failed")
+    if (terminal?.state !== "failed") return
+    expect(terminal.error.details).toEqual({
+      kind: "forge_failure",
+      reason: "source_changed",
+      recovery: "resolve_again",
+    })
+  })
+
   test("does not expose or observe a transition whose journal append fails", async () => {
     const dir = await root()
     const observed: Operation[] = []

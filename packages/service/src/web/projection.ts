@@ -9,6 +9,7 @@ import {
   WebFileStatusResponseSchema,
   WebNotesResponseSchema,
   WebOperationSchema,
+  WebForgeErrorDetailsSchema,
   WebSnapshotSchema,
   WebWorkspaceActionInventorySchema,
   WorkspaceLifecyclePhaseSchema,
@@ -108,10 +109,12 @@ export function projectWebOperation(operation: Operation): WebOperation {
           force_allowed: operation.lifecycle.force_allowed,
         }
       : undefined
+    const forge = WebForgeErrorDetailsSchema.safeParse(operation.error.details)
     return WebOperationSchema.parse({ ...common, error: {
       code: operation.error.code,
       message: operationFailureMessage(operation.error.code, lifecycle?.kind),
       ...(lifecycle ? { lifecycle } : {}),
+      ...(forge.success ? { forge: forge.data } : {}),
     } })
   }
   return WebOperationSchema.parse(common)

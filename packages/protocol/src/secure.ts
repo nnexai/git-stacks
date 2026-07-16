@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { WebShortcutErrorDetailsSchema } from "./web.js"
+import { WebForgeErrorDetailsSchema, WebShortcutErrorDetailsSchema } from "./web.js"
 
 export const SECURE_PROTOCOL = "git-stacks/2" as const
 export const SECURE_FRAME_MAGIC = 0x47533200
@@ -302,6 +302,12 @@ export const SecureRequestSchema = z.strictObject({
 })
 export type SecureRequest = z.infer<typeof SecureRequestSchema>
 
+export const SecureErrorDetailsSchema = z.union([
+  WebShortcutErrorDetailsSchema,
+  WebForgeErrorDetailsSchema,
+])
+export type SecureErrorDetails = z.infer<typeof SecureErrorDetailsSchema>
+
 export const SecureResponseSchema = z.strictObject({
   id: z.string().uuid(),
   ok: z.boolean(),
@@ -310,7 +316,7 @@ export const SecureResponseSchema = z.strictObject({
     code: z.string().min(1).max(SECURE_LIMITS.responseErrorCodeLength),
     message: z.string().min(1).max(SECURE_LIMITS.responseErrorMessageLength),
     retryable: z.boolean().optional(),
-    details: WebShortcutErrorDetailsSchema.optional(),
+    details: SecureErrorDetailsSchema.optional(),
   }).optional(),
 }).refine((value) => value.ok ? value.error === undefined : value.error !== undefined)
 export type SecureResponse = z.infer<typeof SecureResponseSchema>

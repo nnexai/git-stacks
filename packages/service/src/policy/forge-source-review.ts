@@ -160,6 +160,33 @@ function safeFailure(code: WebForgeFailure["code"], provider?: "github" | "gitla
   })
 }
 
+function correctableBeforeCommit(failure: WebForgeFailure): boolean {
+  return failure.code === "branch_conflict" || failure.code === "repo_not_matched"
+}
+
+function reviewedOperationFailure(failure: WebForgeFailure): Error {
+  return Object.assign(new Error(failure.message), {
+    code: "operation_failed",
+    details: {
+      kind: "forge_failure",
+      reason: failure.code,
+      recovery: failure.recovery,
+      ...(failure.details ? { context: failure.details } : {}),
+    },
+    reviewedSafe: true,
+  })
+}
+
+function safeReviewedExecutionError(caught: unknown): Error {
+  if (caught && typeof caught === "object" && (caught as { reviewedSafe?: unknown }).reviewedSafe === true) {
+    return caught as Error
+  }
+  return Object.assign(new Error("Reviewed workspace creation failed"), {
+    code: "operation_failed",
+    reviewedSafe: true,
+  })
+}
+
 function providerFailure(result: Extract<ForgeProviderResolution, { ok: false }>): WebForgeFailure {
   const code = result.error as ForgeResolverFailureCode
   return safeFailure(code, result.provider)
@@ -365,9 +392,18 @@ export class ForgeSourceReviewAuthority {
     if (existing) return existing
     const admission = this.admitReserved(reserved.reservation, input.idempotencyKey)
     this.admissions.set(input.token, admission)
-    const result = await admission
-    if (!result.ok) this.admissions.delete(input.token)
-    return result
+    try {
+      const result = await admission
+      if (!result.ok) {
+        this.admissions.delete(input.token)
+        if (correctableBeforeCommit(result.failure)) this.releaseBinding(reserved.reservation.record)
+      }
+      return result
+    } catch (error) {
+      this.admissions.delete(input.token)
+      this.releaseBinding(reserved.reservation.record)
+      throw error
+    }
   }
 
   private async admitReserved(reservation: ForgeReviewReservation, idempotencyKey: string): Promise<ReviewedCreateAdmissionResult> {
@@ -447,38 +483,22 @@ export class ForgeSourceReviewAuthority {
     }
 
     const operationIdentity = `review_${requestHash({ token: reservation.token, idempotencyKey }).slice(0, 32)}`
-    const prepared = await (this.options.prepareSource ?? prepareReviewedWorkspaceSource)({
-      trusted_source: rechecked.change,
-      matched_repo: matchedRepo,
-      workspace_name: draft.workspace_name,
-      operation_id: operationIdentity,
-      branch: matchedDraftRepository.branch.workspace_branch,
-    })
-    if (!prepared.ok) {
-      const failure = prepared as WorkspaceSourceFailure & { cleanup?: () => Promise<void> }
-      await failure.cleanup?.().catch(() => undefined)
-      if (failure.error === "source_changed") this.records.delete(reservation.token)
-      return { ok: false, failure: safeFailure(
-        failure.error === "source_changed" || failure.error === "fork_unreachable" || failure.error === "branch_conflict" || failure.error === "not_worktree_mode"
-          ? failure.error
-          : "fork_unreachable",
-        record.trustedSource.provider,
-      ) }
+    let started = false
+    let cleanupPending: (() => Promise<void>) | undefined
+    const cleanupPrepared = async () => {
+      if (!cleanupPending) return
+      await cleanupPending()
+      cleanupPending = undefined
     }
-
-    let cleaned = false
-    const cleanup = async () => {
-      if (cleaned) return
-      cleaned = true
-      await prepared.cleanup()
+    const abortAdmission = async () => {
+      if (!started) {
+        this.releaseBinding(record)
+        this.admissions.delete(reservation.token)
+        return
+      }
+      await cleanupPrepared()
     }
     const result: Record<string, unknown> = { workspace_name: request.name, snapshot_changed: true }
-    const createInputs: CreateWorkspaceInputs = {
-      ...plannedInputs,
-      branch: prepared.branch,
-      source: prepared.sourceMetadata,
-      sourceStartRefs: { [prepared.matchedRepoName]: prepared.fetchedRef },
-    }
     const execution: OperationExecution = {
       cancellation: "none",
       steps: [{
@@ -486,7 +506,36 @@ export class ForgeSourceReviewAuthority {
         stage: "executing",
         message: "Creating reviewed workspace",
         run: async (report) => {
+          started = true
+          let executionError: Error | undefined
           try {
+            const prepared = await (this.options.prepareSource ?? prepareReviewedWorkspaceSource)({
+              trusted_source: rechecked.change,
+              matched_repo: matchedRepo,
+              workspace_name: draft.workspace_name,
+              operation_id: operationIdentity,
+              branch: matchedDraftRepository.branch.workspace_branch,
+            })
+            if (!prepared.ok) {
+              const failure = prepared as WorkspaceSourceFailure
+              cleanupPending = failure.cleanup
+              const code = failure.error === "source_changed" || failure.error === "fork_unreachable"
+                || failure.error === "branch_conflict" || failure.error === "not_worktree_mode"
+                ? failure.error
+                : "fork_unreachable"
+              if (code === "source_changed") {
+                this.records.delete(reservation.token)
+                this.admissions.delete(reservation.token)
+              }
+              throw reviewedOperationFailure(safeFailure(code, record.trustedSource.provider))
+            }
+            cleanupPending = prepared.cleanup
+            const createInputs: CreateWorkspaceInputs = {
+              ...plannedInputs,
+              branch: prepared.branch,
+              source: prepared.sourceMetadata,
+              sourceStartRefs: { [prepared.matchedRepoName]: prepared.fetchedRef },
+            }
             let progressQueue = Promise.resolve()
             const created = await (this.options.createWorkspace ?? createWorkspace)(createInputs, () => {
               progressQueue = progressQueue
@@ -494,16 +543,29 @@ export class ForgeSourceReviewAuthority {
                 .then(() => undefined)
             })
             await progressQueue
-            if (!created.ok) throw new Error("Reviewed workspace creation failed")
-          } finally {
-            await cleanup()
+            if (!created.ok) throw new Error("create rejected")
+          } catch (caught) {
+            executionError = safeReviewedExecutionError(caught)
           }
+          try {
+            await cleanupPrepared()
+          } catch {
+            executionError ??= Object.assign(new Error("Reviewed source cleanup could not be completed"), {
+              code: "operation_failed",
+              reviewedSafe: true,
+            })
+          }
+          if (executionError) throw executionError
         },
       }],
       result,
-      finalize: cleanup,
+      finalize: cleanupPrepared,
     }
-    return { ok: true, execution, cleanup }
+    return { ok: true, execution, cleanup: abortAdmission }
+  }
+
+  private releaseBinding(record: TrustedForgeReview): void {
+    delete record.binding
   }
 
   private draftBelongsToRecord(record: TrustedForgeReview, draft: WebReviewedWorkspaceDraft): boolean {

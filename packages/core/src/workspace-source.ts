@@ -28,6 +28,8 @@ export type WorkspaceSourceFailure = {
   ok: false
   error: ForgeSourceResolutionError
   message: string
+  /** Retry-safe cleanup for a private ref when its first deletion attempt failed. */
+  cleanup?: () => Promise<void>
 }
 
 export type PreparedWorkspaceSource = {
@@ -86,7 +88,7 @@ function trustedFetchUrl(source: TrustedForgeChange["source"]): string | null {
       if (
         !parsed.username
         && !parsed.password
-        && (parsed.protocol === "https:" || parsed.protocol === "http:")
+        && parsed.protocol === "https:"
         && parsed.host.toLowerCase() === source.repository.host
         && actualPath === expectedPath
       ) {
@@ -125,8 +127,16 @@ export async function prepareReviewedWorkspaceSource(
   let cleaned = false
   const cleanup = async () => {
     if (cleaned) return
-    cleaned = true
     await _source.deleteRef(inputs.matched_repo.main_path, fetchedRef)
+    cleaned = true
+  }
+  const failAfterCleanup = async (failure: WorkspaceSourceFailure): Promise<WorkspaceSourceFailure> => {
+    try {
+      await cleanup()
+      return failure
+    } catch {
+      return { ...failure, cleanup }
+    }
   }
 
   if (!inputs.dry_run) {
@@ -139,53 +149,47 @@ export async function prepareReviewedWorkspaceSource(
         fetchedRef,
       )
     } catch {
-      await cleanup()
-      return {
+      return failAfterCleanup({
         ok: false,
         error: "fork_unreachable",
         message: `Could not fetch the ${source.provider} source repository. Check repository access and authentication.`,
-      }
+      })
     }
     if (!fetchResult.ok) {
-      await cleanup()
-      return {
+      return failAfterCleanup({
         ok: false,
         error: "fork_unreachable",
         message: `Could not fetch the ${source.provider} source repository. Check repository access and authentication.`,
-      }
+      })
     }
 
     let fetched: Awaited<ReturnType<typeof _source.resolveRef>>
     try {
       fetched = await _source.resolveRef(inputs.matched_repo.main_path, fetchedRef)
     } catch {
-      await cleanup()
-      return { ok: false, error: "source_changed", message: "The provider source changed after review. Resolve the change again." }
+      return failAfterCleanup({ ok: false, error: "source_changed", message: "The provider source changed after review. Resolve the change again." })
     }
     if (!fetched.ok || fetched.sha !== source.source.sha) {
-      await cleanup()
-      return {
+      return failAfterCleanup({
         ok: false,
         error: "source_changed",
         message: "The provider source changed after review. Resolve the change again.",
-      }
+      })
     }
 
     try {
       if (await _source.checkBranchExists(inputs.matched_repo.main_path, targetBranch)) {
         const existing = await _source.resolveRef(inputs.matched_repo.main_path, targetBranch)
         if (!existing.ok || existing.sha !== source.source.sha) {
-          await cleanup()
-          return {
+          return failAfterCleanup({
             ok: false,
             error: "branch_conflict",
             message: `The existing local branch '${targetBranch}' points at a different commit.`,
-          }
+          })
         }
       }
     } catch {
-      await cleanup()
-      return { ok: false, error: "branch_conflict", message: `The local branch '${targetBranch}' could not be verified.` }
+      return failAfterCleanup({ ok: false, error: "branch_conflict", message: `The local branch '${targetBranch}' could not be verified.` })
     }
   }
 

@@ -231,6 +231,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
         return this.options.recoverLocalWebTransport()
       }
       case "core.state": {
+        if (context.mode === "browser") throw coded("Rich core state is unavailable to browsers", "unauthorized")
         if (!this.options.core) throw coded("Core state is unavailable", "capability_unavailable")
         return this.options.core.build()
       }
@@ -251,15 +252,23 @@ export class SecureServiceRouter implements SecureSessionHandler {
         const parsed = WebForgeResolveRequestSchema.safeParse(body)
         if (!parsed.success) throw coded("Invalid forge source URL", "invalid_request")
         if (!this.options.forgeSourceReview) throw coded("Forge source review is unavailable", "capability_unavailable")
-        return this.options.forgeSourceReview.resolve({ principalId: context.principalId, url: parsed.data.url })
+        try {
+          return await this.options.forgeSourceReview.resolve({ principalId: context.principalId, url: parsed.data.url })
+        } catch {
+          throw coded("Forge source could not be resolved", "operation_failed")
+        }
       }
       case "core.edit-target": {
+        if (context.mode === "browser") throw coded("Rich edit targets are unavailable to browsers", "unauthorized")
         if (!this.options.core) throw coded("Core state is unavailable", "capability_unavailable")
         const parsed = EditTargetRequestSchema.safeParse(body)
         if (!parsed.success) throw coded("Invalid edit target request", "invalid_request")
         return this.options.core.editTarget(parsed.data)
       }
-      case "snapshot.all": return this.options.snapshot.buildAll()
+      case "snapshot.all": {
+        if (context.mode === "browser") throw coded("Rich snapshots are unavailable to browsers", "unauthorized")
+        return this.options.snapshot.buildAll()
+      }
       case "web.snapshot": return projectWebSnapshot(this.options.snapshot.buildCatalog
         ? await this.options.snapshot.buildCatalog()
         : await this.options.snapshot.buildAll())
@@ -615,13 +624,18 @@ export class SecureServiceRouter implements SecureSessionHandler {
         execution = this.options.workspaceCreate(web.data.request)
       } else if (web.data.kind === "workspace.create.reviewed") {
         if (!this.options.forgeSourceReview) throw coded("Reviewed workspace creation is unavailable", "capability_unavailable")
-        const admission = await this.options.forgeSourceReview.admit({
-          principalId: context.principalId,
-          token: web.data.request.token,
-          expectedRevision: web.data.request.expected_revision,
-          draft: web.data.request.draft,
-          idempotencyKey: request.idempotency_key,
-        })
+        let admission
+        try {
+          admission = await this.options.forgeSourceReview.admit({
+            principalId: context.principalId,
+            token: web.data.request.token,
+            expectedRevision: web.data.request.expected_revision,
+            draft: web.data.request.draft,
+            idempotencyKey: request.idempotency_key,
+          })
+        } catch {
+          throw coded("Reviewed workspace creation could not be prepared", "operation_failed")
+        }
         if (!admission.ok) {
           const transportCode = admission.failure.code === "cli_unavailable"
             ? "capability_unavailable"
@@ -633,8 +647,10 @@ export class SecureServiceRouter implements SecureSessionHandler {
                   ? "conflict"
                   : "operation_failed"
           throw coded(admission.failure.message, transportCode, {
+            kind: "forge_failure",
             reason: admission.failure.code,
             recovery: admission.failure.recovery,
+            ...(admission.failure.details ? { context: admission.failure.details } : {}),
           })
         }
         parsedRequest = web.data.request
@@ -696,8 +712,10 @@ export class SecureServiceRouter implements SecureSessionHandler {
   }
 
   private getOperation(context: SecureSessionContext, body?: Record<string, unknown>): unknown {
-    if (!this.options.operations || typeof body?.operation_id !== "string") throw coded("Invalid operation id", "invalid_request")
-    const operation = this.options.operations.getForClient(body.operation_id, context.principalId)
+    const parsed = OperationCancelRequestSchema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid operation id", "invalid_request")
+    if (!this.options.operations) throw coded("Operation reads are unavailable", "capability_unavailable")
+    const operation = this.options.operations.getForClient(parsed.data.operation_id, context.principalId)
     if (!operation) throw coded("Operation not found", "not_found")
     return context.mode === "browser" ? projectWebOperation(operation) : operation
   }

@@ -7,6 +7,7 @@ import {
   ErrorCodeSchema,
   OperationCancelResultSchema,
   OperationSchema,
+  WebForgeErrorDetailsSchema,
   WorkspaceLifecycleFailureDetailsSchema,
   type ApiError,
   type Operation,
@@ -428,13 +429,21 @@ export class OperationRegistry {
       } : undefined
       const parsedCode = ErrorCodeSchema.safeParse(candidate?.code)
       const parsedLifecycle = WorkspaceLifecycleFailureDetailsSchema.safeParse(candidate?.details)
+      const parsedForge = WebForgeErrorDetailsSchema.safeParse(candidate?.details)
       const lifecycle: WorkspaceLifecycleFailureDetails | undefined = parsedLifecycle.success ? parsedLifecycle.data : undefined
+      const forgeDetails = parsedForge.success
+        ? { kind: parsedForge.data.kind, reason: parsedForge.data.reason, recovery: parsedForge.data.recovery }
+        : undefined
       if (current.state === "running" && !this.get(accepted.operation_id)?.state.includes("failed")) {
         await this.rollback(accepted, startedAt, completed, rollbackErrors)
         await this.visible(OperationSchema.parse({
           operation_id: accepted.operation_id, state: "failed", accepted_at: accepted.accepted_at, started_at: startedAt,
           finished_at: this.timestamp(), completed_steps: completed.map((step) => step.name),
-          error: error(message === "journal unavailable" ? "internal_error" : parsedCode.success ? parsedCode.data : "operation_failed", message),
+          error: error(
+            message === "journal unavailable" ? "internal_error" : parsedCode.success ? parsedCode.data : "operation_failed",
+            message,
+            forgeDetails,
+          ),
           ...(lifecycle ? { lifecycle } : {}),
           rollback_attempted: completed.some((step) => step.rollback),
           rollback_succeeded: rollbackErrors.length === 0,
