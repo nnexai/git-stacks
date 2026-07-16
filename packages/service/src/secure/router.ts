@@ -519,6 +519,11 @@ export class SecureServiceRouter implements SecureSessionHandler {
         if (!this.options.workspaceCreate) throw coded("Workspace creation is unavailable", "capability_unavailable")
         parsedRequest = web.data.request
         execution = this.options.workspaceCreate(web.data.request)
+      } else if (web.data.kind === "workspace.create.reviewed") {
+        // Plan 04 installs the token-bound reviewed-create authority. Keep the
+        // newly shared protocol discriminant explicit until that authority is
+        // available rather than treating its draft like an ID-based mutation.
+        throw coded("Reviewed workspace creation is unavailable", "capability_unavailable")
       } else {
         const mutationRequest = web.data.request
         const snapshots = await this.options.snapshot.buildAll()
