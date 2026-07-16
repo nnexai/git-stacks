@@ -32,22 +32,22 @@
 
 ## Keyboard-First Web Navigation
 
-- [ ] **KEY-01:** The web client has one centralized, configurable shortcut registry with platform-specific defaults, conflict validation, keyboard-help presentation, and the ability to rebind or unbind every app-owned action.
-- [ ] **KEY-02:** Safe defaults use `Ctrl+Cmd+<key>` on macOS and `Ctrl+Alt+Shift+<key>` on Linux: `K` workspace switcher, `P` commands, `N` new workspace, `T` new terminal, `W` close active terminal, `J` previous terminal, `L` next terminal, and `A` next attention.
-- [ ] **KEY-03:** App shortcuts work while xterm owns focus by using xterm's pre-processing key handler; handled chords are consumed once, while every unmatched key event reaches the PTY unchanged.
-- [ ] **KEY-04:** Linux shortcut matching ignores `AltGraph` input, uses physical key codes where appropriate, and has coverage for non-US layouts and IME/composition so character entry is never mistaken for an app shortcut.
-- [ ] **KEY-05:** Browser-hard shortcuts such as new/close browser tab or window and browser-tab traversal are not shipped as web defaults; fullscreen Keyboard Lock is not required for baseline operation.
-- [ ] **KEY-06:** `Ctrl+K` and `Ctrl+Shift+P` may be configured as aliases, but defaults do not intercept common shell controls or browser-incompatible chords while a terminal is focused.
-- [ ] **KEY-07:** The workspace switcher on the `K` action searches active workspaces and their repositories using real fuzzy ranking, excludes archived workspaces, uses recency only as a tie-breaker, and switches to the highest-ranked row when Enter is pressed even for a partial query.
-- [ ] **KEY-08:** The commands overlay on the `P` action searches configured commands using the same fuzzy/top-result Enter contract and does not become a generic catalog of unrelated application actions.
-- [ ] **KEY-09:** Every overlay is a singleton: repeated shortcut or key-repeat events focus/toggle the existing instance rather than stacking DOM layers, handlers, or backdrops.
-- [ ] **KEY-10:** Palette arrow navigation, Escape, Enter, and input focus are contained within the active overlay; closing it restores focus to the previously active terminal without emitting overlay keystrokes to the PTY.
+- [x] **KEY-01:** The web client has one centralized, configurable shortcut registry with platform-specific defaults, conflict validation, keyboard-help presentation, and the ability to rebind or unbind every app-owned action.
+- [x] **KEY-02:** Safe defaults use `Ctrl+Cmd+<key>` on macOS and `Ctrl+Alt+Shift+<key>` on Linux: `K` workspace switcher, `P` commands, `N` new workspace, `T` new terminal, `W` close active terminal, `J` previous terminal, `L` next terminal, and `A` next attention.
+- [x] **KEY-03:** App shortcuts work while xterm owns focus by using xterm's pre-processing key handler; handled chords are consumed once, while every unmatched key event reaches the PTY unchanged.
+- [x] **KEY-04:** Linux shortcut matching ignores `AltGraph` input, uses physical key codes where appropriate, and has coverage for non-US layouts and IME/composition so character entry is never mistaken for an app shortcut.
+- [x] **KEY-05:** Browser-hard shortcuts such as new/close browser tab or window and browser-tab traversal are not shipped as web defaults; fullscreen Keyboard Lock is not required for baseline operation.
+- [x] **KEY-06:** `Ctrl+K` and `Ctrl+Shift+P` may be configured as aliases, but defaults do not intercept common shell controls or browser-incompatible chords while a terminal is focused.
+- [x] **KEY-07:** The workspace switcher on the `K` action searches active workspaces and their repositories using real fuzzy ranking, excludes archived workspaces, uses recency only as a tie-breaker, and switches to the highest-ranked row when Enter is pressed even for a partial query.
+- [x] **KEY-08:** The commands overlay on the `P` action searches configured commands using the same fuzzy/top-result Enter contract and does not become a generic catalog of unrelated application actions.
+- [x] **KEY-09:** Every overlay is a singleton: repeated shortcut or key-repeat events focus/toggle the existing instance rather than stacking DOM layers, handlers, or backdrops.
+- [x] **KEY-10:** Palette arrow navigation, Escape, Enter, and input focus are contained within the active overlay; closing it restores focus to the previously active terminal without emitting overlay keystrokes to the PTY.
 
 ## Attention Navigation
 
-- [ ] **ATTN-01:** A Next Attention action moves to the next active workspace/repository/terminal carrying a current attention signal using the shared priority ordering and wraps deterministically.
-- [ ] **ATTN-02:** Archived and removed workspaces, dismissed signals, stale terminal surfaces, and inaccessible targets are skipped without clearing unrelated attention.
-- [ ] **ATTN-03:** The action is available from the safe global shortcut, visible UI, and keyboard help with a clear no-attention result.
+- [x] **ATTN-01:** A Next Attention action moves to the next active workspace/repository/terminal carrying a current attention signal using the shared priority ordering and wraps deterministically.
+- [x] **ATTN-02:** Archived and removed workspaces, dismissed signals, stale terminal surfaces, and inaccessible targets are skipped without clearing unrelated attention.
+- [x] **ATTN-03:** The action is available from the safe global shortcut, visible UI, and keyboard help with a clear no-attention result.
 
 ## Web Workflow Parity
 

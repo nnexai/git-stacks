@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v0.22.0
 milestone_name: Workspace Productivity
-current_phase: 125
-current_phase_name: Terminal-Safe Keyboard Navigation
+current_phase: 126
+current_phase_name: Web Workflow and Forge-Source Parity
 status: planning
-stopped_at: Phase 125 planned and validated; ready for Plan 01 execution
-last_updated: "2026-07-16T15:00:51.728Z"
+stopped_at: Phase 125 verified complete; Phase 126 ready for discussion
+last_updated: "2026-07-16T16:41:52.992Z"
 last_activity: 2026-07-16
-last_activity_desc: Phase 124 complete, transitioned to Phase 125
+last_activity_desc: Phase 125 complete, transitioned to Phase 126
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 20
-  completed_plans: 15
-  percent: 40
+  completed_plans: 20
+  percent: 60
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 125 — Terminal-Safe Keyboard Navigation
+Phase: 126 — Web Workflow and Forge-Source Parity
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-16 — Phase 124 complete, transitioned to Phase 125
+Status: Ready to discuss
+Last activity: 2026-07-16 — Phase 125 complete, transitioned to Phase 126
 
 ## Decisions
 
@@ -73,6 +73,9 @@ Last activity: 2026-07-16 — Phase 124 complete, transitioned to Phase 125
 - [Phase 123]: Force Remove exists only for typed dirty state with stopped terminals and exact current-name confirmation. — Prevents message parsing and client-side privilege elevation.
 - [Phase 123]: TUI active ordering consumes the shared workspaceSuccessorOrder seam. — Web and TUI use the same pin priority activity name and stable-ID ordering.
 - [Phase 123]: Date-only workspace `created` fallbacks normalize to UTC midnight at the service projection boundary while offset-aware timestamps remain unchanged; executor-operable evidence closes Phase 123 while live browser/OpenTUI approval remains Phase 127's milestone-end human gate. — Keeps YAML compatible and strict datetimes intact without impersonating human verification.
+- [Phase 125]: Compatible overlays replace in place while confirmations, editors, and active shortcut capture remain exclusive; async command activation is one-shot across keyboard and pointer input.
+- [Phase 125]: Shortcut-setting operations use monotonic generations; only typed stale revisions may reload and rebase, while typed binding-owner conflicts preserve authoritative state, retain capture, name the actual owner, and expose no retry loop.
+- [Phase 125]: Secure shortcut error details are a strict allowlisted union and are revalidated before transport; malformed or mismatched code/detail pairs fail closed.
 
 ## Validated Inputs
 
@@ -127,7 +130,7 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Operator Next Steps
 
-- Verify completed Phase 123 evidence, advance to Phase 124, and preserve the Phase 127 milestone-end checklist before any tag, push, publish, or release.
+- Discuss and plan Phase 126 from the completed parity/forge preflight, then preserve the Phase 127 milestone-end checklist before any tag, push, publish, or release.
 
 ## Performance Metrics
 
@@ -144,6 +147,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-16T15:00:51.718Z
-**Stopped at:** Phase 125 planned and validated; ready for Plan 01 execution
-**Resume file:** .planning/phases/125-terminal-safe-keyboard-navigation/125-01-PLAN.md
+**Last session:** 2026-07-16T16:41:52.992Z
+**Stopped at:** Phase 125 verified complete; Phase 126 ready for discussion
+**Resume file:** .planning/ROADMAP.md
