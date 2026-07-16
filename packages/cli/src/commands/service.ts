@@ -9,6 +9,11 @@ async function serviceRuntime() {
   return import("@git-stacks/service")
 }
 
+export async function prepareManagedDashboardEnvironment(): Promise<void> {
+  const { prepareLocalServiceEnvironment } = await import("@git-stacks/service/client")
+  await prepareLocalServiceEnvironment()
+}
+
 export const serviceCommand = new Command("service")
   .description("Manage the local workspace service")
 

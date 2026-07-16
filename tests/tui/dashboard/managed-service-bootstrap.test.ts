@@ -58,7 +58,7 @@ describe("TUI managed service bootstrap", () => {
       .toBeLessThan(dashboard.indexOf("await render("))
     expect(web.indexOf("await prepareLocalServiceEnvironment()"), "web refresh must precede browser launch")
       .toBeLessThan(web.indexOf("await createBrowserLaunch("))
-    expect(cli.indexOf("await prepareLocalServiceEnvironment()"), "manage refresh must precede TUI spawn")
+    expect(cli.indexOf("await prepareManagedDashboardEnvironment()"), "manage refresh must precede TUI spawn")
       .toBeLessThan(cli.indexOf("spawn([executable]"))
   })
 })

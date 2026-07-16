@@ -11,7 +11,7 @@ import { integrationCommand } from "../commands/integration"
 import { labelCommand } from "../commands/label"
 import { filesCommand } from "../commands/files"
 import { commandCommand } from "../commands/command"
-import { serviceCommand } from "../commands/service"
+import { prepareManagedDashboardEnvironment, serviceCommand } from "../commands/service"
 import { webCommand } from "../commands/web"
 import { hooksCommand } from "../commands/hooks"
 import { silenceObservability } from "@git-stacks/core/observability"
@@ -34,8 +34,7 @@ export function buildCliProgram(binName = "git-stacks"): Command {
       if (!executable) {
         throw new Error("The optional git-stacks TUI is not installed. Install @git-stacks/tui or use `git-stacks web`.")
       }
-      const { prepareLocalServiceEnvironment } = await import("@git-stacks/service/client")
-      await prepareLocalServiceEnvironment()
+      await prepareManagedDashboardEnvironment()
       const tuiProcess = spawn([executable], { stdio: ["inherit", "inherit", "inherit"], env: { ...process.env, ...(options.target ? { GIT_STACKS_TARGET_ID: options.target } : {}) } })
       const exitCode = await tuiProcess.exited
       if (exitCode !== 0) process.exit(exitCode)
