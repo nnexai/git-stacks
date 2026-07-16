@@ -1,19 +1,26 @@
-import type { Operation, Signal, SignalDismissal, WorkspaceCreationCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
+import type { Operation, Signal, SignalDismissal, WorkspaceCatalog, WorkspaceCreationCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
 
-import { WebOperationSchema, WebSnapshotSchema, type WebOperation, type WebSnapshot } from "@git-stacks/protocol"
+import { WebOperationSchema, WebSnapshotSchema, WorkspaceLifecyclePhaseSchema, type WebOperation, type WebSnapshot } from "@git-stacks/protocol"
 
-export function projectWebSnapshot(snapshots: WorkspaceSnapshotResponse[]): WebSnapshot {
-  const revision = snapshots[0]?.revision ?? "0"
-  const generatedAt = snapshots[0]?.generated_at ?? new Date().toISOString()
+export function projectWebSnapshot(input: WorkspaceCatalog | WorkspaceSnapshotResponse[]): WebSnapshot {
+  const catalog = Array.isArray(input)
+    ? {
+        revision: input[0]?.revision ?? "0",
+        generated_at: input[0]?.generated_at ?? new Date().toISOString(),
+        workspaces: input,
+        archived_workspaces: [],
+      }
+    : input
+  const snapshots = catalog.workspaces
   return WebSnapshotSchema.parse({
     protocol: "web-v1",
-    revision,
-    generated_at: generatedAt,
+    revision: catalog.revision,
+    generated_at: catalog.generated_at,
     pinned_workspace_ids: snapshots
       .filter(({ workspace }) => workspace.pinned === true)
       .sort((left, right) => left.workspace.name.localeCompare(right.workspace.name))
       .map(({ workspace }) => workspace.id),
-    archived_workspaces: [],
+    archived_workspaces: catalog.archived_workspaces.map(({ id, name, activity_at }) => ({ id, name, activity_at })),
     workspaces: snapshots.map(({ workspace }) => {
       const status = new Map((workspace.status ?? []).map((entry) => [entry.repository_id, entry]))
       return {
@@ -56,9 +63,11 @@ export function projectWebOperation(operation: Operation): WebOperation {
     ...("finished_at" in operation ? { finished_at: operation.finished_at } : {}),
   }
   if (operation.state === "running") {
+    const lifecyclePhase = WorkspaceLifecyclePhaseSchema.safeParse(operation.progress.data?.lifecycle_phase)
     return WebOperationSchema.parse({ ...common, progress: {
       ...(operation.progress.message ? { message: operation.progress.message } : {}),
       ...(operation.progress.completed === undefined ? {} : { completed: operation.progress.completed, total: operation.progress.total }),
+      ...(lifecyclePhase.success ? { lifecycle_phase: lifecyclePhase.data } : {}),
     } })
   }
   if (operation.state === "succeeded") {
@@ -66,10 +75,24 @@ export function projectWebOperation(operation: Operation): WebOperation {
     return WebOperationSchema.parse({ ...common, result: {
       ...(typeof result.workspace_name === "string" ? { workspace_name: result.workspace_name } : {}),
       ...(typeof result.snapshot_changed === "boolean" ? { snapshot_changed: result.snapshot_changed } : {}),
+      ...(typeof result.revision === "string" ? { revision: result.revision } : {}),
+      ...(typeof result.terminals_stopped === "boolean" ? { terminals_stopped: result.terminals_stopped } : {}),
     } })
   }
   if (operation.state === "failed" || operation.state === "cancelled") {
-    return WebOperationSchema.parse({ ...common, error: { code: operation.error.code, message: operation.error.message } })
+    const lifecycle = operation.lifecycle
+      ? {
+          kind: operation.lifecycle.kind,
+          ...(operation.lifecycle.blocking_repositories ? { blocking_repositories: [...operation.lifecycle.blocking_repositories] } : {}),
+          terminals_stopped: operation.lifecycle.terminals_stopped,
+          force_allowed: operation.lifecycle.force_allowed,
+        }
+      : undefined
+    return WebOperationSchema.parse({ ...common, error: {
+      code: operation.error.code,
+      message: operation.error.message,
+      ...(lifecycle ? { lifecycle } : {}),
+    } })
   }
   return WebOperationSchema.parse(common)
 }
@@ -86,6 +109,12 @@ export function projectWebSignal(signal: Signal | SignalDismissal): Signal | Sig
   }
 }
 
-export function projectWebTerminalSignals(signals: Signal[], terminalSurfaceIds: ReadonlySet<string>): Signal[] {
-  return signals.filter((signal) => signal.kind === "notification" || (signal.surface_id !== undefined && terminalSurfaceIds.has(signal.surface_id)))
+export function projectWebTerminalSignals(
+  signals: Signal[],
+  terminalSurfaceIds: ReadonlySet<string>,
+  activeWorkspaceIds?: ReadonlySet<string>,
+): Signal[] {
+  return signals.filter((signal) =>
+    (activeWorkspaceIds === undefined || activeWorkspaceIds.has(signal.workspace_id))
+    && (signal.kind === "notification" || (signal.surface_id !== undefined && terminalSurfaceIds.has(signal.surface_id))))
 }

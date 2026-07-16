@@ -190,7 +190,9 @@ export class SecureServiceRouter implements SecureSessionHandler {
         return this.options.core.editTarget(parsed.data)
       }
       case "snapshot.all": return this.options.snapshot.buildAll()
-      case "web.snapshot": return projectWebSnapshot(await this.options.snapshot.buildAll())
+      case "web.snapshot": return projectWebSnapshot(this.options.snapshot.buildCatalog
+        ? await this.options.snapshot.buildCatalog()
+        : await this.options.snapshot.buildAll())
       case "workspace-creation.catalog": {
         if (!this.options.workspaceCreationCatalog) throw coded("Workspace creation is unavailable", "capability_unavailable")
         return context.mode === "browser" ? projectWebCatalog(await this.options.workspaceCreationCatalog()) : this.options.workspaceCreationCatalog()
@@ -324,9 +326,11 @@ export class SecureServiceRouter implements SecureSessionHandler {
           if (event.type === "operation" && this.options.operations?.ownerOf(event.operation.operation_id) !== context.principalId) continue
           const projected = context.mode === "browser"
             ? event.type === "operation" ? { ...event, operation: projectWebOperation(event.operation) }
-              : event.type === "signal" ? { ...event, signal: projectWebSignal(event.signal) } : event
+              : event.type === "signal"
+                ? (await this.signalIsActive(event.signal) ? { ...event, signal: projectWebSignal(event.signal) } : undefined)
+                : event
             : event
-          await context.sendEvent(projected)
+          if (projected) await context.sendEvent(projected)
         }
       } finally { resources.subscriptions.delete(subscription); this.notifyConnections() }
     })().catch(() => subscription.close())
@@ -339,7 +343,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
     const projection = await this.options.signalProjection()
     const dismissed = new Set(projection.dismissed)
     const visible = projection.signals.filter((signal) => !dismissed.has(signal.id))
-    return { ...projection, signals: this.visibleSignals(principalId, visible).map((signal) => projectWebSignal(signal) as Signal) }
+    return { ...projection, signals: (await this.visibleSignals(principalId, visible)).map((signal) => projectWebSignal(signal) as Signal) }
   }
 
   private async acknowledgeSignals(principalId: string, body?: Record<string, unknown>): Promise<unknown> {
@@ -349,12 +353,28 @@ export class SecureServiceRouter implements SecureSessionHandler {
     const projection = await this.options.signalProjection()
     const dismissed = new Set(projection.dismissed)
     const visible = projection.signals.filter((signal) => !dismissed.has(signal.id))
-    const acknowledged = this.principals.acknowledgeSurface(principalId, parsed.data.surface_id, visible)
-    return { ...projection, acknowledged, signals: this.visibleSignals(principalId, visible).map((signal) => projectWebSignal(signal)) }
+    const activeVisible = await this.visibleSignals(principalId, visible)
+    const acknowledged = this.principals.acknowledgeSurface(principalId, parsed.data.surface_id, activeVisible)
+    return { ...projection, acknowledged, signals: activeVisible.map((signal) => projectWebSignal(signal)) }
   }
 
-  private visibleSignals(principalId: string, signals: Signal[]): Signal[] {
-    return projectWebTerminalSignals(this.principals.visibleSignals(principalId, signals), this.terminals.surfaceIds(principalId))
+  private async activeWorkspaceIds(): Promise<Set<string>> {
+    const snapshots = this.options.snapshot.buildCatalog
+      ? (await this.options.snapshot.buildCatalog()).workspaces
+      : await this.options.snapshot.buildAll()
+    return new Set(snapshots.map(({ workspace }) => workspace.id))
+  }
+
+  private async signalIsActive(signal: Signal | SignalDismissal): Promise<boolean> {
+    return signal.kind === "dismiss_signal" || (await this.activeWorkspaceIds()).has(signal.workspace_id)
+  }
+
+  private async visibleSignals(principalId: string, signals: Signal[]): Promise<Signal[]> {
+    return projectWebTerminalSignals(
+      this.principals.visibleSignals(principalId, signals),
+      this.terminals.surfaceIds(principalId),
+      await this.activeWorkspaceIds(),
+    )
   }
 
   private async dismissSignal(body?: Record<string, unknown>): Promise<{ dismissed: true }> {
