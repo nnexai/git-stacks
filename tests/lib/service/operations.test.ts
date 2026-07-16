@@ -105,7 +105,9 @@ describe("OperationRegistry lifecycle", () => {
       { name: "open.integrations", stage: "executing", message: "Opening integrations", run: async () => { calls.push("run:second") } },
     ], "safe-boundaries"))
     await firstDone.promise
-    await registry.cancel(accepted.operation_id)
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "available" })
+    expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "requested", operation_state: "running" })
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "requested" })
     expect(registry.get(accepted.operation_id)?.state).toBe("running")
     continueFirst.resolve()
     await registry.wait(accepted.operation_id)
@@ -185,8 +187,7 @@ describe("OperationRegistry lifecycle", () => {
   test("serializes cancellation before start, during safe work, duplicate requests, and terminal refresh", async () => {
     const dir = await root()
     let scheduled: (() => void) | undefined
-    const started = deferred()
-    const release = deferred()
+    let ran = false
     let finalized = 0
     const registry = new OperationRegistry({
       root: dir,
@@ -198,11 +199,7 @@ describe("OperationRegistry lifecycle", () => {
       name: "safe",
       stage: "executing",
       message: "Safe work",
-      run: async (_report, cancellation) => {
-        started.resolve()
-        await release.promise
-        cancellation?.throwIfCancelled()
-      },
+      run: async () => { ran = true },
     }], "safe-boundaries", () => { finalized += 1 }))
 
     expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "available" })
@@ -211,9 +208,8 @@ describe("OperationRegistry lifecycle", () => {
     expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "requested" })
 
     scheduled?.()
-    await started.promise
-    release.resolve()
     await registry.wait(accepted.operation_id)
+    expect(ran).toBe(false)
     expect(registry.get(accepted.operation_id)?.state).toBe("cancelled")
     expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "unavailable", reason: "finished" })
     expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "already-finished", operation_state: "cancelled" })
@@ -252,6 +248,7 @@ describe("OperationRegistry lifecycle", () => {
     const terminal = registry.get(accepted.operation_id)
     expect(terminal?.state).toBe("succeeded")
     if (terminal?.state === "succeeded") expect(terminal).not.toHaveProperty("rollback_attempted")
+    expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "already-finished", operation_state: "succeeded" })
   })
 
   test("never advertises or accepts cancellation for non-cancellable work", async () => {

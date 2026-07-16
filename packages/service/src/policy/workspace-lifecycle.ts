@@ -94,6 +94,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
     execution(mutation: WorkspaceLifecycleMutation): OperationExecution {
       const result: Record<string, unknown> = {}
       return {
+        cancellation: "safe-boundaries",
         steps: [{
           name: "workspace.lifecycle",
           stage: "executing",

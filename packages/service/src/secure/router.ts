@@ -567,8 +567,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
   private async cancelOperation(context: SecureSessionContext, body?: Record<string, unknown>): Promise<unknown> {
     if (!this.options.operations || typeof body?.operation_id !== "string") throw coded("Invalid operation id", "invalid_request")
     if (!this.options.operations.getForClient(body.operation_id, context.principalId)) throw coded("Operation not found", "not_found")
-    const operation = await this.options.operations.cancel(body.operation_id)
-    return context.mode === "browser" ? projectWebOperation(operation) : operation
+    return this.options.operations.cancel(body.operation_id)
   }
 
   private notifyConnections(): void {

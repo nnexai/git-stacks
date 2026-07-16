@@ -5,10 +5,13 @@ import { join } from "node:path"
 import { spawn as spawnChild } from "node:child_process"
 import {
   ErrorCodeSchema,
+  OperationCancelResultSchema,
   OperationSchema,
   WorkspaceLifecycleFailureDetailsSchema,
   type ApiError,
   type Operation,
+  type OperationCancellationView,
+  type OperationCancelResult,
   type OperationProgress,
   type WorkspaceLifecycleFailureDetails,
 } from "@git-stacks/protocol"
@@ -72,6 +75,7 @@ export interface OperationCancellation {
 export type OperationProgressInput = Omit<OperationProgress, "stage"> & { stage?: OperationProgress["stage"] }
 
 export interface OperationExecution {
+  cancellation: "safe-boundaries" | "none"
   steps: OperationStep[]
   result?: Record<string, unknown>
   /** Rebuild authoritative read models after every terminal outcome. */
@@ -137,6 +141,7 @@ export class OperationRegistry {
   private readonly executions = new Map<string, Promise<void>>()
   private readonly cancellations = new Set<string>()
   private readonly activeCancellations = new Map<string, OperationCancellationState>()
+  private readonly cancellationCapabilities = new Map<string, OperationExecution["cancellation"]>()
 
   constructor(private readonly options: OperationRegistryOptions) {
     this.path = join(options.root, "operations.json")
@@ -245,9 +250,11 @@ export class OperationRegistry {
     await this.initialize()
     const accepted = await this.serialized(async () => {
       const operation = OperationSchema.parse({ operation_id: this.id(), state: "accepted", accepted_at: this.timestamp() })
+      this.cancellationCapabilities.set(operation.operation_id, execution.cancellation)
       this.replace(operation)
       await this.persist()
       try { await this.publish(operation) } catch (caught) {
+        this.cancellationCapabilities.delete(operation.operation_id)
         this.store.operations = this.store.operations.filter((item) => item.operation_id !== operation.operation_id)
         await this.persist()
         throw caught
@@ -279,6 +286,7 @@ export class OperationRegistry {
         return original
       }
       const accepted = OperationSchema.parse({ operation_id: this.id(), state: "accepted", accepted_at: this.timestamp() })
+      this.cancellationCapabilities.set(accepted.operation_id, input.execution.cancellation)
       const reservation: PersistedReservation = {
         client_id: input.clientId,
         endpoint: input.endpoint,
@@ -291,6 +299,7 @@ export class OperationRegistry {
       this.store.reservations.push(reservation)
       await this.persist()
       try { await this.publish(accepted) } catch (caught) {
+        this.cancellationCapabilities.delete(accepted.operation_id)
         this.store.operations = this.store.operations.filter((item) => item.operation_id !== accepted.operation_id)
         this.store.reservations = this.store.reservations.filter((item) => item !== reservation)
         await this.persist()
@@ -311,15 +320,41 @@ export class OperationRegistry {
     return structuredClone(operation)
   }
 
-  async cancel(id: string): Promise<Operation> {
-    await this.initialize()
+  cancellationView(id: string): OperationCancellationView | undefined {
     const operation = this.get(id)
-    if (!operation) throw new Error(`unknown operation: ${id}`)
-    if (operation.state === "accepted" || operation.state === "running") {
-      const active = this.activeCancellations.get(id)
-      if (!active || active.cancel()) this.cancellations.add(id)
+    if (!operation) return undefined
+    if (operation.state !== "accepted" && operation.state !== "running") {
+      return { state: "unavailable", reason: "finished" }
     }
-    return operation
+    if (this.cancellationCapabilities.get(id) !== "safe-boundaries") {
+      return { state: "unavailable", reason: "not-cancellable" }
+    }
+    if (this.cancellations.has(id)) return { state: "requested" }
+    const active = this.activeCancellations.get(id)
+    if (active?.committed) return { state: "unavailable", reason: "committed" }
+    if (active?.signal.aborted) return { state: "requested" }
+    return { state: "available" }
+  }
+
+  async cancel(id: string): Promise<OperationCancelResult> {
+    await this.initialize()
+    return this.serialized(async () => {
+      const operation = this.get(id)
+      if (!operation) throw new Error(`unknown operation: ${id}`)
+      const finish = (outcome: OperationCancelResult["outcome"]): OperationCancelResult =>
+        OperationCancelResultSchema.parse({
+          operation_id: id,
+          outcome,
+          operation_state: operation.state,
+        })
+      if (operation.state !== "accepted" && operation.state !== "running") return finish("already-finished")
+      if (this.cancellationCapabilities.get(id) !== "safe-boundaries") return finish("not-cancellable")
+      const active = this.activeCancellations.get(id)
+      if (active?.committed) return finish("too-late")
+      this.cancellations.add(id)
+      active?.cancel()
+      return finish("requested")
+    })
   }
 
   async wait(id: string): Promise<void> {
@@ -342,9 +377,11 @@ export class OperationRegistry {
     const startedAt = this.timestamp()
     const completed: OperationStep[] = []
     const rollbackErrors: ApiError[] = []
-    const cancellation = new OperationCancellationState()
-    this.activeCancellations.set(accepted.operation_id, cancellation)
-    if (this.cancellations.has(accepted.operation_id)) cancellation.cancel()
+    const cancellation = execution.cancellation === "safe-boundaries" ? new OperationCancellationState() : undefined
+    if (cancellation) {
+      this.activeCancellations.set(accepted.operation_id, cancellation)
+      if (this.cancellations.has(accepted.operation_id)) cancellation.cancel()
+    }
     let current: Operation = OperationSchema.parse({
       operation_id: accepted.operation_id, state: "running", accepted_at: accepted.accepted_at,
       started_at: startedAt, progress: { stage: "preparing", message: "Preparing operation" },
@@ -380,7 +417,7 @@ export class OperationRegistry {
         started_at: startedAt, finished_at: this.timestamp(), completed_steps: completed.map((step) => step.name), result: execution.result,
       }))
     } catch (caught) {
-      if (cancellation.signal.aborted && !cancellation.committed) {
+      if (cancellation?.signal.aborted && !cancellation.committed) {
         await this.finishCancelled(accepted, startedAt, completed, rollbackErrors)
         return
       }
@@ -407,6 +444,11 @@ export class OperationRegistry {
     } finally {
       this.activeCancellations.delete(accepted.operation_id)
       this.cancellations.delete(accepted.operation_id)
+      this.cancellationCapabilities.delete(accepted.operation_id)
+      try { await execution.finalize?.() } catch {
+        // Terminal operation state remains authoritative. A failed refresh is
+        // retried by the next snapshot read rather than rewriting the outcome.
+      }
     }
   }
 
@@ -517,6 +559,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
   refreshWorkspace?: (workspace: string) => void | Promise<void>
 } = {}): CoreMutationAdapters {
   const adapt = (name: "open" | "close", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
+    cancellation: "none",
     steps: [{
       name: `workspace.${name}`,
       stage: "executing",
@@ -533,6 +576,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     result: { workspace: request.workspace, snapshot_changed: true },
   })
   const lifecycle = (name: "clean" | "remove" | "merge", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
+    cancellation: "none",
     steps: [{
       name: `workspace.${name}`, stage: "executing", message: `${name === "remove" ? "Removing" : name === "merge" ? "Merging" : "Cleaning"} workspace`,
       run: async (report) => {
@@ -547,6 +591,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     result: { workspace: request.workspace, snapshot_changed: true },
   })
   const create: WorkspaceCreateMutation = (request) => ({
+    cancellation: "none",
     steps: [{
       name: "workspace.create", stage: "preparing", message: "Preparing workspace",
       run: async (report) => {
@@ -579,6 +624,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     "workspace.remove": lifecycle("remove", removeWorkspace),
     "workspace.merge": lifecycle("merge", mergeWorkspace),
     "workspace.rename": (request: CoreMutationRequest<"workspace.rename">) => ({
+      cancellation: "none",
       steps: [{
         name: "workspace.rename", stage: "executing", message: "Renaming workspace",
         run: async (report) => {
@@ -594,7 +640,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     }),
     "workspace.sync": (request: CoreMutationRequest<"workspace.sync">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
-      return { steps: [{
+      return { cancellation: "none", steps: [{
         name: "workspace.sync", stage: "executing", message: "Syncing workspace",
         run: async (report) => {
           let progressQueue = Promise.resolve()
@@ -615,6 +661,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     "workspace.pull": (request: CoreMutationRequest<"workspace.pull">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
       return {
+        cancellation: "none",
         steps: [{
           name: "workspace.pull", stage: "executing", message: "Pulling workspace",
           run: async (report, cancellation) => {
@@ -637,7 +684,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     },
     "workspace.push": (request: CoreMutationRequest<"workspace.push">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
-      return { steps: [{
+      return { cancellation: "none", steps: [{
         name: "workspace.push", stage: "executing", message: "Pushing workspace",
         run: async (report) => {
           let progressQueue = Promise.resolve()
@@ -653,6 +700,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     "workspace.notes.add": (request: CoreMutationRequest<"workspace.notes.add">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
       return {
+        cancellation: "none",
         steps: [{
           name: "workspace.notes.add", stage: "executing", message: "Adding workspace note",
           run: async (_report, cancellation) => {
@@ -675,6 +723,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     "workspace.notes.clear": (request: CoreMutationRequest<"workspace.notes.clear">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
       return {
+        cancellation: "none",
         steps: [{
           name: "workspace.notes.clear", stage: "executing", message: "Clearing workspace notes",
           run: async (_report, cancellation) => {
@@ -695,6 +744,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
       }
     },
     "workspace.labels.set": (request: CoreMutationRequest<"workspace.labels.set">) => ({
+      cancellation: "none",
       steps: [{ name: "workspace.labels.set", stage: "executing", message: "Updating workspace labels", run: async () => {
         const workspace = readWorkspace(request.workspace)
         writeWorkspace({ ...workspace, labels: [...new Set(request.labels)] })
@@ -703,7 +753,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     }),
     "workspace.command.run": (request: CoreMutationRequest<"workspace.command.run">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, command: request.command }
-      return { steps: [{ name: "workspace.command.run", stage: "executing", message: `Running ${request.command}`, run: async (report) => {
+      return { cancellation: "none", steps: [{ name: "workspace.command.run", stage: "executing", message: `Running ${request.command}`, run: async (report) => {
         let progressQueue = Promise.resolve()
         let outputBatch: Array<{ stream: "stdout" | "stderr"; text: string }> = []
         let flushTimer: ReturnType<typeof setTimeout> | undefined
@@ -734,7 +784,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
     },
     "workspace.issue.open": (request: CoreMutationRequest<"workspace.issue.open">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, tracker: request.tracker }
-      return { steps: [{ name: "workspace.issue.open", stage: "executing", message: `Opening ${request.tracker} issue`, run: async (report) => {
+      return { cancellation: "none", steps: [{ name: "workspace.issue.open", stage: "executing", message: `Opening ${request.tracker} issue`, run: async (report) => {
         const args = ["git-stacks", "integration", request.tracker, "issue", "open", request.workspace]
         if (request.tracker !== "jira") args.push("--web")
         const proc = spawnChild(args[0]!, args.slice(1), { stdio: ["ignore", "pipe", "pipe"] })
@@ -755,10 +805,12 @@ export function createWorkspaceMutationAdapters(dependencies: {
       } }], result }
     },
     "template.write": (request: CoreMutationRequest<"template.write">) => ({
+      cancellation: "none",
       steps: [{ name: "template.write", stage: "executing", message: "Writing template", run: async () => { writeTemplate(request.template) } }],
       result: { template: request.template.name, snapshot_changed: true },
     }),
     "template.clone": (request: CoreMutationRequest<"template.clone">) => ({
+      cancellation: "none",
       steps: [{ name: "template.clone", stage: "executing", message: "Cloning template", run: async () => {
         if (listTemplatesUncached().some((template) => template.name === request.new_name)) throw new Error(`Template '${request.new_name}' already exists`)
         writeTemplate({ ...readTemplate(request.template), name: request.new_name })
@@ -766,10 +818,12 @@ export function createWorkspaceMutationAdapters(dependencies: {
       result: { template: request.new_name, snapshot_changed: true },
     }),
     "template.delete": (request: CoreMutationRequest<"template.delete">) => ({
+      cancellation: "none",
       steps: [{ name: "template.delete", stage: "executing", message: "Deleting template", run: async () => { deleteTemplate(request.template) } }],
       result: { template: request.template, snapshot_changed: true },
     }),
     "repository.delete": (request: CoreMutationRequest<"repository.delete">) => ({
+      cancellation: "none",
       steps: [{ name: "repository.delete", stage: "executing", message: "Deleting repository registration", run: async () => {
         const templates = listTemplatesUncached().filter((template) => template.repos.some((repo) => repo.repo === request.repository))
         const workspaces = listWorkspacesUncached().filter((workspace) => workspace.repos.some((repo) => repo.repo === request.repository))
