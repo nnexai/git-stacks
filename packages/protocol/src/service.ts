@@ -145,6 +145,7 @@ export const LaunchSpecificationSchema = z.strictObject({
 export type LaunchSpecification = z.infer<typeof LaunchSpecificationSchema>
 export const WorkspaceSnapshotSchema = z.strictObject({
   id: EntityIdSchema, name: z.string().min(1), branch: z.string(), repositories: z.array(RepositorySnapshotSchema), launch: LaunchSpecificationSchema,
+  activity_at: TimestampSchema,
   labels: z.array(z.string().min(1).max(64)).max(16).optional(),
   pinned: z.boolean().optional(),
   priority: z.number().int().min(-2147483648).max(2147483647).optional(),
@@ -166,6 +167,67 @@ export const WorkspaceSnapshotResponseSchema = z.strictObject({
   ...EnvelopeBase, ok: z.literal(true), revision: RevisionSchema, generated_at: TimestampSchema, workspace: WorkspaceSnapshotSchema,
 })
 export type WorkspaceSnapshotResponse = z.infer<typeof WorkspaceSnapshotResponseSchema>
+
+export const ArchivedWorkspaceSummarySchema = z.strictObject({
+  id: EntityIdSchema,
+  name: utf8BoundedString(CLIENT_MODEL_LIMITS.string_bytes.workspace_name, 1),
+  activity_at: TimestampSchema,
+})
+export type ArchivedWorkspaceSummary = z.infer<typeof ArchivedWorkspaceSummarySchema>
+
+export const WorkspaceCatalogSchema = z.strictObject({
+  revision: RevisionSchema,
+  generated_at: TimestampSchema,
+  workspaces: z.array(WorkspaceSnapshotResponseSchema).max(CLIENT_MODEL_LIMITS.workspaces),
+  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema).max(CLIENT_MODEL_LIMITS.workspaces),
+})
+export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>
+
+const WorkspaceLifecycleTarget = {
+  workspace_id: EntityIdSchema,
+  expected_revision: RevisionSchema,
+}
+export const WorkspaceLifecycleMutationSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("workspace.archive"), ...WorkspaceLifecycleTarget }),
+  z.strictObject({ kind: z.literal("workspace.unarchive"), ...WorkspaceLifecycleTarget }),
+  z.strictObject({ kind: z.literal("workspace.remove"), ...WorkspaceLifecycleTarget }),
+  z.strictObject({
+    kind: z.literal("workspace.force-remove"),
+    ...WorkspaceLifecycleTarget,
+    confirmation_name: utf8BoundedString(CLIENT_MODEL_LIMITS.string_bytes.workspace_name, 1),
+  }),
+])
+export type WorkspaceLifecycleMutation = z.infer<typeof WorkspaceLifecycleMutationSchema>
+
+export const WorkspaceLifecyclePhaseSchema = z.enum([
+  "stopping_terminals",
+  "checking_worktrees",
+  "removing_worktrees",
+  "deleting_workspace_files",
+  "reconciling_state",
+])
+export type WorkspaceLifecyclePhase = z.infer<typeof WorkspaceLifecyclePhaseSchema>
+
+export const WorkspaceLifecycleFailureDetailsSchema = z.strictObject({
+  kind: utf8BoundedString(96, 1),
+  blocking_repositories: z.array(utf8BoundedString(CLIENT_MODEL_LIMITS.string_bytes.repository_name, 1))
+    .max(CLIENT_MODEL_LIMITS.repositories_per_workspace)
+    .refine((names) => new Set(names).size === names.length)
+    .optional(),
+  terminals_stopped: z.boolean(),
+  force_allowed: z.boolean(),
+}).superRefine((details, context) => {
+  if (details.force_allowed && (details.kind !== "workspace_dirty" || details.terminals_stopped !== true)) {
+    context.addIssue({ code: "custom", path: ["force_allowed"], message: "Force is allowed only for dirty workspaces after terminals stop" })
+  }
+})
+export type WorkspaceLifecycleFailureDetails = z.infer<typeof WorkspaceLifecycleFailureDetailsSchema>
+
+export const WorkspaceLifecycleResultSchema = z.strictObject({
+  revision: RevisionSchema,
+  terminals_stopped: z.boolean(),
+})
+export type WorkspaceLifecycleResult = z.infer<typeof WorkspaceLifecycleResultSchema>
 
 export const TerminalLaunchResolutionRequestSchema = z.strictObject({
   workspace_id: EntityIdSchema,

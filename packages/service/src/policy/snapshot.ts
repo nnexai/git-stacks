@@ -35,6 +35,9 @@ import {
   type TerminalLaunchResolution,
   type TerminalLaunchResolutionRequest,
   WorkspaceSnapshotResponseSchema,
+  WorkspaceCatalogSchema,
+  type ArchivedWorkspaceSummary,
+  type WorkspaceCatalog,
   type WorkspaceSnapshotResponse,
 } from "@git-stacks/protocol"
 
@@ -216,6 +219,7 @@ function workspaceDefinitionExists(name: string): boolean {
 export function createSnapshotBuilder(dependencies: SnapshotDependencies = defaultDependencies()) {
   let aggregateRevision = "0"
   let latestAggregate: WorkspaceSnapshotResponse[] | undefined
+  let latestCatalog: WorkspaceCatalog | undefined
   const loadConfig = (): GlobalConfig => typeof dependencies.config === "function" ? dependencies.config() : dependencies.config
   async function project(workspace: IdentityWorkspace, config: GlobalConfig) {
     const status = await dependencies.getWorkspaceStatus(workspace)
@@ -272,6 +276,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return {
       id: workspace.id,
       name: workspace.name,
+      activity_at: workspace.last_opened ?? workspace.created,
       branch: workspace.branch,
       labels: workspace.labels ?? [],
       ...(workspace.pinned === true ? { pinned: true } : {}),
@@ -298,6 +303,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const workspace = dependencies.ensureWorkspaceIdentity(name)
+        if (workspace.archived === true) return null
         const before = await dependencies.fingerprint(workspace)
         const projection = await project(workspace, config)
         const after = await dependencies.fingerprint(workspace)
@@ -321,30 +327,63 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   }
 
   async function buildAll(): Promise<WorkspaceSnapshotResponse[]> {
+    return (await buildCatalog()).workspaces
+  }
+
+  function archivedActivity(workspace: IdentityWorkspace): string {
+    const persisted = workspace.last_opened ?? workspace.created
+    const archivedAt = workspace.archived_at!
+    return Date.parse(archivedAt) >= Date.parse(persisted) ? archivedAt : persisted
+  }
+
+  async function buildCatalog(): Promise<WorkspaceCatalog> {
     const names = [...dependencies.listWorkspaceNames()].sort((a, b) => a.localeCompare(b))
     const config = loadConfig()
     // One aggregate generation owns one revision. Per-workspace concurrent
     // writes to a shared revision store made revision depend on build order.
     const projections = []
+    const archived: ArchivedWorkspaceSummary[] = []
     for (const name of names) {
+      let definition: IdentityWorkspace
+      try {
+        definition = dependencies.ensureWorkspaceIdentity(name)
+      } catch (error) {
+        if (!workspaceDefinitionExists(name)) continue
+        throw error
+      }
+      if (definition.archived === true) {
+        archived.push({ id: definition.id, name: definition.name, activity_at: archivedActivity(definition) })
+        continue
+      }
       const projection = await projectStable(name, config)
-      if (projection) projections.push(projection)
+      if (projection) {
+        projections.push(projection)
+        continue
+      }
+      try {
+        const current = dependencies.ensureWorkspaceIdentity(name)
+        if (current.archived === true) {
+          archived.push({ id: current.id, name: current.name, activity_at: archivedActivity(current) })
+        }
+      } catch (error) {
+        if (workspaceDefinitionExists(name)) throw error
+      }
     }
-    const revision = await dependencies.revisionStore.update(digest(projections))
+    archived.sort((left, right) => Date.parse(right.activity_at) - Date.parse(left.activity_at)
+      || left.name.localeCompare(right.name)
+      || left.id.localeCompare(right.id))
+    const revision = await dependencies.revisionStore.update(digest({ workspaces: projections, archived_workspaces: archived }))
     aggregateRevision = revision
-    if (projections.length === 0) {
-      latestAggregate = []
-      return latestAggregate
-    }
     const generated_at = dependencies.clock().toISOString()
     latestAggregate = projections.map((workspace) => WorkspaceSnapshotResponseSchema.parse({
       protocol: "v1", request_id: `req_${randomUUID().replaceAll("-", "")}`, ok: true, revision, generated_at, workspace,
     }))
-    return latestAggregate
+    latestCatalog = WorkspaceCatalogSchema.parse({ revision, generated_at, workspaces: latestAggregate, archived_workspaces: archived })
+    return latestCatalog
   }
 
   async function currentRevision(): Promise<string> {
-    await buildAll()
+    await buildCatalog()
     return aggregateRevision
   }
 
@@ -400,5 +439,5 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     } })
   }
 
-  return { buildWorkspace, buildAll, currentRevision, resolveTerminalLaunch }
+  return { buildWorkspace, buildAll, buildCatalog, currentRevision, resolveTerminalLaunch }
 }

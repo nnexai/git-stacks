@@ -1,5 +1,6 @@
 import { z } from "zod"
 import {
+  ArchivedWorkspaceSummarySchema,
   CommandIdSchema,
   CursorSchema,
   EntityIdSchema,
@@ -8,6 +9,8 @@ import {
   SignalIdSchema,
   TimestampSchema,
   WorkspaceCreationRequestSchema,
+  WorkspaceLifecycleFailureDetailsSchema,
+  WorkspaceLifecyclePhaseSchema,
   utf8BoundedString,
 } from "./service.js"
 
@@ -82,6 +85,7 @@ export type WebCommand = z.infer<typeof WebCommandSchema>
 export const WebWorkspaceSchema = z.strictObject({
   id: EntityIdSchema,
   name: utf8BoundedString(96, 1),
+  activity_at: TimestampSchema,
   branch: utf8BoundedString(96),
   priority: z.number().int().min(-2147483648).max(2147483647),
   labels: z.array(utf8BoundedString(64, 1)).max(16),
@@ -99,6 +103,7 @@ export const WebSnapshotSchema = z.strictObject({
   generated_at: TimestampSchema,
   pinned_workspace_ids: z.array(EntityIdSchema).max(16),
   workspaces: z.array(WebWorkspaceSchema),
+  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema).max(16),
 })
 export type WebSnapshot = z.infer<typeof WebSnapshotSchema>
 
@@ -125,8 +130,22 @@ export const WebOperationSchema = z.strictObject({
   accepted_at: TimestampSchema,
   started_at: TimestampSchema.optional(),
   finished_at: TimestampSchema.optional(),
-  progress: z.strictObject({ message: utf8BoundedString(500).optional(), completed: z.number().int().nonnegative().optional(), total: z.number().int().positive().optional() }).optional(),
-  result: z.strictObject({ workspace_name: utf8BoundedString(96, 1).optional(), snapshot_changed: z.boolean().optional() }).optional(),
-  error: z.strictObject({ code: z.string().min(1), message: utf8BoundedString(500, 1) }).optional(),
+  progress: z.strictObject({
+    message: utf8BoundedString(500).optional(),
+    completed: z.number().int().nonnegative().optional(),
+    total: z.number().int().positive().optional(),
+    lifecycle_phase: WorkspaceLifecyclePhaseSchema.optional(),
+  }).optional(),
+  result: z.strictObject({
+    workspace_name: utf8BoundedString(96, 1).optional(),
+    snapshot_changed: z.boolean().optional(),
+    revision: RevisionSchema.optional(),
+    terminals_stopped: z.boolean().optional(),
+  }).optional(),
+  error: z.strictObject({
+    code: utf8BoundedString(96, 1),
+    message: utf8BoundedString(500, 1),
+    lifecycle: WorkspaceLifecycleFailureDetailsSchema.optional(),
+  }).optional(),
 })
 export type WebOperation = z.infer<typeof WebOperationSchema>

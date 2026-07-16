@@ -1,6 +1,7 @@
 import { describe, expect, test } from "@test/api"
 import type { Workspace } from "../../../packages/core/src/config"
 import * as Protocol from "../../../packages/protocol/src/service"
+import { CoreWorkspaceSchema } from "../../../packages/service/src/policy/core-contract"
 import {
   SnapshotBusyError,
   createSnapshotBuilder,
@@ -85,6 +86,7 @@ describe("authoritative service snapshots", () => {
     const catalog = await builder.buildCatalog()
     const schema = (Protocol as Record<string, unknown>).WorkspaceCatalogSchema as { parse(value: unknown): Record<string, unknown> }
     const parsed = schema.parse(catalog)
+    const activeResponse = (parsed.workspaces as Array<{ workspace: unknown }>)[0]!
     expect(activeProjectionReads).toBe(1)
     expect(parsed.workspaces).toEqual([expect.objectContaining({
       workspace: expect.objectContaining({ name: "active", activity_at: active.last_opened }),
@@ -94,6 +96,7 @@ describe("authoritative service snapshots", () => {
       name: archived.name,
       activity_at: archived.archived_at,
     }])
+    expect(CoreWorkspaceSchema.parse({ definition: active, projection: activeResponse.workspace }).projection.activity_at).toBe(active.last_opened)
   })
 
   test("catalog revision advances through active, all-archived, and archive-only changes", async () => {

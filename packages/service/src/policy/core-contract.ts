@@ -6,7 +6,7 @@ import {
   TemplateSchema,
   WorkspaceSchema,
 } from "@git-stacks/core/config"
-import { RevisionSchema, TimestampSchema, WorkspaceSnapshotSchema } from "@git-stacks/protocol"
+import { ArchivedWorkspaceSummarySchema, RevisionSchema, TimestampSchema, WorkspaceSnapshotSchema } from "@git-stacks/protocol"
 
 /**
  * Trusted read model consumed by first-party machine-local clients.
@@ -30,6 +30,7 @@ export const CoreStateSchema = z.strictObject({
   generated_at: TimestampSchema,
   config: GlobalConfigSchema,
   workspaces: z.array(CoreWorkspaceSchema),
+  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema),
   templates: z.array(TemplateSchema),
   repositories: z.array(CoreRepositorySchema),
 })

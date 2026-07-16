@@ -10,7 +10,7 @@ describe("browser-safe service projection", () => {
     const trusted = [{
       protocol: "v1", request_id: "req_abcdefghijklmnop", ok: true, revision: "7", generated_at: "2026-07-13T12:00:00.000Z",
       workspace: {
-        id: workspaceId, name: "demo", branch: "feature/web", labels: ["active"], pinned: true, priority: 12,
+        id: workspaceId, name: "demo", activity_at: "2026-07-13T11:00:00.000Z", branch: "feature/web", labels: ["active"], pinned: true, priority: 12,
         repositories: [{ id: repositoryId, name: "repo", mode: "worktree", path: "/secret/path" }],
         status: [{ repository_id: repositoryId, name: "repo", exists: true, dirty: true, branch: "feature/web", default_branch: "main", mode: "worktree", ahead: 1, behind: 2, additions: 3, removals: 4, remote: "available", degraded: false }],
         file_status: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
@@ -24,6 +24,7 @@ describe("browser-safe service projection", () => {
     expect(projected.revision).toBe("7")
     expect(projected.pinned_workspace_ids).toEqual([workspaceId])
     expect(projected.workspaces[0]?.priority).toBe(12)
+    expect(projected.workspaces[0]?.activity_at).toBe("2026-07-13T11:00:00.000Z")
     expect(projected.workspaces[0]?.commands).toEqual([{ id: "cmd_abcdefghijklmnop", name: "Tests", scope: "repository", repository_id: repositoryId }])
     const encoded = JSON.stringify(projected)
     for (const secret of ["/secret/path", "SECRET_COMMAND", "SECRET_ENV", "vault:path", "/secret/cwd", "9999", "SECRET_STEP", "SECRET_STEP_ENV"]) expect(encoded).not.toContain(secret)

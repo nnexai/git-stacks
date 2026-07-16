@@ -369,7 +369,14 @@ class TerminalView {
   }
 }
 
-let snapshot: Snapshot = { protocol: "web-v1", revision: "0", generated_at: new Date().toISOString(), pinned_workspace_ids: [], workspaces: [] }
+let snapshot: Snapshot = {
+  protocol: "web-v1",
+  revision: "0",
+  generated_at: new Date().toISOString(),
+  pinned_workspace_ids: [],
+  workspaces: [],
+  archived_workspaces: [],
+}
 let snapshotRefreshGeneration = 0
 let selectedPair: Pair | undefined
 let activeTerminalId: string | undefined

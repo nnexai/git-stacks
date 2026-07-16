@@ -83,11 +83,23 @@ export function compactRelativeTime(occurredAt: string, now = Date.now()): strin
   return `${Math.floor(seconds / 86400)}d`
 }
 
-export function workspacePriorityOrder(
-  left: { priority?: number; name: string; id?: string },
-  right: { priority?: number; name: string; id?: string },
+export function workspaceSuccessorOrder(
+  left: { pinned?: boolean; priority?: number; activity_at: string; name: string; id: string },
+  right: { pinned?: boolean; priority?: number; activity_at: string; name: string; id: string },
 ): number {
-  return (right.priority ?? 0) - (left.priority ?? 0)
+  return Number(right.pinned === true) - Number(left.pinned === true)
+    || (right.priority ?? 0) - (left.priority ?? 0)
+    || Date.parse(right.activity_at) - Date.parse(left.activity_at)
     || left.name.localeCompare(right.name)
-    || (left.id ?? "").localeCompare(right.id ?? "")
+    || left.id.localeCompare(right.id)
+}
+
+export function workspacePriorityOrder(
+  left: { pinned?: boolean; priority?: number; activity_at?: string; name: string; id?: string },
+  right: { pinned?: boolean; priority?: number; activity_at?: string; name: string; id?: string },
+): number {
+  return workspaceSuccessorOrder(
+    { ...left, activity_at: left.activity_at ?? "", id: left.id ?? "" },
+    { ...right, activity_at: right.activity_at ?? "", id: right.id ?? "" },
+  )
 }

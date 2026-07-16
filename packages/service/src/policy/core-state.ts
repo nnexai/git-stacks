@@ -18,10 +18,11 @@ import {
 } from "./core-contract"
 import { SnapshotBusyError } from "./snapshot"
 import { listWorkspaceNotes, type WorkspaceNoteRecord } from "@git-stacks/core/notes"
-import type { WorkspaceSnapshotResponse } from "@git-stacks/protocol"
+import type { ArchivedWorkspaceSummary, WorkspaceCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
 
 type CoreSnapshotSource = {
   buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]>
+  buildCatalog?(signal?: AbortSignal): Promise<WorkspaceCatalog>
   currentRevision?(): Promise<string>
 }
 
@@ -36,25 +37,38 @@ export function createCoreStateProvider(snapshot: CoreSnapshotSource): CoreState
     async build(signal) {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         signal?.throwIfAborted()
-        const projections = await snapshot.buildAll(signal)
+        const catalog = await snapshot.buildCatalog?.(signal)
+        const projections = catalog?.workspaces ?? await snapshot.buildAll(signal)
         const definitions = listWorkspacesUncached()
-        const definitionsByName = new Map(definitions.map((workspace) => [workspace.name, workspace]))
+        const activeDefinitions = definitions.filter((workspace) => workspace.archived !== true)
+        const definitionsByName = new Map(activeDefinitions.map((workspace) => [workspace.name, workspace]))
         const workspaces = projections.flatMap(({ workspace: projection }) => {
           const definition = definitionsByName.get(projection.name)
           return definition ? [{ definition, projection }] : []
         })
         const namesMatch = workspaces.length === projections.length
-          && definitions.length === projections.length
+          && activeDefinitions.length === projections.length
           && workspaces.every(({ definition, projection }) => definition.id === projection.id)
         if (!namesMatch) continue
 
-        const revision = projections[0]?.revision ?? await snapshot.currentRevision?.() ?? "0"
-        const generatedAt = projections[0]?.generated_at ?? new Date().toISOString()
+        const archivedWorkspaces: ArchivedWorkspaceSummary[] = catalog?.archived_workspaces ?? definitions
+          .filter((workspace): workspace is typeof workspace & { id: string; archived_at: string } => workspace.archived === true && workspace.id !== undefined && workspace.archived_at !== undefined)
+          .map((workspace) => ({
+            id: workspace.id,
+            name: workspace.name,
+            activity_at: Date.parse(workspace.archived_at) >= Date.parse(workspace.last_opened ?? workspace.created)
+              ? workspace.archived_at
+              : workspace.last_opened ?? workspace.created,
+          }))
+          .sort((left, right) => Date.parse(right.activity_at) - Date.parse(left.activity_at) || left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
+        const revision = catalog?.revision ?? projections[0]?.revision ?? await snapshot.currentRevision?.() ?? "0"
+        const generatedAt = catalog?.generated_at ?? projections[0]?.generated_at ?? new Date().toISOString()
         return CoreStateSchema.parse({
           revision,
           generated_at: generatedAt,
           config: readGlobalConfig(),
           workspaces,
+          archived_workspaces: archivedWorkspaces,
           templates: listTemplatesUncached(),
           repositories: listRegistryEntries().map((repository) => ({
             ...repository,
