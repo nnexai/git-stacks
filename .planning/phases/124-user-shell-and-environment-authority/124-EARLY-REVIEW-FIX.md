@@ -18,3 +18,21 @@ Focused verification:
 - `bunx tsc --noEmit -p packages/protocol/tsconfig.json`
 
 The complete host fixture and full repository gates remain the next verification layer after rebasing this repair chain.
+
+## Second adversarial repair pass
+
+Three follow-up blockers are now repaired:
+
+- PTY post-initialization uses shell-family builtin dispatch for environment parsing, export, readiness creation, command sourcing, status capture, and exit. Hostile Bash, zsh, and fish profile fixtures that shadow those command names cannot intercept the authoritative overlay or command source boundary; readiness is created only after every overlay entry succeeds.
+- Command PTY initialization timeout and failure now perform `SIGTERM`, wait for both leader settlement and process-group disappearance, escalate to `SIGKILL`, and confirm the group is gone before the logical terminal reports its ended state.
+- Core command cancellation and service terminal closure poll for process-group disappearance after `SIGKILL`, independently of leader exit notification. A real Linux fixture with a TERM-resistant shell and descendant verifies cancellation returns only after the owned group is absent.
+
+Second-pass focused verification:
+
+- `bun test tests/service/web-terminal.test.ts -t "hostile profile|SIGKILLs descendants|command PTY group"`
+- `bun test tests/lib/user-shell-adapter.test.ts`
+- `bun test tests/service/web-terminal.test.ts -t "keeps an active real PTY|captures agent lifecycle|resets to retained"`
+- `bunx tsc --noEmit -p packages/core/tsconfig.json`
+- `bunx tsc --noEmit -p packages/service/tsconfig.json`
+
+The two timing-sensitive real-PTY streaming tests passed independently; in one long aggregate run they timed out after earlier real-PTY cases. No failure involved the new initialization or process-group assertions, and the milestone host fixture/full gates remain the authoritative aggregate check.
