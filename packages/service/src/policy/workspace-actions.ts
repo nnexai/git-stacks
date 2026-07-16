@@ -78,8 +78,11 @@ export interface WorkspaceActionAuthorityInput {
   staleRevision?: boolean
   /** Service-owned open state. Omitted means the action remains available. */
   openState?: "open" | "closed"
-  /** Fresh typed result from Phase 123 removal inspection/failure state. */
-  removal?: WorkspaceLifecycleFailureDetails
+  /** Revision-bound typed result from Phase 123 removal inspection/failure state. */
+  removal?: Readonly<{
+    revision: string
+    details: WorkspaceLifecycleFailureDetails
+  }>
 }
 
 const AVAILABLE = Object.freeze({ available: true as const })
@@ -156,9 +159,10 @@ export function deriveWorkspaceActionInventory(input: WorkspaceActionAuthorityIn
     if (input.staleRevision && !readActions.has(actionId)) return unavailable("stale_revision")
 
     if (actionId === "workspace.force-remove") {
-      return input.removal?.kind === "workspace_dirty"
-        && input.removal.terminals_stopped === true
-        && input.removal.force_allowed === true
+      return input.removal?.revision === input.state.revision
+        && input.removal.details.kind === "workspace_dirty"
+        && input.removal.details.terminals_stopped === true
+        && input.removal.details.force_allowed === true
         ? AVAILABLE
         : unavailable("dirty_worktree")
     }

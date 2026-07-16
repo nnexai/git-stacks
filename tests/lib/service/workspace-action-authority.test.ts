@@ -180,19 +180,33 @@ describe("canonical workspace action authority", () => {
       { kind: "workspace_dirty", terminals_stopped: false, force_allowed: true },
       { kind: "operation_failed", terminals_stopped: true, force_allowed: true },
     ] as const
-    for (const removal of failures) {
+    for (const details of failures) {
+      const removal = details ? { revision: "7", details } : undefined
       const inventory = deriveWorkspaceActionInventory({ state: state({ dirty: true }), workspaceId: ACTIVE_ID, removal })
       expect(byId(inventory, "workspace.force-remove").availability.available).toBe(false)
     }
+
+    const stale = deriveWorkspaceActionInventory({
+      state: state({ dirty: true }),
+      workspaceId: ACTIVE_ID,
+      removal: {
+        revision: "6",
+        details: { kind: "workspace_dirty", terminals_stopped: true, force_allowed: true },
+      },
+    })
+    expect(byId(stale, "workspace.force-remove").availability.available).toBe(false)
 
     const eligible = deriveWorkspaceActionInventory({
       state: state({ dirty: true }),
       workspaceId: ACTIVE_ID,
       removal: {
-        kind: "workspace_dirty",
-        terminals_stopped: true,
-        force_allowed: true,
-        blocking_repositories: ["repo"],
+        revision: "7",
+        details: {
+          kind: "workspace_dirty",
+          terminals_stopped: true,
+          force_allowed: true,
+          blocking_repositories: ["repo"],
+        },
       },
     })
     expect(byId(eligible, "workspace.force-remove").availability).toEqual({ available: true })
