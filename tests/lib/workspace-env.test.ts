@@ -95,6 +95,25 @@ describe("workspace-env", () => {
     })
   })
 
+  test("reserved workspace identity wins over spoofed workspace env and ports", () => {
+    const workspace = makeWorkspace({
+      env: {
+        GS_WORKSPACE_NAME: "spoofed-name",
+        GS_WORKSPACE_BRANCH: "spoofed-branch",
+        GS_WORKSPACE_PATH: "/spoofed/path",
+        GS_TRIGGERED_BY: "spoofed-trigger",
+      },
+      ports: { GS_WORKSPACE_NAME: 9999 },
+    })
+
+    expect(buildBaseEnv(workspace, "/trusted/tasks/feature-ws", "command:test")).toMatchObject({
+      GS_WORKSPACE_NAME: "feature-ws",
+      GS_WORKSPACE_BRANCH: "feature/test",
+      GS_WORKSPACE_PATH: "/trusted/tasks/feature-ws",
+      GS_TRIGGERED_BY: "command:test",
+    })
+  })
+
   test("buildRepoEnv adds repo-specific path metadata", () => {
     const repo = makeWorktreeRepo("/virtual/tasks/feature-ws/api", {
       main_path: "/virtual/main/api",
@@ -111,6 +130,22 @@ describe("workspace-env", () => {
       GS_REPO_NAME: "api",
       GS_REPO_PATH: "/virtual/tasks/feature-ws/api",
       GS_REPO_CLONE_PATH: "/virtual/main/api",
+    })
+  })
+
+  test("reserved repository identity wins over inherited and workspace values", () => {
+    const repo = makeWorktreeRepo("/trusted/tasks/feature-ws/api", {
+      main_path: "/trusted/main/api",
+    })
+
+    expect(buildRepoEnv({
+      GS_REPO_NAME: "spoofed-repo",
+      GS_REPO_PATH: "/spoofed/repo",
+      GS_REPO_CLONE_PATH: "/spoofed/clone",
+    }, repo)).toMatchObject({
+      GS_REPO_NAME: "api",
+      GS_REPO_PATH: "/trusted/tasks/feature-ws/api",
+      GS_REPO_CLONE_PATH: "/trusted/main/api",
     })
   })
 

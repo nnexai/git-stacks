@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { runProcessSync } from "../process"
-import { mkdirSync, writeFileSync, rmSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
 import { applyTestGitEnv, gitExecOptions } from "../helpers"
@@ -174,5 +174,18 @@ describe("run --parallel", () => {
     const apiEntry = parsed.find((e: { repo: string }) => e.repo === "api")
     expect(apiEntry?.stdout.trim()).toBe("hello")
     expect(apiEntry?.exit_code).toBe(0)
+  })
+
+  test("delegates user-authored parallel commands after the shared adapter exists", () => {
+    const adapterPath = join(PROJECT_ROOT, "packages/core/src/user-shell.ts")
+    if (!existsSync(adapterPath)) return
+
+    const workspaceCommandSource = readFileSync(
+      join(PROJECT_ROOT, "packages/cli/src/commands/workspace.ts"),
+      "utf8",
+    )
+    expect(workspaceCommandSource).toContain("executeUserShellCommand")
+    expect(workspaceCommandSource).not.toMatch(/spawn\(\[\s*["']sh["']\s*,\s*["']-c["']/)
+    expect(workspaceCommandSource).not.toMatch(/process\.env\.SHELL\s*\|\|\s*["']sh["']/)
   })
 })

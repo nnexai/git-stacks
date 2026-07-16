@@ -1,4 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "@test/api"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { runProcess } from "../process"
 import type { HookOutputLine, HookResult, ShellOutputLine, ShellSequenceResult, SpawnHandle } from "@/lib/lifecycle"
 
@@ -263,6 +265,20 @@ describe("runHooksCaptured", () => {
 // executing real shell commands.
 
 import type { SpawnHandle as _SpawnHandle } from "@/lib/lifecycle"
+
+describe("Phase 124 lifecycle adapter delegation contract", () => {
+  test("activates after the shared adapter exists and rejects hard-coded shell execution", () => {
+    const adapterPath = join(import.meta.dirname, "../../packages/core/src/user-shell.ts")
+    if (!existsSync(adapterPath)) return
+
+    const lifecycleSource = readFileSync(
+      join(import.meta.dirname, "../../packages/core/src/lifecycle.ts"),
+      "utf8",
+    )
+    expect(lifecycleSource).toContain("executeUserShellCommand")
+    expect(lifecycleSource).not.toMatch(/\[\s*["']\/bin\/sh["']\s*,\s*["']-c["']/)
+  })
+})
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
