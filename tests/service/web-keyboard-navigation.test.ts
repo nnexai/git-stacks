@@ -9,6 +9,7 @@ import {
   createWebActionRegistry,
   createWebShortcutDispatcher,
   loadAuthoritativeWebActionSettings,
+  terminalTraversalTarget,
   type WebActionInvocation,
   type WebActionRegistration,
 } from "../../packages/web/src/navigation"
@@ -220,5 +221,23 @@ describe("web keyboard navigation boundary", () => {
     expect(source).not.toMatch(/event\.key\.toLowerCase\(\) === ["']t["']/)
     expect(source).not.toContain('event.key === "PageDown"')
     expect(source).not.toContain('event.key === "PageUp"')
+  })
+
+  test("selects only another visible terminal in established wrap order", () => {
+    expect(terminalTraversalTarget([], undefined, 1)).toEqual({ message: "No other terminal is available." })
+    expect(terminalTraversalTarget(["ended"], "ended", -1)).toEqual({ message: "No other terminal is available." })
+    expect(terminalTraversalTarget(["ended", "running", "third"], "ended", -1)).toEqual({ terminalId: "third" })
+    expect(terminalTraversalTarget(["ended", "running", "third"], "third", 1)).toEqual({ terminalId: "ended" })
+  })
+
+  test("connects terminal and attention actions with exact empty feedback", async () => {
+    const source = await readFile(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
+    expect(source).toContain("Select a repository before starting a terminal.")
+    expect(source).toContain("No active terminal to close.")
+    expect(source).toContain("No other terminal is available.")
+    expect(source).toContain("No workspace needs attention.")
+    expect(source).toContain("selectNextAttentionTarget")
+    expect(source).toContain("selectPair({ workspaceId: target.workspaceId, repositoryId: target.repositoryId })")
+    expect(source).toContain("if (target.terminalId) selectTerminal(target.terminalId)")
   })
 })
