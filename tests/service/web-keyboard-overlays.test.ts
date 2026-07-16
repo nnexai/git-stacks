@@ -8,7 +8,7 @@ import {
   mountShortcutHelp,
   mountShortcutSettings,
 } from "../../packages/web/src/overlay-controller"
-import { overlayAwareActionAvailability } from "../../packages/web/src/navigation"
+import { overlayAwareActionAvailability, WebShortcutConflictRecoveryError } from "../../packages/web/src/navigation"
 
 type Listener = (event: FakeEvent) => void
 
@@ -434,6 +434,40 @@ describe("web authoritative shortcut overlays", () => {
     expect(opened.view?.body.textContent).toContain("Shortcut changes were not saved. Your previous bindings are still active.")
     expect(opened.view?.body.textContent).toContain("Retry saving shortcut")
     expect(accepted).toEqual(["10"])
+  })
+
+  test("reloads conflict state and retries with the new authoritative revision", async () => {
+    const { controller } = harness()
+    const accepted: string[] = []
+    const attemptedRevisions: string[] = []
+    const opened = controller.open({ id: "settings", title: "Customize shortcuts", closeLabel: "Close shortcut settings", returnTarget: "term" })
+    const settings = mountShortcutSettings(opened.view!, {
+      platform: "linux",
+      load: async () => defaultShortcutSettings("linux", "10"),
+      mutate: async (mutation) => {
+        attemptedRevisions.push(mutation.expected_revision)
+        if (mutation.expected_revision === "10") {
+          const authoritative = defaultShortcutSettings("linux", "11")
+          throw new WebShortcutConflictRecoveryError(authoritative, { ...mutation, expected_revision: "11" })
+        }
+        return defaultShortcutSettings("linux", "12")
+      },
+      accept: (next) => accepted.push(next.revision),
+      announce: () => undefined,
+    })
+    await settings.ready
+
+    opened.view?.body.querySelectorAll("BUTTON")
+      .find((node) => node.textContent === "Unbind shortcut")?.dispatch("click")
+    await settings.idle()
+    expect(opened.view?.body.textContent).toContain("Authoritative bindings were reloaded before retry.")
+    expect(accepted).toEqual(["10", "11"])
+
+    opened.view?.body.querySelectorAll("BUTTON")
+      .find((node) => node.textContent === "Retry saving shortcut")?.dispatch("click")
+    await settings.idle()
+    expect(attemptedRevisions).toEqual(["10", "11"])
+    expect(accepted).toEqual(["10", "11", "12"])
   })
 
   test("ignores pure modifiers, composition, and AltGraph during capture", async () => {

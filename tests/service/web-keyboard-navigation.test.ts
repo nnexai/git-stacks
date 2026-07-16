@@ -8,11 +8,24 @@ import { WEB_SHORTCUT_ACTION_IDS, type WebShortcutActionId } from "../../package
 import {
   createWebActionRegistry,
   createWebShortcutDispatcher,
+  createWebShortcutSettingsCoordinator,
   loadAuthoritativeWebActionSettings,
   terminalTraversalTarget,
+  WebShortcutConflictRecoveryError,
+  WebShortcutConflictRefreshError,
   type WebActionInvocation,
   type WebActionRegistration,
 } from "../../packages/web/src/navigation"
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
 
 type EventFixture = {
   type: string
@@ -209,6 +222,107 @@ describe("web keyboard navigation boundary", () => {
     expect(dispatcher.handleXterm(afterFailure)).toBe(true)
     expect(calls).toHaveLength(1)
     expect(afterFailure.prevented).toBe(0)
+  })
+
+  test("keeps only the newest authoritative load when responses resolve out of order", async () => {
+    const { registry } = harness()
+    const firstResponse = deferred<ReturnType<typeof defaultShortcutSettings>>()
+    const secondResponse = deferred<ReturnType<typeof defaultShortcutSettings>>()
+    const responses = [firstResponse, secondResponse]
+    const accepted: Array<string | undefined> = []
+    const coordinator = createWebShortcutSettingsCoordinator(registry, {
+      load: () => responses.shift()!.promise,
+      mutate: async () => { throw new Error("unused") },
+      isConflict: () => false,
+      onChange: (settings) => accepted.push(settings?.revision),
+    })
+
+    const first = coordinator.load()
+    const second = coordinator.load()
+    const newer = defaultShortcutSettings("linux", "2")
+    newer.bindings.find(({ action_id }) => action_id === "terminal.new")!.primary = {
+      code: "KeyZ", ctrl: true, alt: true, shift: true, meta: false,
+    }
+    secondResponse.resolve(newer)
+    await expect(second).resolves.toMatchObject({ revision: "2" })
+    firstResponse.resolve(defaultShortcutSettings("linux", "1"))
+    await expect(first).resolves.toMatchObject({ revision: "2" })
+
+    expect(coordinator.current()?.revision).toBe("2")
+    expect(registry.entry("terminal.new")?.effectiveBinding?.primary?.code).toBe("KeyZ")
+    expect(accepted.filter(Boolean)).toEqual(["2"])
+  })
+
+  test("does not let a stale mutation response replace a newer load", async () => {
+    const { registry } = harness()
+    const mutationResponse = deferred<ReturnType<typeof defaultShortcutSettings>>()
+    const loadResponse = deferred<ReturnType<typeof defaultShortcutSettings>>()
+    const accepted: Array<string | undefined> = []
+    const coordinator = createWebShortcutSettingsCoordinator(registry, {
+      load: () => loadResponse.promise,
+      mutate: () => mutationResponse.promise,
+      isConflict: () => false,
+      onChange: (settings) => accepted.push(settings?.revision),
+    })
+    const mutation = coordinator.mutate({
+      platform: "linux", action_id: "terminal.new", expected_revision: "1", intent: "unbind",
+    })
+    const load = coordinator.load()
+    loadResponse.resolve(defaultShortcutSettings("linux", "3"))
+    await expect(load).resolves.toMatchObject({ revision: "3" })
+    mutationResponse.resolve(defaultShortcutSettings("linux", "2"))
+    await expect(mutation).resolves.toMatchObject({ revision: "3" })
+    expect(coordinator.current()?.revision).toBe("3")
+    expect(accepted.filter(Boolean)).toEqual(["3"])
+  })
+
+  test("reloads after a conflict and exposes only a retry rebased to the authoritative revision", async () => {
+    const { registry } = harness()
+    let loadCount = 0
+    const attemptedRevisions: string[] = []
+    const coordinator = createWebShortcutSettingsCoordinator(registry, {
+      load: async () => defaultShortcutSettings("linux", String(++loadCount === 1 ? 7 : 8)),
+      mutate: async (mutation) => {
+        attemptedRevisions.push(mutation.expected_revision)
+        if (mutation.expected_revision === "7") throw new Error("conflict")
+        return defaultShortcutSettings("linux", "9")
+      },
+      isConflict: (error) => error instanceof Error && error.message === "conflict",
+    })
+    await coordinator.load()
+    const staleMutation = {
+      platform: "linux", action_id: "terminal.new", expected_revision: "7", intent: "unbind",
+    } as const
+
+    let recovery: WebShortcutConflictRecoveryError | undefined
+    try {
+      await coordinator.mutate(staleMutation)
+    } catch (error) {
+      expect(error).toBeInstanceOf(WebShortcutConflictRecoveryError)
+      recovery = error as WebShortcutConflictRecoveryError
+    }
+    expect(recovery?.settings.revision).toBe("8")
+    expect(recovery?.retryMutation).toMatchObject({ intent: "unbind", expected_revision: "8" })
+    expect(coordinator.current()?.revision).toBe("8")
+    await expect(coordinator.mutate(recovery!.retryMutation)).resolves.toMatchObject({ revision: "9" })
+    expect(attemptedRevisions).toEqual(["7", "8"])
+  })
+
+  test("fails closed without exposing a stale retry when conflict refresh is unavailable", async () => {
+    const { registry } = harness()
+    const coordinator = createWebShortcutSettingsCoordinator(registry, {
+      load: async () => { throw new Error("offline") },
+      mutate: async () => { throw new Error("conflict") },
+      isConflict: (error) => error instanceof Error && error.message === "conflict",
+    })
+    await expect(coordinator.mutate({
+      platform: "linux", action_id: "terminal.new", expected_revision: "7", intent: "unbind",
+    })).rejects.toBeInstanceOf(WebShortcutConflictRefreshError)
+    expect(coordinator.current()).toBeUndefined()
+    expect(registry.entry("terminal.new")?.availability).toEqual({
+      available: false,
+      disabledReason: "Shortcut settings are not loaded.",
+    })
   })
 
   test("wires authoritative loading and xterm preprocessing before PTY forwarding without legacy handlers", async () => {

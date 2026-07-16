@@ -6,7 +6,7 @@ import "./app.css"
 import { FUZZY_FIELD_WEIGHT, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { createWebActionRegistry, createWebShortcutDispatcher, loadAuthoritativeWebActionSettings, overlayAwareActionAvailability, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -468,6 +468,12 @@ const actionRegistrations = Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((acti
   },
 } satisfies WebActionRegistration])) as Record<WebShortcutActionId, WebActionRegistration>
 const webActionRegistry = createWebActionRegistry(actionRegistrations)
+const shortcutSettingsCoordinator = createWebShortcutSettingsCoordinator(webActionRegistry, {
+  load: () => api<WebShortcutSettings>("shortcuts.get", { platform: shortcutPlatform }, { scope: "snapshot.read" }),
+  mutate: (mutation) => api<WebShortcutSettings>("shortcuts.set", mutation, { scope: "operation.write" }),
+  isConflict: (error) => error instanceof ApiRequestError && error.code === "conflict",
+  onChange: (settings) => { shortcutSettings = settings },
+})
 const shortcutDispatcher = createWebShortcutDispatcher(webActionRegistry)
 function invokeRegisteredAction(actionId: WebShortcutActionId): void {
   const action = webActionRegistry.entry(actionId)
@@ -1277,11 +1283,8 @@ function showLauncher(): void {
 
 async function loadShortcutSettings(reportFailure = true): Promise<WebShortcutSettings> {
   try {
-    const settings = await loadAuthoritativeWebActionSettings(webActionRegistry, () => api<WebShortcutSettings>("shortcuts.get", { platform: shortcutPlatform }, { scope: "snapshot.read" }))
-    shortcutSettings = settings
-    return settings
+    return await shortcutSettingsCoordinator.load()
   } catch (error) {
-    shortcutSettings = undefined
     if (reportFailure) toast("Shortcuts could not be loaded. Retry to enable keyboard actions.", true)
     throw error
   }
@@ -1319,7 +1322,7 @@ function showShortcutSettings(): void {
   mountShortcutSettings(opened.view, {
     platform: shortcutPlatform,
     load: () => loadShortcutSettings(false),
-    mutate: (mutation) => api<WebShortcutSettings>("shortcuts.set", mutation, { scope: "operation.write" }),
+    mutate: (mutation) => shortcutSettingsCoordinator.mutate(mutation),
     accept: (settings) => {
       shortcutSettings = settings
       webActionRegistry.setSettings(settings)

@@ -16,6 +16,7 @@ import {
   type WebShortcutPlatform,
   type WebShortcutSettings,
 } from "@git-stacks/protocol"
+import { WebShortcutConflictRecoveryError, WebShortcutConflictRefreshError } from "./navigation"
 
 type OverlayControllerOptions = {
   restoreFocus(target: string | undefined): void
@@ -402,6 +403,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
   let capture: CaptureState | undefined
   let busyAction: WebShortcutActionId | undefined
   let retryMutation: WebShortcutMutation | undefined
+  let retryMessage: string | undefined
   let pending: Promise<void> = Promise.resolve()
 
   const rowFor = (actionId: WebShortcutActionId) => current?.bindings.find((binding) => binding.action_id === actionId)
@@ -430,6 +432,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
     const previous = current
     busyAction = mutation.action_id
     retryMutation = undefined
+    retryMessage = undefined
     render()
     pending = options.mutate(mutation).then((next) => {
       if (!validateShortcutSettings(next).valid) throw new Error("Invalid authoritative shortcut response")
@@ -438,12 +441,29 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
       options.announce(`${actionLabel(mutation.action_id)} shortcut updated.`)
       capture = undefined
       view.setExclusive(false)
-    }).catch(() => {
-      current = previous
-      retryMutation = mutation
+    }).catch((error) => {
+      if (error instanceof WebShortcutConflictRecoveryError) {
+        current = error.settings
+        options.accept(error.settings)
+        retryMutation = error.retryMutation
+        retryMessage = "Shortcut settings changed elsewhere. Authoritative bindings were reloaded before retry."
+        capture = undefined
+        view.setExclusive(false)
+      } else if (error instanceof WebShortcutConflictRefreshError) {
+        current = undefined
+        retryMutation = undefined
+        retryMessage = undefined
+        capture = undefined
+        view.setExclusive(false)
+      } else {
+        current = previous
+        retryMutation = mutation
+        retryMessage = "Shortcut changes were not saved. Your previous bindings are still active."
+      }
     }).finally(() => {
       busyAction = undefined
-      render()
+      if (current) render()
+      else renderLoadError()
     })
   }
 
@@ -509,6 +529,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
     capture = { actionId, target }
     view.setExclusive(true)
     retryMutation = undefined
+    retryMessage = undefined
     render()
     view.body.querySelector<HTMLElement>(`[data-capture='${actionId}']`)?.focus()
   }
@@ -569,7 +590,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
         }
         if (busyAction === actionId) row.append(node(document, "div", "shortcut-busy", "Saving shortcut…"))
         if (retryMutation?.action_id === actionId) {
-          const error = node(document, "div", "shortcut-inline-error", "Shortcut changes were not saved. Your previous bindings are still active.")
+          const error = node(document, "div", "shortcut-inline-error", retryMessage ?? "Shortcut changes were not saved. Your previous bindings are still active.")
           const retry = control(document, "Retry saving shortcut")
           retry.addEventListener("click", () => runMutation(retryMutation!))
           row.append(error, retry)
@@ -590,6 +611,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
     current = undefined
     capture = undefined
     retryMutation = undefined
+    retryMessage = undefined
     renderLoading()
     try {
       const settings = await options.load()

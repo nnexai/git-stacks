@@ -8,6 +8,7 @@ import {
 import type {
   WebShortcutActionId,
   WebShortcutEffectiveBinding,
+  WebShortcutMutation,
   WebShortcutSettings,
 } from "@git-stacks/protocol"
 
@@ -137,19 +138,125 @@ export type WebShortcutDispatcher = {
   handleXterm(event: BoundaryKeyEvent): boolean
 }
 
+export class WebShortcutConflictRecoveryError extends Error {
+  constructor(
+    readonly settings: WebShortcutSettings,
+    readonly retryMutation: WebShortcutMutation,
+    options?: ErrorOptions,
+  ) {
+    super("Shortcut settings changed; authoritative bindings were reloaded", options)
+    this.name = "WebShortcutConflictRecoveryError"
+  }
+}
+
+export class WebShortcutConflictRefreshError extends Error {
+  constructor(options?: ErrorOptions) {
+    super("Shortcut settings changed and authoritative bindings could not be reloaded", options)
+    this.name = "WebShortcutConflictRefreshError"
+  }
+}
+
+export type WebShortcutSettingsCoordinator = {
+  current(): WebShortcutSettings | undefined
+  load(): Promise<WebShortcutSettings>
+  mutate(mutation: WebShortcutMutation): Promise<WebShortcutSettings>
+}
+
+type WebShortcutSettingsCoordinatorOptions = {
+  load(): Promise<WebShortcutSettings>
+  mutate(mutation: WebShortcutMutation): Promise<WebShortcutSettings>
+  isConflict(error: unknown): boolean
+  onChange?(settings: WebShortcutSettings | undefined): void
+}
+
+export function createWebShortcutSettingsCoordinator(
+  registry: WebActionRegistry,
+  options: WebShortcutSettingsCoordinatorOptions,
+): WebShortcutSettingsCoordinator {
+  let current: WebShortcutSettings | undefined
+  let generation = 0
+  let latestIdentity: symbol | undefined
+  let latestOperation: Promise<WebShortcutSettings> | undefined
+
+  const accept = (settings: WebShortcutSettings | undefined) => {
+    if (settings && !validateShortcutSettings(settings).valid) {
+      throw new Error("Invalid authoritative shortcut settings")
+    }
+    current = settings
+    registry.setSettings(settings)
+    options.onChange?.(settings)
+  }
+  const superseded = (identity: symbol): Promise<WebShortcutSettings> => {
+    if (latestOperation && latestIdentity !== identity) return latestOperation
+    if (current) return Promise.resolve(current)
+    return Promise.reject(new Error("Shortcut settings operation was superseded"))
+  }
+  const start = (
+    clear: boolean,
+    run: (operationGeneration: number, identity: symbol) => Promise<WebShortcutSettings>,
+  ): Promise<WebShortcutSettings> => {
+    const operationGeneration = ++generation
+    const identity = Symbol("shortcut-settings-operation")
+    latestIdentity = identity
+    if (clear) accept(undefined)
+    const operation = run(operationGeneration, identity)
+    latestOperation = operation
+    return operation
+  }
+  const isCurrent = (operationGeneration: number) => operationGeneration === generation
+
+  return {
+    current: () => current,
+    load: () => start(true, async (operationGeneration, identity) => {
+      try {
+        const settings = await options.load()
+        if (!isCurrent(operationGeneration)) return superseded(identity)
+        accept(settings)
+        return settings
+      } catch (error) {
+        if (!isCurrent(operationGeneration)) return superseded(identity)
+        accept(undefined)
+        throw error
+      }
+    }),
+    mutate: (mutation) => start(false, async (operationGeneration, identity) => {
+      try {
+        const settings = await options.mutate(mutation)
+        if (!isCurrent(operationGeneration)) return superseded(identity)
+        accept(settings)
+        return settings
+      } catch (error) {
+        if (!isCurrent(operationGeneration)) return superseded(identity)
+        if (!options.isConflict(error)) throw error
+
+        let settings: WebShortcutSettings
+        try {
+          settings = await options.load()
+        } catch (refreshError) {
+          if (!isCurrent(operationGeneration)) return superseded(identity)
+          accept(undefined)
+          throw new WebShortcutConflictRefreshError({ cause: refreshError })
+        }
+        if (!isCurrent(operationGeneration)) return superseded(identity)
+        accept(settings)
+        throw new WebShortcutConflictRecoveryError(settings, {
+          ...mutation,
+          expected_revision: settings.revision,
+        }, { cause: error })
+      }
+    }),
+  }
+}
+
 export async function loadAuthoritativeWebActionSettings(
   registry: WebActionRegistry,
   load: () => Promise<WebShortcutSettings>,
 ): Promise<WebShortcutSettings> {
-  registry.setSettings(undefined)
-  try {
-    const settings = await load()
-    registry.setSettings(settings)
-    return settings
-  } catch (error) {
-    registry.setSettings(undefined)
-    throw error
-  }
+  return createWebShortcutSettingsCoordinator(registry, {
+    load,
+    mutate: async () => { throw new Error("Shortcut mutation is unavailable") },
+    isConflict: () => false,
+  }).load()
 }
 
 export function terminalTraversalTarget(
