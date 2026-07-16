@@ -1,6 +1,7 @@
 import type { Workspace } from "@git-stacks/core/config"
 
 import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
+import type { ArchivedWorkspaceSummary } from "@git-stacks/protocol"
 
 export type RepoStatus = {
   name: string
@@ -37,7 +38,20 @@ export type WorkspaceFileStatusState =
 
 export type Tab = "workspaces" | "templates" | "repos"
 
-export type Action = "open" | "close" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync" | "push" | "create-workspace" | "issue" | "commands"
+export type Action = "open" | "close" | "edit" | "rename" | "clean" | "archive" | "remove" | "merge" | "sync" | "push" | "create-workspace" | "issue" | "commands"
+
+export type WorkspaceLifecycleTarget = {
+  id: string
+  name: string
+  expectedRevision: string
+}
+
+export type DirtyRemovalContext = {
+  kind: "workspace_dirty"
+  blockingRepositories: string[]
+  terminalsStopped: true
+  forceAllowed: true
+}
 
 export type IssueCandidate = {
   tracker: "github" | "gitlab" | "gitea" | "jira"
@@ -48,6 +62,12 @@ export type IssueCandidate = {
 export type UIView =
   | { view: "list" }
   | { view: "action-menu"; index: number }
+  | { view: "archived-workspaces"; rows: ArchivedWorkspaceSummary[] }
+  | { view: "remove-confirm"; target: WorkspaceLifecycleTarget }
+  | { view: "dirty-remove-blocked"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }
+  | { view: "force-remove-name"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }
+  | { view: "lifecycle-progress"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
+  | { view: "lifecycle-failure"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
   | { view: "sync-progress"; message: string }
@@ -62,3 +82,5 @@ export type UIView =
   | { view: "wizard-create-template"; source: "repos"; repoNames: string[] }
   | { view: "repo-action-menu"; index: number }
   | { view: "repo-remove-blocked"; repoName: string }
+
+export type LifecycleAction = "archive" | "unarchive" | "remove" | "force-remove"
