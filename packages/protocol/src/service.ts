@@ -334,6 +334,41 @@ export type SignalDismissal = z.infer<typeof SignalDismissalSchema>
 export const SIGNAL_MODEL_LIMITS = Object.freeze({ signal_items: 64, signal_id: 64, signal_title: 160, signal_detail: 500, signal_occurred_at: 40 })
 export const OperationStageSchema = z.enum(["accepted", "preparing", "executing", "rolling_back", "completed"])
 export const OperationStateSchema = z.enum(["accepted", "running", "succeeded", "failed", "cancelled"])
+export const OperationCancellationViewSchema = z.discriminatedUnion("state", [
+  z.strictObject({ state: z.literal("available") }),
+  z.strictObject({ state: z.literal("requested") }),
+  z.strictObject({
+    state: z.literal("unavailable"),
+    reason: z.enum(["committed", "finished", "not-cancellable"]),
+  }),
+])
+export type OperationCancellationView = z.infer<typeof OperationCancellationViewSchema>
+export const OperationCancelRequestSchema = z.strictObject({ operation_id: OperationIdSchema })
+export type OperationCancelRequest = z.infer<typeof OperationCancelRequestSchema>
+export const OperationCancelOutcomeSchema = z.enum([
+  "requested",
+  "already-finished",
+  "too-late",
+  "not-cancellable",
+])
+export type OperationCancelOutcome = z.infer<typeof OperationCancelOutcomeSchema>
+export const OperationCancelResultSchema = z.strictObject({
+  operation_id: OperationIdSchema,
+  outcome: OperationCancelOutcomeSchema,
+  operation_state: OperationStateSchema,
+}).superRefine(({ outcome, operation_state }, context) => {
+  const terminal = operation_state === "succeeded" || operation_state === "failed" || operation_state === "cancelled"
+  if (outcome === "already-finished" && !terminal) {
+    context.addIssue({ code: "custom", path: ["operation_state"], message: "Already-finished cancellation requires a terminal operation" })
+  }
+  if (outcome !== "already-finished" && terminal) {
+    context.addIssue({ code: "custom", path: ["operation_state"], message: "Only already-finished cancellation may carry a terminal operation" })
+  }
+  if (outcome === "too-late" && operation_state !== "running") {
+    context.addIssue({ code: "custom", path: ["operation_state"], message: "Too-late cancellation requires a running committed operation" })
+  }
+})
+export type OperationCancelResult = z.infer<typeof OperationCancelResultSchema>
 export const OperationProgressSchema = z.strictObject({
   stage: OperationStageSchema, message: z.string().optional(), completed: z.number().int().nonnegative().optional(), total: z.number().int().positive().optional(),
   data: z.record(z.string(), z.unknown()).optional(),
@@ -356,6 +391,70 @@ export const OperationSchema = z.discriminatedUnion("state", [
   OperationResultSchema, OperationFailureSchema,
 ])
 export type Operation = z.infer<typeof OperationSchema>
+
+export const ServiceOperationMutationKindSchema = z.enum([
+  "workspace.create",
+  "workspace.create.reviewed",
+  "workspace.archive",
+  "workspace.unarchive",
+  "workspace.remove",
+  "workspace.force-remove",
+  "workspace.rename",
+  "workspace.open",
+  "workspace.close",
+  "workspace.sync",
+  "workspace.pull",
+  "workspace.push",
+  "workspace.merge",
+  "workspace.notes.add",
+  "workspace.notes.clear",
+])
+export type ServiceOperationMutationKind = z.infer<typeof ServiceOperationMutationKindSchema>
+
+export const ForgeProviderSchema = z.enum(["github", "gitlab"])
+export type ForgeProvider = z.infer<typeof ForgeProviderSchema>
+export const ForgeChangeKindSchema = z.enum(["pull_request", "merge_request"])
+export type ForgeChangeKind = z.infer<typeof ForgeChangeKindSchema>
+export const ForgeReviewTokenSchema = z.string().regex(/^review_[A-Za-z0-9_-]{43,128}$/)
+export type ForgeReviewToken = z.infer<typeof ForgeReviewTokenSchema>
+export const ForgeResolutionConfidenceSchema = z.enum(["provider", "explicit-config", "unique-remote"])
+export type ForgeResolutionConfidence = z.infer<typeof ForgeResolutionConfidenceSchema>
+const ForgeLogicalRepositorySchema = utf8BoundedString(256, 3).refine(
+  (value) => /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/u.test(value),
+  { message: "Forge repository identity must be a logical namespace path" },
+)
+export const ForgeSourceIdentitySchema = z.strictObject({
+  provider: ForgeProviderSchema,
+  change_kind: ForgeChangeKindSchema,
+  change_number: z.number().int().positive(),
+  web_url: utf8BoundedString(2048, 1),
+  host: utf8BoundedString(253, 1).regex(/^[A-Za-z0-9.-]+$/),
+  target_repository: ForgeLogicalRepositorySchema,
+  source_repository: ForgeLogicalRepositorySchema,
+  source_branch: utf8BoundedString(256, 1),
+  target_branch: utf8BoundedString(256, 1),
+  head_sha: z.string().regex(/^[0-9a-f]{40,64}$/),
+  cross_repository: z.boolean(),
+  confidence: ForgeResolutionConfidenceSchema,
+}).superRefine(({ provider, change_kind, web_url, host }, context) => {
+  if ((provider === "github") !== (change_kind === "pull_request")) {
+    context.addIssue({ code: "custom", path: ["change_kind"], message: "GitHub uses pull requests and GitLab uses merge requests" })
+  }
+  let parsed: URL
+  try {
+    parsed = new URL(web_url)
+  } catch {
+    context.addIssue({ code: "custom", path: ["web_url"], message: "Forge source URL must be absolute" })
+    return
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    context.addIssue({ code: "custom", path: ["web_url"], message: "Forge source URL must be credential-free HTTPS" })
+  }
+  if (parsed.hostname.toLowerCase() !== host.toLowerCase()) {
+    context.addIssue({ code: "custom", path: ["host"], message: "Forge host must match the canonical web URL" })
+  }
+})
+export type ForgeSourceIdentity = z.infer<typeof ForgeSourceIdentitySchema>
 
 export const ReplayGapSchema = z.strictObject({ requested: CursorSchema, oldest_available: CursorSchema, newest_available: CursorSchema })
 export type ReplayGap = z.infer<typeof ReplayGapSchema>

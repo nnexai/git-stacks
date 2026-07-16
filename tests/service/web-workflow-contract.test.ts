@@ -13,6 +13,7 @@ import {
   WEB_WORKSPACE_ACTION_IDS,
   WebFileStatusResponseSchema,
   WebForgeFailureSchema,
+  WebForgeResolveIntentSchema,
   WebForgeResolveRequestSchema,
   WebForgeResolveResponseSchema,
   WebNotesAddRequestSchema,
@@ -139,20 +140,19 @@ describe("browser-safe notes and file status", () => {
     expect(WebNotesListRequestSchema.parse({ workspace_id: workspaceId, expected_revision: "7" })).toEqual({ workspace_id: workspaceId, expected_revision: "7" })
     expect(WebNotesAddRequestSchema.parse({ workspace_id: workspaceId, expected_revision: "7", expected_notes_revision: "3", text: "plain text" }).text).toBe("plain text")
     expect(WebNotesClearRequestSchema.parse({ workspace_id: workspaceId, expected_revision: "7", expected_notes_revision: "3" }).expected_notes_revision).toBe("3")
-    const response = {
-      workspace_id: workspaceId,
-      revision: "7",
-      notes_revision: "4",
-      count: 2,
-      records: [
-        { text: "new", created_at: "2026-07-16T12:01:00.000Z" },
-        { text: "old", created_at: "2026-07-16T12:00:00.000Z" },
-      ],
+    const records = [
+      { text: "new", created_at: "2026-07-16T12:01:00.000Z" },
+      { text: "old", created_at: "2026-07-16T12:00:00.000Z" },
+    ]
+    for (const selected of [[], records.slice(0, 1), records]) {
+      const candidate = { workspace_id: workspaceId, revision: "7", notes_revision: "4", count: selected.length, records: selected }
+      expect(WebNotesResponseSchema.parse(candidate)).toEqual(candidate)
     }
-    expect(WebNotesResponseSchema.parse(response)).toEqual(response)
+    const response = { workspace_id: workspaceId, revision: "7", notes_revision: "4", count: 2, records }
     expect(WebNotesResponseSchema.safeParse({ ...response, records: [...response.records].reverse() }).success).toBe(false)
     expect(WebNotesResponseSchema.safeParse({ ...response, count: 0 }).success).toBe(false)
     expect(WebNotesResponseSchema.safeParse({ ...response, records: [{ text: "x".repeat(4097), created_at: response.records[0].created_at }] }).success).toBe(false)
+    expect(WebNotesResponseSchema.safeParse({ ...response, records: [{ text: "valid", created_at: "not-a-time" }] }).success).toBe(false)
     expect(WebNotesResponseSchema.safeParse({ ...response, path: "/home/user/notes.jsonl" }).success).toBe(false)
   })
 
@@ -230,7 +230,11 @@ describe("reviewed forge source protocol", () => {
     workspace_name: "review-pr-42",
     template_name: "full",
     matched_source_repository_id: repositoryId,
-    repositories: [{ repository_id: repositoryId, included: true, branch: "review/pr-42" }],
+    repositories: [{
+      repository_id: repositoryId,
+      included: true,
+      branch: { base_branch: "main", workspace_branch: "review/pr-42" },
+    }],
   }
   const source = {
     provider: "github",
@@ -246,6 +250,12 @@ describe("reviewed forge source protocol", () => {
     cross_repository: true,
     confidence: "provider",
   }
+  const repositoryCandidate = {
+    repository_id: repositoryId,
+    name: "app",
+    mode: "worktree",
+    matched_source: true,
+  } as const
 
   test("accepts GitHub PR and GitLab MR terminology only", () => {
     expect(ForgeProviderSchema.parse("github")).toBe("github")
@@ -258,6 +268,9 @@ describe("reviewed forge source protocol", () => {
 
   test("resolve accepts exactly one credential-free full HTTPS URL and cannot create", () => {
     expect(WebForgeResolveRequestSchema.parse({ url: source.web_url })).toEqual({ url: source.web_url })
+    expect(WebForgeResolveIntentSchema.parse({ kind: "workspace.source.resolve", request: { url: source.web_url } })).toEqual({
+      kind: "workspace.source.resolve", request: { url: source.web_url },
+    })
     for (const invalid of [
       { url: "github.com/acme/app/pull/42" },
       { url: "https://user:token@github.com/acme/app/pull/42" },
@@ -274,6 +287,11 @@ describe("reviewed forge source protocol", () => {
       expires_at: "2026-07-16T12:10:00.000Z",
       revision: "7",
       source,
+      terminology: { provider: "github", change: "Pull request", source_branch: "Head branch", target_branch: "Base branch" },
+      candidates: {
+        templates: [{ name: "full", repositories: [repositoryCandidate] }],
+        source_repositories: [repositoryCandidate],
+      },
       draft,
     }
     expect(WebForgeResolveResponseSchema.parse(response)).toEqual(response)
