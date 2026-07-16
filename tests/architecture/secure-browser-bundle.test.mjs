@@ -4,6 +4,19 @@ import test from "node:test"
 
 const bundleUrl = new URL("../../packages/web/dist/git-stacks.html", import.meta.url)
 
+export function assertSecureBrowserBundle(html) {
+  for (const forbidden of [
+    "localStorage", "sessionStorage", "indexedDB", "serviceWorker", "SharedWorker",
+    "CacheStorage", "EventSource(", "WebSocket(", "fetch(", "/web/api", "text/event-stream",
+  ]) assert.equal(html.includes(forbidden), false, `bundle contains forbidden browser authority/transport: ${forbidden}`)
+  assert.doesNotMatch(html, /navigator\s*\.\s*keyboard\s*\.\s*(?:lock|unlock)\s*\(/, "bundle contains forbidden Keyboard Lock API")
+}
+
+test("forbidden bundle assertion rejects a hostile Keyboard Lock fixture", () => {
+  assert.throws(() => assertSecureBrowserBundle("navigator.keyboard.lock(['KeyK'])"), /Keyboard Lock/)
+  assert.throws(() => assertSecureBrowserBundle("navigator.keyboard.unlock()"), /Keyboard Lock/)
+})
+
 test("packaged browser client is self-contained and has no durable authority or plaintext transport", async () => {
   const html = await readFile(bundleUrl, "utf8")
   assert.match(html, /^<!doctype html>/i)
@@ -16,10 +29,7 @@ test("packaged browser client is self-contained and has no durable authority or 
   assert.doesNotMatch(html, /script-src[^;]*(?:unsafe-inline|unsafe-eval)/)
   assert.doesNotMatch(html, /unsafe-eval/)
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["'](?!data:)/i)
-  for (const forbidden of [
-    "localStorage", "sessionStorage", "indexedDB", "serviceWorker", "SharedWorker",
-    "CacheStorage", "EventSource(", "WebSocket(", "fetch(", "/web/api", "text/event-stream",
-  ]) assert.equal(html.includes(forbidden), false, `bundle contains forbidden browser authority/transport: ${forbidden}`)
+  assertSecureBrowserBundle(html)
   const files = await readdir(new URL("../../packages/web/dist/", import.meta.url))
   assert.deepEqual(files.sort(), ["git-stacks.html", "index.html", "manifest.json"])
 })

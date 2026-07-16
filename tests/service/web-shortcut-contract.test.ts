@@ -10,6 +10,10 @@ import {
   WebShortcutSettingsSchema,
 } from "../../packages/protocol/src/web"
 import {
+  WEB_SHORTCUT_ACTION_METADATA,
+  defaultShortcutSettings,
+} from "../../packages/client/src/shortcuts"
+import {
   WEB_SHORTCUT_ACTION_IDS as CORE_WEB_SHORTCUT_ACTION_IDS,
   WEB_SHORTCUT_DEFAULTS,
 } from "../../packages/core/src/web-shortcuts"
@@ -53,8 +57,13 @@ describe("web shortcut protocol contract", () => {
 
   test("keeps protocol inventory and core-owned defaults in literal agreement", () => {
     expect(CORE_WEB_SHORTCUT_ACTION_IDS).toEqual(WEB_SHORTCUT_ACTION_IDS)
+    expect(WEB_SHORTCUT_ACTION_METADATA.map(({ actionId }) => actionId)).toEqual(WEB_SHORTCUT_ACTION_IDS)
     expect(Object.keys(WEB_SHORTCUT_DEFAULTS.macos)).toEqual(WEB_SHORTCUT_ACTION_IDS)
     expect(Object.keys(WEB_SHORTCUT_DEFAULTS.linux)).toEqual(WEB_SHORTCUT_ACTION_IDS)
+    for (const platform of ["macos", "linux"] as const) {
+      const client = Object.fromEntries(defaultShortcutSettings(platform).bindings.map((row) => [row.action_id, row.primary]))
+      expect(client).toEqual(WEB_SHORTCUT_DEFAULTS[platform])
+    }
   })
 
   test("accepts only normalized physical letter bindings", () => {
