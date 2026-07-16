@@ -111,6 +111,7 @@ All accent-backed text uses `--accent-text`. Warning, danger, success, and disab
 | Unsafe capture error | `Add Ctrl, Alt, or Command so terminal typing stays available.` |
 | Conflict error | `Already assigned to {action}. Choose another shortcut or unbind that action first.` |
 | Unbound binding | `Unbound` |
+| Alias actions | `Add shortcut alias` / `Remove shortcut alias` |
 | No selected repository | `Select a repository first.` |
 | New-terminal empty result | `Select a repository before starting a terminal.` |
 | Close-terminal empty result | `No active terminal to close.` |
@@ -160,19 +161,19 @@ Sentence case is mandatory. Action labels use verb + object (`Switch workspace`,
 
 - Title: `Keyboard shortcuts`. Render three ordered groups: `Navigation`, `Workspace`, and `Terminal`.
 - Navigation contains `Switch workspace or repository` and `Next attention`; Workspace contains `Configured commands` and `New workspace`; Terminal contains `New terminal`, `Close terminal`, `Previous terminal`, and `Next terminal`.
-- Each row shows action label on the left and the current effective chord as individual `<kbd>` caps on the right. An unbound action shows the muted literal `Unbound`, never a blank cell.
+- Each row shows action label on the left and the current effective primary plus any aliases as separate labelled chord groups of individual `<kbd>` caps on the right. An unbound action shows the muted literal `Unbound`, never a blank cell.
 - The current platform is reflected in rendered modifier names (`Ctrl`, `Command`, `Alt`, `Shift`) rather than glyph-only notation. Help always reflects effective service-projected bindings, including optional aliases when enabled.
 - Footer actions are `Close help` and primary `Customize shortcuts`. Help has no search box; initial focus is `Close help` only when no prior invoker exists, otherwise the first content action.
 
 ### Shortcut Settings and Capture
 
-- Title: `Customize shortcuts`. Group rows identically to help. Each row contains action label, current binding button, `Reset shortcut to default`, and `Unbind shortcut`; reset is disabled when already at the platform default and unbind is disabled when already unbound.
+- Title: `Customize shortcuts`. Group rows identically to help. Each row contains action label, primary binding button, zero or more removable alias chords, `Add shortcut alias`, `Reset shortcut to default`, and `Unbind shortcut`; reset is disabled only when the safe primary is active and no aliases exist, while unbind is disabled when primary and aliases are already absent.
 - On open, render a compact busy state with `aria-busy="true"` and the loading copy. Do not flash defaults as though they were authoritative. A load failure renders the documented error plus a primary `Retry loading shortcuts` control; editing stays unavailable.
-- Selecting a binding enters capture mode inside the same modal and highlights only that row. Replace its binding button with `Press shortcut…`, render the capture instruction directly beneath it, and expose an `aria-live="polite"` status. Escape exits capture and returns focus to that row without closing settings.
+- Selecting the primary or `Add shortcut alias` enters capture mode inside the same modal and highlights only that row and target. Replace the target control with `Press shortcut…`, render the capture instruction directly beneath it, and expose an `aria-live="polite"` status. Escape exits capture and returns focus to that row without closing settings.
 - Capture ignores pure modifier presses and composition/AltGraph events. A printable key without Ctrl, Alt, or Command renders the unsafe-capture error inline and leaves the old binding active.
 - A conflict renders the documented warning inline beneath the row, names the other action, keeps both existing bindings unchanged, and leaves capture active. It must never silently swap, overwrite, or unbind another action.
 - A valid save disables that row's controls, shows `Saving shortcut…`, and updates the key caps only after the typed service operation succeeds. Failure restores the prior caps and renders the save error with `Retry saving shortcut`. Success announces `{Action} shortcut updated.` through the existing polite toast/live region.
-- `Reset shortcut to default` and `Unbind shortcut` are explicit one-click settings mutations, not destructive confirmations. Their in-flight, success, and failure treatment is identical to capture save.
+- `Remove shortcut alias`, `Reset shortcut to default`, and `Unbind shortcut` are explicit one-click settings mutations, not destructive confirmations. Reset restores the safe platform primary and removes all aliases; Unbind clears primary and aliases. Their in-flight, success, and failure treatment is identical to capture save.
 
 ### Focus and Terminal Input Boundary
 

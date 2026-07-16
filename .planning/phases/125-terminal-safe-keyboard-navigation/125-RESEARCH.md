@@ -15,15 +15,15 @@ The highest-risk mistake would be treating bindings like the current in-memory w
 
 - `packages/core/src/config.ts` owns `GlobalConfigSchema`, `readGlobalConfig()`, `writeGlobalConfig()`, and `updateGlobalConfig()`. `updateGlobalConfig()` already uses `withMutationLeaseSync()` and atomic YAML replacement.
 - `GlobalConfigSchema` currently contains `workspace_root`, integrations, ports, and secret resolver selection. Add a strict optional `web.shortcuts` shape rather than placing browser bindings in workspace definitions or an unvalidated record.
-- Model only stable Phase 125 action IDs. Reject unknown action IDs, duplicate effective chords, unsafe modifier sets, malformed physical codes, and browser-hard defaults in core as well as in the UI.
-- Store platform-specific override maps (`macos`, `linux`) because the shipped defaults and collision constraints differ. An explicit `null` means unbound; absence means use the current default. Do not persist derived labels or current defaults.
+- Model only stable Phase 125 action IDs. Reject unknown action IDs, duplicate effective chords, unsafe modifier sets, malformed physical codes, and browser-hard defaults in core as well as in the UI. Core remains a leaf: define transport-independent domain constants/types locally and never import `@git-stacks/protocol`.
+- Store platform-specific override maps (`macos`, `linux`) because the shipped defaults and collision constraints differ. Each action override has an optional primary binding (or null) plus bounded aliases. Absence means default primary with no aliases; Reset removes the override, while Unbind stores null and clears aliases. Do not persist derived labels or current defaults.
 - Use a shortcut-subdocument revision/fingerprint for optimistic concurrency. A binding write receives the expected shortcut revision, runs inside the global-config lease, rechecks it, validates the complete effective registry, and writes once. This avoids tying configuration concurrency to unrelated workspace snapshot revisions.
 
 ### Protocol and service boundary
 
 - `packages/protocol/src/web.ts` is the correct place for strict browser-safe shortcut schemas alongside pins, priorities, snapshot, and terminal contracts.
 - Add bounded action/platform/code/modifier schemas plus a projected settings response containing only platform, revision, and effective bindings. No global config, filesystem path, command text, or environment value crosses the browser boundary.
-- Add `shortcuts.get` under `snapshot.read` and `shortcuts.set` under `operation.write` in `packages/service/src/secure/router.ts`. The router should parse strict protocol schemas and delegate to injected read/update capabilities; it must not mutate YAML itself.
+- Add `shortcuts.get` under `snapshot.read` and `shortcuts.set` under `operation.write` in `packages/service/src/secure/router.ts`. Service may import both core and protocol, so it explicitly maps parsed transport requests to core intents and maps core results back to protocol responses. The router must not mutate YAML itself.
 - `packages/service/src/main.ts` already injects core-owned pin and priority setters into the secure runtime. Inject the shortcut reader/updater in the same composition seam and add focused router/runtime contract tests.
 - Prefer a dedicated settings get/set contract over expanding `web.snapshot`: the snapshot adapter does not currently carry global config, shortcut settings have their own concurrency token, and the settings UI explicitly needs loading/retry states. Load once during app bootstrap for dispatch/help, refresh on opening settings, and replace local effective bindings only after successful mutation.
 
@@ -62,15 +62,23 @@ type WebShortcutBinding = {
 type WebShortcutSettings = {
   platform: "macos" | "linux"
   revision: string
-  bindings: Array<{ action_id: WebShortcutActionId; binding: WebShortcutBinding | null }>
+  bindings: Array<{
+    action_id: WebShortcutActionId
+    primary: WebShortcutBinding | null
+    aliases: WebShortcutBinding[]
+  }>
 }
 
 type WebShortcutSetRequest = {
   platform: "macos" | "linux"
   expected_revision: string
   action_id: WebShortcutActionId
-  binding: WebShortcutBinding | null
-}
+} & (
+  | { intent: "set-primary"; binding: WebShortcutBinding }
+  | { intent: "set-aliases"; aliases: WebShortcutBinding[] }
+  | { intent: "unbind" }
+  | { intent: "reset" }
+)
 ```
 
 The service determines/validates allowed platforms for the connected browser contract; the client must not obtain broader host configuration authority by selecting an arbitrary config object. A successful set returns the complete new effective settings response so the registry updates atomically.
@@ -116,4 +124,3 @@ Use isolated worktrees for plans 1 and 2. Merge those foundations before splitti
 ## Primary Source
 
 - xterm.js `Terminal.attachCustomKeyEventHandler`: the handler runs before xterm processing and its boolean return decides whether xterm processes the event: https://xtermjs.org/docs/api/terminal/classes/terminal/
-
