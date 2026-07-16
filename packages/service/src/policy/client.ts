@@ -25,6 +25,25 @@ import {
   type DynamicEnvironmentRefreshResult,
   ServiceEventSchema,
   type ServiceEvent,
+  OperationCancelResultSchema,
+  WebFileStatusResponseSchema,
+  WebForgeResolveRequestSchema,
+  WebForgeResolveResponseSchema,
+  WebNotesResponseSchema,
+  WebOperationMutationSchema,
+  WebOperationSchema,
+  WebWorkspaceActionInventorySchema,
+  WebWorkspaceMutationSchema,
+  type OperationCancelResult,
+  type WebFileStatusRequest,
+  type WebFileStatusResponse,
+  type WebForgeResolveRequest,
+  type WebForgeResolveResponse,
+  type WebNotesListRequest,
+  type WebNotesResponse,
+  type WebOperation,
+  type WebOperationMutation,
+  type WebWorkspaceActionInventory,
 } from "@git-stacks/protocol"
 import { ensureManagedServiceProcess } from "../main"
 import { connectLocalTls } from "../transport/local-tls"
@@ -32,6 +51,7 @@ import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-st
 import type { WorkspaceNoteRecord } from "@git-stacks/core/notes"
 import type { PairingBundle, PairedHelper, TargetRecord } from "../security/targets"
 import type { SecureScope } from "@git-stacks/protocol"
+import { projectWebOperation } from "../web/projection"
 
 export interface SignalProjectionResponse {
   signals: Signal[]
@@ -123,6 +143,93 @@ export async function fetchWorkspaceFileStatus(workspace: string, signal?: Abort
 
 export async function fetchWorkspaceNotes(workspace: string, signal?: AbortSignal): Promise<WorkspaceNoteRecord[]> {
   return secureRequest("core.workspace.notes", { workspace }, { signal, scope: "snapshot.read" })
+}
+
+/** Thin-client workspace projection adapters. These routes return the same
+ * bounded, path-free DTOs to OpenTUI and browser clients. */
+export async function fetchWorkspaceActionInventory(
+  request: z.infer<typeof WebWorkspaceMutationSchema>,
+  signal?: AbortSignal,
+): Promise<WebWorkspaceActionInventory> {
+  const parsed = WebWorkspaceMutationSchema.parse(request)
+  return WebWorkspaceActionInventorySchema.parse(await secureRequest("workspace.actions", parsed, {
+    signal,
+    scope: "snapshot.read",
+  }))
+}
+
+export async function fetchWorkspaceNotesProjection(
+  request: WebNotesListRequest,
+  signal?: AbortSignal,
+): Promise<WebNotesResponse> {
+  return WebNotesResponseSchema.parse(await secureRequest("workspace.notes.list", request, {
+    signal,
+    scope: "snapshot.read",
+  }))
+}
+
+export async function fetchWorkspaceFileStatusProjection(
+  request: WebFileStatusRequest,
+  signal?: AbortSignal,
+): Promise<WebFileStatusResponse> {
+  return WebFileStatusResponseSchema.parse(await secureRequest("workspace.files.inspect", request, {
+    signal,
+    scope: "snapshot.read",
+  }))
+}
+
+export async function resolveForgeSourceReview(
+  request: WebForgeResolveRequest,
+  signal?: AbortSignal,
+): Promise<WebForgeResolveResponse> {
+  const parsed = WebForgeResolveRequestSchema.parse(request)
+  return WebForgeResolveResponseSchema.parse(await secureRequest("forge.source.resolve", parsed, {
+    signal,
+    scope: "operation.write",
+    retry: false,
+  }))
+}
+
+export async function submitWebOperation(
+  mutation: WebOperationMutation,
+  signal?: AbortSignal,
+): Promise<WebOperation> {
+  const parsed = WebOperationMutationSchema.parse(mutation)
+  return WebOperationSchema.parse(await secureRequest("operation.submit", parsed, {
+    signal,
+    scope: "operation.write",
+    idempotencyKey: `official-${crypto.randomUUID()}`,
+    retry: false,
+  }))
+}
+
+export async function fetchWebOperation(operationId: string, signal?: AbortSignal): Promise<WebOperation> {
+  const value = await secureRequest("operation.get", { operation_id: operationId }, {
+    signal,
+    scope: "snapshot.read",
+  })
+  const web = WebOperationSchema.safeParse(value)
+  return web.success ? web.data : projectWebOperation(OperationSchema.parse(value))
+}
+
+export async function cancelWebOperation(operationId: string, signal?: AbortSignal): Promise<OperationCancelResult> {
+  return OperationCancelResultSchema.parse(await secureRequest("operation.cancel", { operation_id: operationId }, {
+    signal,
+    scope: "operation.write",
+    retry: false,
+  }))
+}
+
+export async function setWorkspacePins(
+  workspaceIds: readonly string[],
+  expectedRevision: string,
+  signal?: AbortSignal,
+): Promise<{ workspace_ids: string[]; revision: string }> {
+  return secureRequest("workspace.pins.set", { workspace_ids: [...workspaceIds], expected_revision: expectedRevision }, {
+    signal,
+    scope: "operation.write",
+    retry: false,
+  })
 }
 
 export async function fetchEditTarget(request: EditTargetRequest, signal?: AbortSignal): Promise<EditTarget> {

@@ -14,6 +14,7 @@ import { TemplateDetail } from "./TemplateDetail"
 import { RepoList } from "./RepoList"
 import { RepoDetail } from "./RepoDetail"
 import { ActionMenu } from "./ActionMenu"
+import { WorkspaceOperationView } from "./WorkspaceOperationView"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
@@ -50,11 +51,20 @@ import type {
   WorkspaceLifecycleTarget,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
-import { issueTrackerLabels } from "@git-stacks/client"
+import { createOperationTracker, issueTrackerLabels, type OperationTracker, type OperationTrackerState } from "@git-stacks/client"
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
 import * as serviceClient from "@git-stacks/service/client"
-import type { Operation, WorkspaceLifecycleFailureDetails, WorkspaceLifecycleMutation } from "@git-stacks/protocol"
+import type {
+  Operation,
+  WebOperation,
+  WebOperationMutation,
+  WebOperationSummary,
+  WebWorkspaceAction,
+  WebWorkspaceActionId,
+  WorkspaceLifecycleFailureDetails,
+  WorkspaceLifecycleMutation,
+} from "@git-stacks/protocol"
 import { openEditorHandoff, resolveEditorHandoff } from "./editor-handoff"
 import { useCoreState } from "./core-store"
 import { runWorkspaceShellHandoff } from "./terminal-handoff"
@@ -91,6 +101,53 @@ export function nextWorkspaceGroupingMode(mode: WorkspaceGroupingMode): Workspac
   if (mode === "label") return "state"
   if (mode === "state") return "template"
   return "none"
+}
+
+function operationSummary(
+  operation: WebOperation,
+  context: { actionId: Exclude<WebWorkspaceActionId, "operation.cancel">; workspaceId: string; workspaceName: string },
+  cancellable: boolean,
+): WebOperationSummary {
+  const identity = {
+    operation_id: operation.operation_id,
+    action_id: context.actionId,
+    workspace_id: context.workspaceId,
+    workspace_name: context.workspaceName,
+    accepted_at: operation.accepted_at,
+  }
+  if (operation.state === "accepted") return { ...identity, state: "accepted", cancellation: cancellable ? { state: "available" } : undefined }
+  if (operation.state === "running") return {
+    ...identity,
+    state: "running",
+    started_at: operation.started_at ?? operation.accepted_at,
+    progress: {
+      stage: "executing",
+      ...(operation.progress?.message ? { message: operation.progress.message } : {}),
+      ...(operation.progress?.completed === undefined ? {} : { completed: operation.progress.completed, total: operation.progress.total! }),
+    },
+    cancellation: cancellable ? { state: "available" } : { state: "unavailable", reason: "not-cancellable" },
+  }
+  if (operation.state === "succeeded") return {
+    ...identity,
+    state: "succeeded",
+    started_at: operation.started_at ?? operation.accepted_at,
+    finished_at: operation.finished_at ?? operation.accepted_at,
+    cancellation: { state: "unavailable", reason: "finished" },
+    result: operation.result ?? {},
+  }
+  return {
+    ...identity,
+    state: operation.state,
+    ...(operation.started_at ? { started_at: operation.started_at } : {}),
+    finished_at: operation.finished_at ?? operation.accepted_at,
+    cancellation: { state: "unavailable", reason: "finished" },
+    error: {
+      code: operation.error?.code ?? "operation_failed",
+      message: operation.error?.message ?? "The operation failed.",
+      retryable: ["request_timeout", "rate_limited", "provider_unavailable"].includes(operation.error?.code ?? ""),
+      ...(operation.error?.forge ? { forge: operation.error.forge } : {}),
+    },
+  }
 }
 
 function workspaceStateGroup(status: WorkspaceStatus): string {
@@ -202,6 +259,11 @@ export default function App() {
   const [repoRemoveTarget, setRepoRemoveTarget] = createSignal<string | null>(null)
   const [workspaceGroupingMode, setWorkspaceGroupingMode] = createSignal<WorkspaceGroupingMode>("none")
   const [detailScrollRequest, setDetailScrollRequest] = createSignal<{ sequence: number; direction: -1 | 1 }>({ sequence: 0, direction: 1 })
+  const [workspaceActions, setWorkspaceActions] = createSignal<readonly WebWorkspaceAction[]>()
+  const [operationTracker, setOperationTracker] = createSignal<OperationTracker<WebOperationMutation>>()
+  const [operationState, setOperationState] = createSignal<OperationTrackerState>({ phase: "ready" })
+  const [operationCards, setOperationCards] = createSignal<WebOperationSummary[]>([])
+  const [operationOverflow, setOperationOverflow] = createSignal(0)
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -569,6 +631,114 @@ export default function App() {
     setView({ view: "progress", message: `Running ${name}...` })
     const exitCode = await runWorkspaceShellHandoff(name, appendCommandLine)
     finishCommandOutput(exitCode === 0 ? "success" : "failed")
+  }
+
+  async function openWorkspaceActionMenu(index: number): Promise<void> {
+    setWorkspaceActions(undefined)
+    setView({ view: "action-menu", index })
+    const entry = filteredEntries()[index]
+    const revision = core.state()?.revision
+    if (!entry || !revision || typeof serviceClient.fetchWorkspaceActionInventory !== "function") return
+    try {
+      const actions = await serviceClient.fetchWorkspaceActionInventory({
+        workspace_id: entry.workspaceId,
+        expected_revision: revision,
+      })
+      if (view().view === "action-menu") setWorkspaceActions(actions)
+    } catch (error) {
+      setRefreshFlash(error instanceof Error ? error.message : "Workspace actions could not be loaded.")
+    }
+  }
+
+  function syncTrackedOperation(tracker: OperationTracker<WebOperationMutation>): void {
+    setOperationTracker(tracker)
+    setOperationState({ ...tracker.state() })
+    setOperationCards([...tracker.cards()])
+    setOperationOverflow(tracker.overflowCount())
+  }
+
+  async function startTrackedWorkspaceOperation(
+    actionId: Exclude<WebWorkspaceActionId, "operation.cancel">,
+    entry: WorkspaceEntry,
+  ): Promise<void> {
+    const revision = core.state()?.revision
+    if (!revision) return
+    const context = { actionId, workspaceId: entry.workspaceId, workspaceName: entry.workspace.name }
+    const mutation: WebOperationMutation = {
+      kind: actionId as Extract<WebOperationMutation, { kind: string }>["kind"],
+      request: { workspace_id: entry.workspaceId, expected_revision: revision },
+    } as WebOperationMutation
+    const summarize = async (operation: WebOperation) => {
+      let cancellable = false
+      try {
+        const inventory = await serviceClient.fetchWorkspaceActionInventory({
+          workspace_id: entry.workspaceId,
+          expected_revision: core.state()?.revision ?? revision,
+        })
+        cancellable = inventory.some((candidate) => candidate.action_id === "operation.cancel"
+          && candidate.subject.kind === "operation"
+          && candidate.subject.operation_id === operation.operation_id
+          && candidate.availability.available)
+      } catch {
+        // Cancellation is fail-closed until the authoritative inventory says otherwise.
+      }
+      return operationSummary(operation, context, cancellable)
+    }
+    const tracker = createOperationTracker<WebOperationMutation>({
+      submit: async (intent) => summarize(await serviceClient.submitWebOperation(intent)),
+      get: async (operationId) => summarize(await serviceClient.fetchWebOperation(operationId)),
+      cancel: (operationId) => serviceClient.cancelWebOperation(operationId),
+      refresh: async () => { await reload(); await reloadSignals() },
+      reconcile: () => { setSelected(new Set<string>()) },
+    })
+    setView({ view: "workspace-operation" })
+    syncTrackedOperation(tracker)
+    try {
+      await tracker.submit(mutation)
+      syncTrackedOperation(tracker)
+      while (tracker.state().phase === "observing" || tracker.state().phase === "reconnecting") {
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+        await tracker.reconnect()
+        syncTrackedOperation(tracker)
+      }
+    } catch {
+      syncTrackedOperation(tracker)
+    }
+  }
+
+  async function runCanonicalWorkspaceAction(actionId: WebWorkspaceActionId, index: number): Promise<void> {
+    const entry = filteredEntries()[index]
+    if (!entry) return
+    if (actionId === "operation.cancel") {
+      const tracker = operationTracker()
+      if (tracker) { await tracker.cancel(); syncTrackedOperation(tracker) }
+      return
+    }
+    if (actionId === "workspace.pin" || actionId === "workspace.unpin") {
+      const state = core.state()
+      if (!state) return
+      const pinned = state.workspaces
+        .filter(({ definition }) => definition.pinned === true)
+        .map(({ projection }) => projection.id)
+      const next = actionId === "workspace.pin"
+        ? [...new Set([...pinned, entry.workspaceId])]
+        : pinned.filter((id) => id !== entry.workspaceId)
+      await serviceClient.setWorkspacePins(next, state.revision)
+      await reload()
+      setView({ view: "list" })
+      return
+    }
+    if (["workspace.open", "workspace.close", "workspace.sync", "workspace.pull", "workspace.push", "workspace.merge"].includes(actionId)) {
+      await startTrackedWorkspaceOperation(actionId, entry)
+      return
+    }
+    const legacy: Partial<Record<WebWorkspaceActionId, Action>> = {
+      "workspace.archive": "archive",
+      "workspace.remove": "remove",
+      "workspace.rename": "rename",
+    }
+    const action = legacy[actionId]
+    if (action) await runAction(action, index)
   }
 
   async function runAction(action: Action, index: number) {
@@ -1233,6 +1403,8 @@ export default function App() {
     }
     if (v.view === "push-progress") return
 
+    if (v.view === "workspace-operation") return
+
     if (v.view === "lifecycle-progress") return
     if (v.view === "lifecycle-failure") {
       setView({ view: "list" })
@@ -1342,10 +1514,10 @@ export default function App() {
         }
         if (tab() === "workspaces" && workspaceGroupingMode() !== "none") {
           const item = groupedNavigableEntries()[cursor()]
-          if (item) setView({ view: "action-menu", index: item.originalIndex })
+          if (item) void openWorkspaceActionMenu(item.originalIndex)
           return
         }
-        if (len > 0) setView({ view: "action-menu", index: cursor() })
+        if (len > 0) void openWorkspaceActionMenu(cursor())
         return
       }
 
@@ -1472,9 +1644,11 @@ export default function App() {
           <Match when={tab() === "workspaces"}>
             <ActionMenu
               workspaceName={currentEntry()?.workspace.name ?? ""}
+              descriptors={workspaceActions()}
               issueDisabledReason={issueDisabledReason()}
               commandsDisabledReason={commandsDisabledReason()}
               onAction={(action) => runAction(action, (view() as any).index)}
+              onInvoke={(actionId) => runCanonicalWorkspaceAction(actionId, (view() as any).index)}
               onCancel={() => setView({ view: "list" })}
               onRun={() => handleRun(selectedName())}
             />
@@ -1605,6 +1779,27 @@ export default function App() {
             </CenteredDialog>
           )
         })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "workspace-operation"}>
+        <WorkspaceOperationView
+          state={operationState()}
+          operations={operationCards()}
+          overflowCount={operationOverflow()}
+          onCancel={async () => {
+            const tracker = operationTracker()
+            if (tracker) { await tracker.cancel(); syncTrackedOperation(tracker) }
+          }}
+          onReconnect={async () => {
+            const tracker = operationTracker()
+            if (tracker) { await tracker.reconnect(); syncTrackedOperation(tracker) }
+          }}
+          onRetryRefresh={async () => {
+            const tracker = operationTracker()
+            if (tracker) { await tracker.retryRefresh(); syncTrackedOperation(tracker) }
+          }}
+          onBack={() => setView({ view: "list" })}
+        />
       </Show>
 
       <Show when={!helpOpen() && !signalsOpen() && view().view === "issue-picker"}>

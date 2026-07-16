@@ -71,6 +71,7 @@ export type UIView =
   | { view: "force-remove-name"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }
   | { view: "lifecycle-progress"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
   | { view: "lifecycle-failure"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
+  | { view: "workspace-operation" }
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
   | { view: "sync-progress"; message: string }
