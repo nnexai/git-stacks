@@ -581,6 +581,8 @@ describe("web authoritative shortcut overlays", () => {
     expect(contrast(token(light, "accent"), token(light, "accent-text"))).toBeGreaterThanOrEqual(4.5)
     expect(contrast(token(light, "warning"), token(light, "panel"))).toBeGreaterThanOrEqual(4.5)
     expect(css).toMatch(/\.button \{[^}]*font-size: 14px; font-weight: 650;/)
+    expect(css).toMatch(/\.shortcut-binding-button \{[^}]*font-size: 14px; font-weight: 650; line-height: 1\.3;/)
+    expect(css).toMatch(/kbd \{[^}]*padding: 4px 8px;[^}]*font: 650 11px\/1\.4/)
     expect(css).toContain(".shortcut-remove { min-height: 32px; padding: 4px 8px; }")
   })
 })
