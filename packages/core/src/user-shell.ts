@@ -328,6 +328,20 @@ async function exitWithin(
   ])
 }
 
+async function processGroupGoneWithin(
+  pid: number,
+  milliseconds: number,
+  dependencies: UserShellExecutionDependencies,
+): Promise<boolean> {
+  const deadline = dependencies.now() + milliseconds
+  while (dependencies.processGroupExists(pid)) {
+    const remaining = deadline - dependencies.now()
+    if (remaining <= 0) return false
+    await dependencies.wait(Math.min(INITIALIZATION_POLL_MS, remaining))
+  }
+  return true
+}
+
 async function terminateProcessGroup(
   processHandle: SpawnedProcess,
   shell: ValidatedUserShell,
@@ -335,11 +349,13 @@ async function terminateProcessGroup(
 ): Promise<void> {
   processHandle.killGroup("SIGTERM")
   const leaderExitedAfterTerm = await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
-  if (leaderExitedAfterTerm && !dependencies.processGroupExists(processHandle.pid)) return
+  const groupExitedAfterTerm = await processGroupGoneWithin(processHandle.pid, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
+  if (leaderExitedAfterTerm && groupExitedAfterTerm) return
   processHandle.killGroup("SIGKILL")
   const leaderExitedAfterKill = leaderExitedAfterTerm
     || await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
-  if (leaderExitedAfterKill && !dependencies.processGroupExists(processHandle.pid)) return
+  const groupExitedAfterKill = await processGroupGoneWithin(processHandle.pid, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
+  if (leaderExitedAfterKill && groupExitedAfterKill) return
   fail(
     "cleanup",
     shell.executable,

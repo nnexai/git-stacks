@@ -105,15 +105,16 @@ export function createPtyInitialization(
 async function waitForPtyInitialization(
   processHandle: PtyProcess,
   initialization: ReturnType<typeof createPtyInitialization>,
+  timeoutMs = 10_000,
 ): Promise<void> {
   let exited = false
   const subscription = processHandle.onExit(() => { exited = true })
   processHandle.write(`${initialization.bootstrap}\r`)
-  const deadline = Date.now() + 10_000
+  const deadline = Date.now() + timeoutMs
   try {
     while (!existsSync(initialization.readyPath)) {
       if (exited) throw new Error("Shell exited before PTY initialization completed")
-      if (Date.now() >= deadline) throw new Error("Shell PTY initialization exceeded 10000ms")
+      if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
       await new Promise<void>((resolve) => setTimeout(resolve, 10))
     }
   } finally {
@@ -194,6 +195,7 @@ export type WorkspaceTerminalCloseResult =
 
 export type WebTerminalManagerTiming = {
   launchResolutionTimeoutMs?: number
+  ptyInitializationTimeoutMs?: number
   setTimeout?: (callback: () => void, delayMs: number) => unknown
   clearTimeout?: (handle: unknown) => void
 }
@@ -313,14 +315,15 @@ export class WebTerminalManager {
               name: "xterm-256color",
             }))
           if (launch.initialization) {
+            const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
             const initialization = createPtyInitialization(launch.initialization.shell, {
               ...launch.environment,
               ...terminalEnvironment,
             })
             try {
-              await waitForPtyInitialization(spawned, initialization)
+              await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs)
             } catch (error) {
-              spawned.kill("SIGKILL")
+              await this.terminatePtyProcessGroup(spawned, spawnedExited)
               throw error
             } finally {
               rmSync(initialization.root, { force: true, recursive: true })
@@ -498,7 +501,13 @@ export class WebTerminalManager {
           const childExited = new Promise<{ exitCode: number; signal?: number }>((resolve) => { resolveExit = resolve })
           child.onExit(resolveExit)
           try {
-            await waitForPtyInitialization(child, initialization)
+            try {
+              await waitForPtyInitialization(child, initialization, this.timing.ptyInitializationTimeoutMs)
+            } catch (error) {
+              await this.terminatePtyProcessGroup(child, childExited)
+              active = undefined
+              throw error
+            }
             if (cancelled) {
               child.kill("SIGTERM")
             } else {
@@ -644,12 +653,17 @@ export class WebTerminalManager {
   private async closeConfirmed(session: Session): Promise<WebTerminal> {
     try {
       this.killGroup(session, "SIGTERM")
-      const termExited = await this.waitForExit(session)
-      const termGroupGone = !this.processGroupExists(session.process.pid)
+      const [termExited, termGroupGone] = await Promise.all([
+        this.waitForExitPromise(session.exited),
+        this.waitForProcessGroupExit(session.process.pid),
+      ])
       if (!termExited || !termGroupGone) {
         this.killGroup(session, "SIGKILL")
-        const killExited = await this.waitForExit(session)
-        if (!killExited || this.processGroupExists(session.process.pid)) {
+        const [killExited, killGroupGone] = await Promise.all([
+          termExited ? Promise.resolve(true) : this.waitForExitPromise(session.exited),
+          this.waitForProcessGroupExit(session.process.pid),
+        ])
+        if (!killExited || !killGroupGone) {
           session.state = "cleanup_failed"
           this.notifyActive()
           return this.project(session)
@@ -665,7 +679,7 @@ export class WebTerminalManager {
     return this.finalizeEndedSession(session)
   }
 
-  private waitForExit(session: Session): Promise<boolean> {
+  private waitForExitPromise(exited: Promise<unknown>): Promise<boolean> {
     return new Promise((resolve) => {
       let settled = false
       const finish = (value: boolean) => {
@@ -676,8 +690,41 @@ export class WebTerminalManager {
       }
       const timeout = setTimeout(() => finish(false), this.closeTimeoutMs)
       timeout.unref?.()
-      void session.exited.then(() => finish(true))
+      void exited.then(() => finish(true), () => finish(true))
     })
+  }
+
+  private async waitForProcessGroupExit(pid: number): Promise<boolean> {
+    const deadline = Date.now() + this.closeTimeoutMs
+    while (this.processGroupExists(pid)) {
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) return false
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, Math.min(10, remaining))
+        timeout.unref?.()
+      })
+    }
+    return true
+  }
+
+  private signalPtyProcessGroup(processHandle: PtyProcess, signal: NodeJS.Signals): void {
+    if (processHandle.pid <= 0) { processHandle.kill(signal); return }
+    try { process.kill(-processHandle.pid, signal) } catch { processHandle.kill(signal) }
+  }
+
+  private async terminatePtyProcessGroup(processHandle: PtyProcess, exited: Promise<unknown>): Promise<void> {
+    this.signalPtyProcessGroup(processHandle, "SIGTERM")
+    const [termExited, termGroupGone] = await Promise.all([
+      this.waitForExitPromise(exited),
+      this.waitForProcessGroupExit(processHandle.pid),
+    ])
+    if (termExited && termGroupGone) return
+    this.signalPtyProcessGroup(processHandle, "SIGKILL")
+    const [killExited, killGroupGone] = await Promise.all([
+      termExited ? Promise.resolve(true) : this.waitForExitPromise(exited),
+      this.waitForProcessGroupExit(processHandle.pid),
+    ])
+    if (!killExited || !killGroupGone) throw new Error(`PTY process group ${processHandle.pid} did not exit after SIGTERM and SIGKILL`)
   }
 
   private async finalizeEndedSession(session: Session): Promise<WebTerminal> {
@@ -807,8 +854,7 @@ export class WebTerminalManager {
 
   private killGroup(session: Session, signal: NodeJS.Signals): void {
     session.process.cancelSequence?.()
-    if (session.process.pid <= 0) { session.process.kill(signal); return }
-    try { process.kill(-session.process.pid, signal) } catch { session.process.kill(signal) }
+    this.signalPtyProcessGroup(session.process, signal)
   }
 
   private async handleSignal(session: Session, signal: TerminalSignal): Promise<void> {

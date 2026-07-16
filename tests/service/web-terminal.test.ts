@@ -216,7 +216,7 @@ describe("service-owned web terminal", () => {
         pid: 910_000 + processes.length,
         write(data) {
           record.writes.push(data)
-          const readyPath = data.match(/(?:\: >|touch --) '([^']+\/ready)'/)?.[1]
+          const readyPath = data.match(/(?:\: >|touch --|printf '' >) '([^']+\/ready)'/)?.[1]
           if (readyPath) writeFileSync(readyPath, "ready")
           if (data === "typed-input\r") finish()
           if (data.includes("command.") && processes.length > 1) finish()
@@ -528,7 +528,7 @@ describe("service-owned web terminal", () => {
       const kill = child.kill.bind(child)
       child.kill = (signal) => {
         kill(signal)
-        if (signal === "SIGKILL") groupExists = false
+        if (signal === "SIGKILL") setTimeout(() => { groupExists = false }, 2)
       }
       return child
     }
@@ -538,12 +538,49 @@ describe("service-owned web terminal", () => {
       resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
         argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
       } }),
-    }, undefined, undefined, Date.now, spawn, undefined, 10, {}, undefined, () => groupExists)
+    }, undefined, undefined, Date.now, spawn, undefined, 25, {}, undefined, () => groupExists)
 
     const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
     expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
     expect(groupExists).toBe(false)
+  })
+
+  test("terminates and confirms a command PTY group before reporting initialization timeout", async () => {
+    const ptys = createPtyFactory(["kill"])
+    let groupExists = true
+    const spawn: PtyFactory = (argv, options) => {
+      const child = ptys.spawn(argv, options)
+      const kill = child.kill.bind(child)
+      child.kill = (signal) => {
+        kill(signal)
+        if (signal === "SIGKILL") setTimeout(() => { groupExists = false }, 2)
+      }
+      return child
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "never-starts", cwd: process.cwd(), environment: {} }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 25, { ptyInitializationTimeoutMs: 5 }, undefined, () => groupExists)
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      command_id: "cmd_0123456789abcdef",
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+    expect(groupExists).toBe(false)
+    expect(manager.activeCount).toBe(0)
+    expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "ended", exit_code: 126 })
+    await manager.close("browser-1", terminal.id)
   })
 
   test("marks a logical PTY sequence cancelled before signaling its active process group", async () => {

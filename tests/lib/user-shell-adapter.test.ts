@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "@test/api"
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
+import { setTimeout as sleep } from "node:timers/promises"
 import { cleanup, makeTmpDir } from "../helpers"
 
 const ADAPTER_PATH = join(import.meta.dirname, "../../packages/core/src/user-shell.ts")
@@ -264,4 +265,39 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     resolveExit(0)
     await expect(execution).resolves.toMatchObject({ exitCode: 0 })
   })
+
+  test("cancels a real TERM-resistant command tree and waits for its process group to disappear", async () => {
+    if (process.platform !== "linux" || !existsSync("/usr/bin/bash")) return
+    const { executeUserShellCommand } = await import("../../packages/core/src/user-shell")
+    const { spawn } = await import("../../packages/core/src/node-runtime")
+    const home = makeTmpDir("phase124-term-resistant-home")
+    const startedPath = join(home, "started")
+    const controller = new AbortController()
+    let processGroupId = 0
+
+    const execution = executeUserShellCommand({
+      command: `trap '' TERM\nsh -c 'trap "" TERM; while :; do sleep 1; done' &\nprintf '%s' "$!" > '${startedPath}'\nwhile :; do sleep 1; done`,
+      cwd: home,
+      shellEnvironment: { SHELL: "/usr/bin/bash" },
+      inheritedEnvironment: { ...process.env, HOME: home },
+      signal: controller.signal,
+    }, {
+      spawn: (argv, options) => {
+        const child = spawn(argv, options)
+        processGroupId = child.pid
+        return child
+      },
+    })
+
+    const deadline = Date.now() + 3_000
+    while (!existsSync(startedPath) && Date.now() < deadline) await sleep(10)
+    expect(existsSync(startedPath)).toBe(true)
+    controller.abort(new Error("test cancellation"))
+    await expect(execution).rejects.toMatchObject({
+      diagnostic: { category: "cancellation", stage: "execution-cancelled" },
+    })
+    expect(processGroupId).toBeGreaterThan(0)
+    expect(() => process.kill(-processGroupId, 0)).toThrow()
+    cleanup(home)
+  }, 10_000)
 })
