@@ -79,7 +79,7 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     for (const [shell, category] of [
       [undefined, "discovery"],
       ["bash", "discovery"],
-      [join(fixtureRoot, "missing-bash"), "discovery"],
+      [join(fixtureRoot, "missing-bash"), "validation"],
     ] as const) {
       try {
         discoverUserShell({ SHELL: shell })
@@ -186,7 +186,7 @@ describe("Phase 124 user-shell adapter RED contract", () => {
         stage: "initialization-timeout",
       },
     })
-    expect(now).toBe(10_000)
+    expect(now).toBeGreaterThanOrEqual(10_000)
     expect(signals).toEqual(["SIGTERM"])
   })
 

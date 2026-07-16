@@ -80,6 +80,7 @@ export type SpawnOptions = {
   cwd?: string
   env?: Record<string, string | undefined>
   timeoutMs?: number
+  isolatedProcessGroup?: boolean
   stdin?: StdioMode
   stdout?: StdioMode
   stderr?: StdioMode
@@ -92,12 +93,14 @@ export type SpawnedProcess = {
   stdout: ReadableStream<Uint8Array> | null
   stderr: ReadableStream<Uint8Array> | null
   kill(signal?: NodeJS.Signals | number): boolean
+  killGroup(signal?: NodeJS.Signals | number): boolean
   unref(): void
 }
 
 export function spawn(argv: readonly string[], options: SpawnOptions = {}): SpawnedProcess {
   const stdio = options.stdio ?? [options.stdin ?? "ignore", options.stdout ?? "pipe", options.stderr ?? "pipe"]
-  const isolatedProcessGroup = options.timeoutMs !== undefined && process.platform !== "win32"
+  const isolatedProcessGroup = (options.isolatedProcessGroup === true || options.timeoutMs !== undefined)
+    && process.platform !== "win32"
   const child = nodeSpawn(argv[0], argv.slice(1), {
     cwd: options.cwd,
     env: options.env as NodeJS.ProcessEnv | undefined,
@@ -125,6 +128,17 @@ export function spawn(argv: readonly string[], options: SpawnOptions = {}): Spaw
     stdout: child.stdout ? Readable.toWeb(child.stdout) as unknown as ReadableStream<Uint8Array> : null,
     stderr: child.stderr ? Readable.toWeb(child.stderr) as unknown as ReadableStream<Uint8Array> : null,
     kill: (signal) => child.kill(signal),
+    killGroup: (signal) => {
+      if (isolatedProcessGroup && child.pid) {
+        try {
+          process.kill(-child.pid, signal ?? "SIGTERM")
+          return true
+        } catch {
+          // The process may have exited or group signaling may be unavailable.
+        }
+      }
+      return child.kill(signal)
+    },
     unref: () => child.unref(),
   }
 }
