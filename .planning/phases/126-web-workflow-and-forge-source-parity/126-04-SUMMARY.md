@@ -13,7 +13,7 @@ provides:
 affects: [126-05, 126-06, 126-07, 126-08, 127-live-web-tui-uat]
 tech-stack:
   added: []
-  patterns: [fixed safe DTO projection, in-memory capability token, revalidate-before-admit, private-ref cleanup finalizer]
+  patterns: [fixed safe DTO projection, in-memory capability token, revalidate-before-admit, durable-before-private-ref, retry-safe cleanup finalizer]
 key-files:
   created:
     - packages/service/src/policy/forge-source-review.ts
@@ -27,7 +27,8 @@ key-files:
 key-decisions:
   - "Browser and TUI workflow routes return strict allowlist DTOs; rich name/path-bearing core routes remain unavailable to browsers."
   - "A review token is an expiring server-side capability bound to one principal, canonical source, catalog revision, canonical draft body, and idempotency key."
-  - "Reviewed creation is non-cancellable because source preparation completes before operation acceptance; cleanup is idempotent across registration failure, creation failure, success, and finalization."
+  - "Reviewed creation is non-cancellable and private-ref preparation starts only inside the durably registered operation; cleanup remains pending until deletion succeeds."
+  - "Only explicitly correctable pre-commit draft failures release the token body binding; accepted/unsafe paths remain one-shot."
 patterns-established:
   - "Provider and system failures cross the client boundary only as fixed typed code, recovery, and message tuples."
   - "Reviewed source authority rechecks current catalog and provider identity, then delegates SHA verification and creation to existing core seams."
@@ -118,19 +119,23 @@ status: complete
 - **Started:** 2026-07-16T19:59:17+02:00
 - **Completed:** 2026-07-16T20:20:46+02:00
 - **Tasks:** 3
-- **Files modified:** 7
+- **Files modified:** 16 in the independent review repair, in addition to the original Plan 04 implementation
 
 ## Accomplishments
 
 - Replaced browser access to rich name/path-bearing file and notes reads with strict ID/revision routes for action inventory, bounded notes, sanitized file detail, and safe operation/cancellation views.
 - Added an in-memory 256-bit opaque review-token authority with bounded TTL, principal/canonical-source/revision/body/idempotency binding, atomic competing-submit rejection, and restart-safe invalidation.
 - Revalidated current template/repository membership and provider identity, verified the fetched private ref against the immutable full head SHA, then invoked normal workspace creation with idempotent cleanup on all exits.
+- Closed the independent security review by blocking raw browser snapshots, deferring Git refs until durable registration, enforcing HTTPS/validated SSH fetches, preserving strict forge recovery details, and making correctable review retries safe.
 
 ## Task Commits
 
 1. **Task 1: Build strict path/provider-safe projections and scoped routes** - `0b6cc9c2` (RED), `3135673e` (GREEN)
 2. **Task 2: Issue principal/revision/source-bound review tokens** - `2e19428e` (RED), `7c231f77` (GREEN)
 3. **Task 3: Revalidate reviewed creation and close provider-to-fetch SHA races** - `2d1a3e9f` (RED), `8db479d4` (GREEN)
+4. **Independent review: adversarial security/regression coverage** - `fbf7ce44` (RED)
+5. **Independent review: authority, transport, operation, and cleanup repairs** - `9d1358a9` (GREEN)
+6. **Independent review: authoritative CLI provider fixtures** - `a50f2cb1` (regression repair)
 
 ## Files Created/Modified
 
@@ -141,22 +146,37 @@ status: complete
 - `tests/service/forge-source-review.test.ts` - Entropy, expiry, replay, revision, atomic reservation, provider movement, SHA-preparation failure, creation, and cleanup coverage.
 - `tests/service/web-safe-detail.test.ts` - POSIX/Windows path, credential, clone/fetch, argv/output, environment, and raw-error canary coverage.
 - `tests/service/web-workflow-authority.test.ts` - Route scope, strict-body, ownership, notes/file lookup, cancellation, principal binding, and reviewed registration coverage.
+- `packages/protocol/src/secure.ts`, `packages/protocol/src/web.ts`, and `packages/service/src/security/session-authority.ts` - Strict union of shortcut and forge transport recovery details.
+- `packages/core/src/workspace-source.ts` - HTTPS/validated-SSH fetch admission and retry-safe private-ref deletion.
+- `packages/service/src/policy/operations.ts` - Allowlisted forge recovery preservation on durable terminal failures.
+- `tests/commands/workspace-source*.test.ts` and `tests/helpers.ts` - Injected authoritative GitLab provider metadata for CLI regressions without real hosted calls or synthetic resolver fallback.
 
 ## Decisions Made
 
 - Successful duplicate submits may reuse only the same bound request and idempotency key; competing body/key bindings fail closed before admission.
-- The reviewed operation advertises `cancellation: none` honestly because provider recheck and private-ref preparation finish before operation acceptance and normal creation has no safe cancellation seam.
+- The reviewed operation advertises `cancellation: none` honestly. Catalog/provider admission remains pre-registration, while private-ref fetch/SHA verification and normal creation execute only after the durable operation exists.
 - Normal creation progress is persisted with fixed safe wording rather than forwarding arbitrary core/provider output into durable operations.
+
+## Independent Review Resolution
+
+1. Browser sessions now fail closed on `core.state`, `core.edit-target`, and `snapshot.all`; trusted TUI/internal callers retain the rich methods.
+2. Reviewed fetch coordinates accept credential-free HTTPS or a host/path-matched `git@host:path.git` SSH coordinate; plaintext HTTP is rejected before Git or a credential helper runs.
+3. Private refs are created only inside the durably registered operation. Every returned cleanup is retried until deletion succeeds, and registration, fetch, SHA, create, and finalization failures share the same cleanup owner.
+4. Resolver/catalog/planner/admission throws are caught at fixed router boundaries, while execution failures use fixed safe messages; path, credential, argv, and provider-output canaries do not serialize.
+5. `branch_conflict` and `repo_not_matched` pre-commit failures release the exact atomic body binding so an edited draft may retry; source movement, accepted operations, and other unsafe paths remain consumed.
+6. Secure responses and durable operation failures preserve only strict allowlisted forge reason/recovery/context schemas; arbitrary details are discarded.
+7. `operation.get` now uses the strict operation-ID request schema, rejecting malformed and extra fields before registry lookup.
 
 ## Deviations from Plan
 
-None - plan executed as written.
+Independent review moved private-ref preparation from synchronous admission into the durably registered operation step. This is a deliberate safety correction: provider/catalog/planner rejections remain synchronous, while fetch/SHA failures are typed safe terminal operation failures.
 
 ## Issues Encountered
 
 - The first reviewed-admission implementation allowed the default planner to consult process-global configuration after current-catalog validation. Focused tests exposed the mismatch; planning is now dependency-bound to the same freshly revalidated catalog.
 - Codex stopped during the initial Task 3 patch. The isolated worktree retained every prior atomic commit and the complete working diff, so execution resumed from the focused failing tests without reconstruction.
-- The isolated worktree uses an intentionally untracked `node_modules` symlink to the main checkout for local verification; it was not staged or committed.
+- The isolated worktree temporarily replaced package links so TypeScript resolved this branch's protocol/core sources rather than the main checkout; no dependency artifacts were staged.
+- Three legacy CLI source fixtures initially attempted a real `glab` call after the Plan 02 authoritative-resolver change. They now inject bounded provider JSON and local Git URL rewrites, preserving real resolver/fetch/SHA behavior without restoring synthetic metadata.
 
 ## User Setup Required
 
@@ -170,10 +190,10 @@ None - existing provider CLI authentication and configured forge metadata remain
 
 ## Self-Check: PASSED
 
-- Exact Plan 04 suites passed: 3 files, 19 tests.
-- Projection regression passed: 1 file, 4 tests.
-- Service typecheck and dependency architecture gate passed.
-- `git diff --check` passed before the Task 3 commit.
+- Plan 04 plus source/resolver/operation/protocol/session/router regression matrix passed: 16 files, 157 tests.
+- Full Node architecture/conformance/secure-runtime matrix passed: 46 tests.
+- Core, protocol, and service typechecks passed; package architecture/dependency cycles passed.
+- Full package build and `git diff --check` passed.
 
 ---
 *Phase: 126-web-workflow-and-forge-source-parity*
