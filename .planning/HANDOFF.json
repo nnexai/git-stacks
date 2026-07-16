@@ -1,0 +1,108 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-16T20:01:36.694Z",
+  "phase": "126",
+  "phase_name": "web-workflow-and-forge-source-parity",
+  "phase_dir": ".planning/phases/126-web-workflow-and-forge-source-parity",
+  "plan": 6,
+  "task": 3,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Phase 126 Plans 01-05",
+      "status": "done",
+      "commit": "9ffa4b07"
+    },
+    {
+      "id": 2,
+      "name": "Plan 06 TUI implementation checkpoint",
+      "status": "in_progress",
+      "progress": "Implementation and summary are committed on codex/phase126-06 through d182db26, but independent review found five high-severity contract gaps and the branch must not be merged yet."
+    },
+    {
+      "id": 3,
+      "name": "Plan 07 web review repair checkpoint",
+      "status": "in_progress",
+      "progress": "Six original authority/security findings are repaired on codex/phase126-07-review-fix through bf3009c7; independent re-review found one residual focus-restoration warning before merge."
+    },
+    {
+      "id": 4,
+      "name": "Commit updated GSD workflows",
+      "status": "done",
+      "commit": "0837a1ed"
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 5,
+      "name": "Repair and re-review Plan 06 findings on codex/phase126-06",
+      "status": "not_started"
+    },
+    {
+      "id": 6,
+      "name": "Repair and re-review Plan 07 scope-menu focus warning on codex/phase126-07-review-fix",
+      "status": "not_started"
+    },
+    {
+      "id": 7,
+      "name": "Cherry-pick the reviewed Plan 06 and Plan 07 commit sets onto main and run post-merge gates",
+      "status": "not_started"
+    },
+    {
+      "id": 8,
+      "name": "Execute Phase 126 Plan 08 conformance, full gates, and Phase 127 handoff",
+      "status": "not_started"
+    },
+    {
+      "id": 9,
+      "name": "Discuss, plan, execute, and verify Phase 127, then stop before tag/push/publish/release for manual verification",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Plan 06 canonical inventory loading/failure currently exposes an enabled legacy action menu, bypassing service authority.",
+      "type": "technical",
+      "workaround": "Render an explicit loading/error state with no authoritative actions until the canonical inventory succeeds."
+    },
+    {
+      "description": "Plan 06 canonical Merge bypasses its required confirmation and canonical rendering drops existing Edit/Clean/Run/Issue/Commands actions.",
+      "type": "technical",
+      "workaround": "Use shared registry confirmation/callback policy and preserve adapted legacy-only actions without making them an authority fallback."
+    },
+    {
+      "description": "Plan 06 submit-unknown can trap the operation view, terminal reviewed-create failures do not restore editable review, duplicate v shortcuts misroute Pin/Unpin, and note rejection promises are unhandled.",
+      "type": "technical",
+      "workaround": "Add RED tests for every review path, repair through shared trackers/coordinator, and independently re-review."
+    },
+    {
+      "description": "Plan 07 scope-menu overlays restore focus to the terminal rather than the invoking scope control.",
+      "type": "technical",
+      "workaround": "Capture the concrete scope-menu invoker before row.run(), add placement-specific coverage, then re-review."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {
+      "decision": "Stop at the clean review boundary after committing GSD 1.7.0 instead of starting Plan 126-08.",
+      "rationale": "The user requested a restart so subsequent work uses the updated workflows end-to-end.",
+      "phase": "126"
+    },
+    {
+      "decision": "Do not merge either Plan 06 or Plan 07 branch until its independent review findings are repaired.",
+      "rationale": "Green branch tests did not cover the TUI authority bypasses and web focus placement gap.",
+      "phase": "126"
+    },
+    {
+      "decision": "Retain the milestone release boundary: no tag, push, publish, or release before the user's Phase 127 manual verification.",
+      "rationale": "This is an explicit user constraint and hosted/manual evidence must remain honest.",
+      "phase": "127"
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Resume with $gsd-resume-work, acknowledge the blocking constraints, then repair Plan 06 in /tmp/git-stacks-126-06 before touching Plan 08.",
+  "context_notes": "Main is clean at 0837a1ed. /tmp/git-stacks-126-06 is clean at d182db26 on codex/phase126-06. /tmp/git-stacks-126-07-review-fix is clean at bf3009c7 on codex/phase126-07-review-fix. Neither branch is merged. Plan 126-08 and Phase 127 have not started. No background processes or async jobs remain."
+}
