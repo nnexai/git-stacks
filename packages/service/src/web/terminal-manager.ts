@@ -260,12 +260,15 @@ export class WebTerminalManager {
     terminalEnvironment: Record<string, string>,
   ): PtyProcess {
     const controller = new AbortController()
+    const decoder = new TextDecoder()
     let dataListener: (data: string) => void = () => undefined
     let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
     let exited = false
     const finish = (exitCode: number, signal?: number) => {
       if (exited) return
       exited = true
+      const remaining = decoder.decode()
+      if (remaining) dataListener(remaining)
       exitListener({ exitCode, ...(signal === undefined ? {} : { signal }) })
     }
     const reportDiagnostic = (diagnostic: ExecuteUserShellCommandResult["diagnostic"]) => {
@@ -283,7 +286,10 @@ export class WebTerminalManager {
             inheritedEnvironment: process.env,
             overlay: { ...step.environment, ...terminalEnvironment },
             signal: controller.signal,
-            onOutput: ({ chunk }) => dataListener(new TextDecoder().decode(chunk)),
+            onOutput: ({ chunk }) => {
+              const text = decoder.decode(chunk, { stream: true })
+              if (text) dataListener(text)
+            },
           })
           if (result.exitCode !== 0) {
             reportDiagnostic(result.diagnostic)
