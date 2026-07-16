@@ -16,7 +16,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
               -> 127 stale intelligence + v0.22.0-rc.1 closure
 ```
 
-- [ ] **Phase 123: Archived Workspaces and Safe Removal** — Add the persisted archive state and terminal-aware destructive removal contract across core, service, web, and TUI.
+- [x] **Phase 123: Archived Workspaces and Safe Removal** — Add the persisted archive state and terminal-aware destructive removal contract across core, service, web, and TUI. (completed 2026-07-16)
 - [ ] **Phase 124: User Shell and Environment Authority** — Run user-authored commands through supported configured shells and refresh allowlisted dynamic environment values safely.
 - [ ] **Phase 125: Terminal-Safe Keyboard Navigation** — Deliver configurable collision-aware shortcuts, singleton fuzzy overlays, terminal switching, and next-attention navigation.
 - [ ] **Phase 126: Web Workflow and Forge-Source Parity** — Bring high-value lifecycle/Git/notes/status actions to web and create normal workspaces from PR/MR URLs.
@@ -27,7 +27,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 **Goal:** Make active-workspace cleanup reversible by default and destructive removal explicit, terminal-aware, and consistent across clients.
 **Depends on:** Nothing
 **Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, REMOVE-01, REMOVE-02, REMOVE-03, REMOVE-04, REMOVE-05
-**Plans:** 8/8 plans executed
+**Plans:** 8/8 plans complete
 
 Plans:
 **Wave 1**
@@ -127,7 +127,7 @@ Plans:
 
 | Phase | Name | Requirements | Status |
 |---:|---|---:|---|
-| 123 | Archived Workspaces and Safe Removal | 11 | In Progress|
+| 123 | Archived Workspaces and Safe Removal | 11 | Complete    |
 | 124 | User Shell and Environment Authority | 7 | Not started |
 | 125 | Terminal-Safe Keyboard Navigation | 13 | Not started |
 | 126 | Web Workflow and Forge-Source Parity | 9 | Not started |
