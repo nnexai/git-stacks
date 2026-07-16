@@ -4,6 +4,10 @@ import { spawn as spawnPty } from "node-pty"
 import type { Signal } from "@git-stacks/protocol"
 import type { SnapshotAdapter } from "../snapshot-adapter"
 import type { TerminalAttachment } from "../terminal-attachment"
+import {
+  createWorkspaceLifecycleAdmission,
+  type WorkspaceLifecycleAdmission,
+} from "../policy/workspace-lifecycle-admission"
 import { WebTerminalSchema, WebTerminalSocketControlSchema, type WebTerminal } from "@git-stacks/protocol"
 import { TerminalSignalFilter, type TerminalSignal } from "./signal-filter"
 
@@ -57,6 +61,7 @@ type Session = {
   replayBytes: number
   process: PtyProcess
   exited: Promise<number>
+  closePromise?: Promise<WebTerminal>
   attachment?: Attachment
   filter: TerminalSignalFilter
   agentSessions: Map<TerminalSignal["provider"], string>
@@ -72,6 +77,10 @@ export type WebTerminalCreateInput = {
   cols: number
   rows: number
 }
+
+export type WorkspaceTerminalCloseResult =
+  | { ok: true; status: "closed"; requested: number; closed: number; failed: 0 }
+  | { ok: false; status: "cleanup_failed"; requested: number; closed: number; failed: number }
 
 function terminalId(): string { return `term_${randomBytes(16).toString("base64url")}` }
 function activityId(session: Session, signal: Pick<TerminalSignal, "provider" | "sessionId">): string {
@@ -104,6 +113,8 @@ export class WebTerminalManager {
     private readonly onActiveChange?: (count: number) => void,
     private readonly now: () => number = Date.now,
     private readonly spawn: PtyFactory = productionPty,
+    private readonly workspaceLifecycleAdmission: Pick<WorkspaceLifecycleAdmission, "assertTerminalAdmission"> = createWorkspaceLifecycleAdmission(),
+    private readonly closeTimeoutMs = 1_000,
   ) {}
 
   get activeCount(): number { return [...this.sessions.values()].filter((session) => session.state === "starting" || session.state === "running" || session.state === "closing").length }
@@ -150,6 +161,7 @@ export class WebTerminalManager {
     let resolveExit!: (code: number) => void
     const exited = new Promise<number>((resolve) => { resolveExit = resolve })
     let child: PtyProcess
+    this.workspaceLifecycleAdmission.assertTerminalAdmission(input.workspace_id)
     try {
       child = this.spawn(argv, {
         cwd: resolution.launch.cwd,
@@ -232,26 +244,44 @@ export class WebTerminalManager {
     return this.project(session)
   }
 
-  async close(principalId: string, id: string): Promise<WebTerminal | undefined> {
+  close(principalId: string, id: string): Promise<WebTerminal | undefined> {
     const session = this.sessions.get(id)
-    if (!session || session.principalId !== principalId) return undefined
+    if (!session || session.principalId !== principalId) return Promise.resolve(undefined)
+    return this.closeSession(session)
+  }
+
+  async closeWorkspace(workspaceId: string): Promise<WorkspaceTerminalCloseResult> {
+    const sessions = [...this.sessions.values()].filter((session) => session.workspaceId === workspaceId)
+    const terminals = await Promise.all(sessions.map((session) => this.closeSession(session)))
+    const failed = terminals.filter((terminal) => terminal.state !== "ended").length
+    const closed = terminals.length - failed
+    if (failed > 0) return { ok: false, status: "cleanup_failed", requested: sessions.length, closed, failed }
+    return { ok: true, status: "closed", requested: sessions.length, closed, failed: 0 }
+  }
+
+  private closeSession(session: Session): Promise<WebTerminal> {
     if (session.state === "ended") {
-      const terminal = this.project(session)
-      await this.clearAgentSignals(session)
-      session.attachment?.socket.close(1000, "Terminal closed")
-      this.sessions.delete(id)
-      this.notifyActive()
-      return terminal
+      return this.finalizeEndedSession(session)
     }
-    if (session.state === "closing") return this.project(session)
+    if (session.closePromise) return session.closePromise
     session.state = "closing"
     this.sendControl(session, { type: "closing" })
+    session.closePromise = this.closeConfirmed(session)
+    return session.closePromise
+  }
+
+  private async closeConfirmed(session: Session): Promise<WebTerminal> {
     try {
       this.killGroup(session, "SIGTERM")
-      const exited = await Promise.race([session.exited.then(() => true), new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000))])
-      if (!exited) {
+      const termExited = await this.waitForExit(session)
+      if (!termExited) {
         this.killGroup(session, "SIGKILL")
-        await Promise.race([session.exited, new Promise<void>((resolve) => setTimeout(resolve, 1_000))])
+        const killExited = await this.waitForExit(session)
+        if (!killExited) {
+          session.state = "cleanup_failed"
+          this.notifyActive()
+          return this.project(session)
+        }
       }
       session.state = "ended"
       session.endedAt ??= this.now()
@@ -259,12 +289,31 @@ export class WebTerminalManager {
       session.state = "cleanup_failed"
     }
     this.notifyActive()
+    if (session.state !== "ended") return this.project(session)
+    return this.finalizeEndedSession(session)
+  }
+
+  private waitForExit(session: Session): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (value: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        resolve(value)
+      }
+      const timeout = setTimeout(() => finish(false), this.closeTimeoutMs)
+      timeout.unref?.()
+      void session.exited.then(() => finish(true))
+    })
+  }
+
+  private async finalizeEndedSession(session: Session): Promise<WebTerminal> {
     const terminal = this.project(session)
-    if (session.state === "ended") {
-      await this.clearAgentSignals(session)
-      session.attachment?.socket.close(1000, "Terminal closed")
-      this.sessions.delete(id)
-    }
+    await this.clearAgentSignals(session)
+    session.attachment?.socket.close(1000, "Terminal closed")
+    this.sessions.delete(session.id)
+    this.notifyActive()
     return terminal
   }
 
