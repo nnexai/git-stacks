@@ -68,6 +68,21 @@ function serializePtyEnvironment(environment: Record<string, string>): Buffer {
   return Buffer.concat(entries.map(([key, value]) => Buffer.from(`${key}=${value}\0`, "utf8")))
 }
 
+function serializePosixPtyOverlay(environment: Record<string, string>, readyPath: string): string {
+  const entries = Object.entries(environment).sort(([left], [right]) => left.localeCompare(right))
+  for (const [key, value] of entries) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value.includes("\0")) throw new TypeError(`Invalid PTY environment entry: ${key}`)
+  }
+  const assignments = entries.map(([key, value]) => `${key}=${shellQuote(value)}`)
+  const checks = entries.map(([key, value]) => `case \"\${${key}-}\" in ${shellQuote(value)})`)
+  return [
+    ...assignments,
+    ...checks,
+    `> ${shellQuote(readyPath)}`,
+    ...entries.map(() => ";; *) ;; esac"),
+  ].join("\n")
+}
+
 export function createPtyInitialization(
   shell: "bash" | "zsh" | "fish",
   environment: Record<string, string>,
@@ -77,14 +92,15 @@ export function createPtyInitialization(
   chmodSync(root, 0o700)
   const environmentPath = join(root, "environment")
   const readyPath = join(root, "ready")
-  writeFileSync(environmentPath, serializePtyEnvironment(environment), { mode: 0o600 })
+  if (shell === "fish") writeFileSync(environmentPath, serializePtyEnvironment(environment), { mode: 0o600 })
+  else writeFileSync(environmentPath, serializePosixPtyOverlay(environment, readyPath), { mode: 0o600 })
   let runCommand: string | undefined
   if (command !== undefined) {
     const commandPath = join(root, shell === "fish" ? "command.fish" : "command.sh")
     writeFileSync(commandPath, command, { mode: 0o600 })
     runCommand = shell === "fish"
       ? `builtin source ${shellQuote(commandPath)}; builtin set -l __gs_status $status; builtin exit $__gs_status`
-      : `builtin source ${shellQuote(commandPath)}; __gs_status=$?; builtin exit "$__gs_status"`
+      : `\\. ${shellQuote(commandPath)}; __gs_status=$?; exit "$__gs_status"`
   }
   const bootstrap = shell === "fish"
     ? [
@@ -96,8 +112,7 @@ export function createPtyInitialization(
         `builtin printf '' > ${shellQuote(readyPath)}`,
       ].join("; ")
     : [
-        `while IFS= builtin read -r -d '' __gs_entry; do builtin export "$__gs_entry" || builtin return 126; done < ${shellQuote(environmentPath)}`,
-        `builtin printf '' > ${shellQuote(readyPath)}`,
+        `\\. ${shellQuote(environmentPath)}`,
       ].join("; ")
   return { root, readyPath, bootstrap, ...(runCommand ? { runCommand } : {}) }
 }
@@ -486,6 +501,8 @@ export class WebTerminalManager {
             cwd: step.cwd,
             env: {
               ...process.env,
+              ...step.environment,
+              ...terminalEnvironment,
               TERM: process.env.TERM ?? "xterm-256color",
               COLORTERM: process.env.COLORTERM ?? "truecolor",
             },

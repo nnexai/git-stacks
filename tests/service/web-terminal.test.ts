@@ -103,6 +103,7 @@ describe("service-owned web terminal", () => {
           "alias export='false'",
           "alias source='false'",
           "alias printf='false'",
+          "function builtin { return 91; }",
           "function export { return 91; }",
           "function source { return 92; }",
           "function printf { return 93; }",
@@ -144,11 +145,11 @@ describe("service-owned web terminal", () => {
       const profilePath = join(root, fixture.profileName)
       mkdirSync(dirname(profilePath), { recursive: true })
       writeFileSync(profilePath, fixture.profile)
-      const initialization = createPtyInitialization(fixture.family, { AUTHORITATIVE_OVERLAY: `ready-${fixture.family}` }, "builtin printf '%s' \"$AUTHORITATIVE_OVERLAY\"")
+      const initialization = createPtyInitialization(fixture.family, { AUTHORITATIVE_OVERLAY: `ready-${fixture.family}` }, "/usr/bin/printf '%s' \"$AUTHORITATIVE_OVERLAY\"")
       try {
         const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; ${initialization.runCommand}`), {
           encoding: "utf8",
-          env: { ...process.env, HOME: root, ...fixture.environment(root) },
+          env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...fixture.environment(root) },
           timeout: 3_000,
         })
         expect(result.status, `${fixture.family}: ${result.stderr}`).toBe(0)
@@ -158,6 +159,27 @@ describe("service-owned web terminal", () => {
         rmSync(initialization.root, { force: true, recursive: true })
         rmSync(root, { force: true, recursive: true })
       }
+    }
+  })
+
+  test("creates POSIX PTY readiness only after the complete overlay verifies", () => {
+    const root = mkdtempSync(join(tmpdir(), "git-stacks-hostile-readiness-"))
+    const profilePath = join(root, "bashrc")
+    writeFileSync(profilePath, [
+      "readonly AUTHORITATIVE_OVERLAY=profile-wins",
+      "function builtin { return 91; }",
+    ].join("\n"))
+    const initialization = createPtyInitialization("bash", { AUTHORITATIVE_OVERLAY: "service-wins" })
+    try {
+      spawnSync("/usr/bin/bash", ["--noprofile", "--rcfile", profilePath, "-i", "-c", initialization.bootstrap], {
+        encoding: "utf8",
+        env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile" },
+        timeout: 3_000,
+      })
+      expect(existsSync(initialization.readyPath)).toBe(false)
+    } finally {
+      rmSync(initialization.root, { force: true, recursive: true })
+      rmSync(root, { force: true, recursive: true })
     }
   })
 
