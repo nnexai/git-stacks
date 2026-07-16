@@ -268,6 +268,11 @@ export class WebTerminalManager {
       exited = true
       exitListener({ exitCode, ...(signal === undefined ? {} : { signal }) })
     }
+    const reportDiagnostic = (diagnostic: ExecuteUserShellCommandResult["diagnostic"]) => {
+      dataListener(diagnostic
+        ? `\r\n[git-stacks shell ${diagnostic.category}] ${diagnostic.message} Recovery: ${diagnostic.recovery}\r\n`
+        : "\r\n[git-stacks shell execution] Command execution failed. Retry after checking shell configuration.\r\n")
+    }
     queueMicrotask(() => void (async () => {
       try {
         for (const step of steps) {
@@ -280,14 +285,16 @@ export class WebTerminalManager {
             signal: controller.signal,
             onOutput: ({ chunk }) => dataListener(new TextDecoder().decode(chunk)),
           })
-          if (result.exitCode !== 0) { finish(result.exitCode); return }
+          if (result.exitCode !== 0) {
+            reportDiagnostic(result.diagnostic)
+            finish(result.exitCode)
+            return
+          }
         }
         finish(0)
       } catch (error) {
         const diagnostic = error instanceof UserShellError ? error.diagnostic : undefined
-        dataListener(diagnostic
-          ? `\r\n[git-stacks shell ${diagnostic.category}] ${diagnostic.message} Recovery: ${diagnostic.recovery}\r\n`
-          : "\r\n[git-stacks shell execution] Command execution failed. Retry after checking shell configuration.\r\n")
+        reportDiagnostic(diagnostic)
         finish(controller.signal.aborted ? 130 : 126, controller.signal.aborted ? 15 : undefined)
       }
     })())

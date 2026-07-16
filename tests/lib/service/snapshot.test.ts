@@ -303,6 +303,59 @@ describe("authoritative service snapshots", () => {
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
   })
 
+  test("resolves secrets and volatile shell inputs for each launch without changing the snapshot", async () => {
+    let secret = "phase124-secret-a"
+    let dynamic = { PATH: "/phase124/a/bin", SSH_AUTH_SOCK: "/tmp/phase124-a.sock" }
+    const agentPaths: string[] = []
+    const definition = { ...workspace(), env: { API_TOKEN: "${{ env:API_TOKEN }}" } }
+    const builder = createSnapshotBuilder(dependencies({
+      ensureWorkspaceIdentity: () => definition,
+      planManualCommand: () => [{ bucket: "main", scope: "workspace", shell: "print-current-env", cwd: "/tasks/alpha", environment: {} }],
+      buildWorkspaceEnv: async (_workspace: Workspace, options: { skipSecrets: boolean }) => options.skipSecrets
+        ? { VISIBLE: "stable" }
+        : { VISIBLE: "stable", API_TOKEN: secret },
+      prepareAgentSignals: (_path: string, _name: string, environment: Record<string, string>) => {
+        agentPaths.push(environment.PATH)
+        return {}
+      },
+    }), {
+      dynamicEnvironment: () => dynamic,
+      shellEnvironment: () => ({ SHELL: "/bin/bash" }),
+    })
+
+    const snapshot = (await builder.buildAll())[0]!
+    const projected = JSON.stringify(snapshot)
+    expect(projected).not.toContain(secret)
+    expect(projected).not.toContain(dynamic.PATH)
+    expect(projected).not.toContain(dynamic.SSH_AUTH_SOCK)
+    const commandId = snapshot.workspace.launch.named![0]!.id
+    const request = {
+      workspace_id: snapshot.workspace.id,
+      repository_id: snapshot.workspace.repositories[0]!.id,
+      command_id: commandId,
+      expected_revision: snapshot.revision,
+    }
+
+    const launchA = await builder.resolveTerminalLaunch(request)
+    secret = "phase124-secret-b"
+    dynamic = { PATH: "/phase124/b/bin", SSH_AUTH_SOCK: "/tmp/phase124-b.sock" }
+    const launchB = await builder.resolveTerminalLaunch(request)
+
+    expect(launchA.resolved && !launchA.launch.configuration.shell ? launchA.launch.steps[0]?.environment : undefined).toMatchObject({
+      API_TOKEN: "phase124-secret-a",
+      PATH: "/phase124/a/bin",
+      SSH_AUTH_SOCK: "/tmp/phase124-a.sock",
+    })
+    expect(launchB.resolved && !launchB.launch.configuration.shell ? launchB.launch.steps[0]?.environment : undefined).toMatchObject({
+      API_TOKEN: "phase124-secret-b",
+      PATH: "/phase124/b/bin",
+      SSH_AUTH_SOCK: "/tmp/phase124-b.sock",
+    })
+    expect(agentPaths).toEqual(["/phase124/a/bin", "/phase124/b/bin"])
+    expect((await builder.buildAll())[0]!.revision).toBe(snapshot.revision)
+    expect(JSON.stringify(await builder.buildAll())).not.toContain("phase124-secret-b")
+  })
+
   test("reuses the delivered aggregate when launching a terminal from its revision", async () => {
     let statusReads = 0
     const builder = createSnapshotBuilder(dependencies({

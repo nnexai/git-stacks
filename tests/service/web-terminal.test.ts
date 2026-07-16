@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
+import { UserShellError } from "../../packages/core/src/user-shell"
 import type { Signal, TerminalLaunchResolution } from "../../packages/protocol/src/service"
 import { createWorkspaceLifecycleAdmission } from "../../packages/service/src/policy/workspace-lifecycle-admission"
 import type { TerminalAttachment } from "../../packages/service/src/terminal-attachment"
@@ -125,6 +126,42 @@ describe("service-owned web terminal", () => {
     expect(calls.every((call) => call.overlay?.GIT_STACKS_SURFACE_ID === terminal.surface_id)).toBe(true)
     expect(manager.get("browser-1", terminal.id)).toMatchObject({ exit_code: 23, state: "ended" })
     await manager.close("browser-1", terminal.id)
+  })
+
+  test("cancels the active command-step adapter and reports safe cancellation metadata", async () => {
+    let activeSignal: AbortSignal | undefined
+    let started!: () => void
+    const running = new Promise<void>((resolve) => { started = resolve })
+    const runner: TerminalCommandStepRunner = (request) => new Promise((_resolve, reject) => {
+      activeSignal = request.signal
+      request.signal?.addEventListener("abort", () => reject(new UserShellError({
+        category: "cancellation",
+        shell: "/bin/bash",
+        mode: "command",
+        stage: "process-group-term",
+        message: "Command cancelled and its process group was stopped.",
+        recovery: "Retry the command when ready.",
+      })), { once: true })
+      started()
+    })
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "long-running", cwd: "/workspace", environment: { SECRET_CANARY: "must-not-print" } }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: ["SECRET_CANARY"],
+      } }),
+    }, undefined, undefined, Date.now, undefined, undefined, 10, {}, runner)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, command_id: "cmd_0123456789abcdef", expected_revision: "1", cols: 80, rows: 24 })
+    const attachment = attach(manager, terminal.id)
+    await running
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended", exit_code: 130 })
+    expect(activeSignal?.aborted).toBe(true)
+    const output = attachment.sent.filter((entry): entry is Uint8Array => entry instanceof Uint8Array)
+      .map((entry) => new TextDecoder().decode(entry.subarray(9))).join("")
+    expect(output).toContain("[git-stacks shell cancellation]")
+    expect(output).not.toContain("must-not-print")
   })
 
   test("passes resolved PTY argv, cwd, and environment without reparsing", async () => {
