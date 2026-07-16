@@ -5,15 +5,15 @@ milestone_name: Workspace Productivity
 current_phase: 123
 current_phase_name: Archived Workspaces and Safe Removal
 status: executing
-stopped_at: Completed 123-02-PLAN.md
-last_updated: "2026-07-16T06:19:57.855Z"
+stopped_at: Completed 123-03-PLAN.md
+last_updated: "2026-07-16T06:36:29.456Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-07-16 — Phase 123 execution started
 
@@ -57,6 +57,9 @@ Last activity: 2026-07-16 — Phase 123 execution started
 - [Phase 123]: Catalog revision digests both active projections and minimal archived summaries, including all-archived state.
 - [Phase 123]: Force eligibility is schema-valid only for workspace_dirty after terminals are confirmed stopped; confirmation_name exists only on workspace.force-remove.
 - [Phase 123]: workspacePriorityOrder delegates to workspaceSuccessorOrder with neutral activity and ID defaults instead of retaining a divergent algorithm.
+- [Phase 123]: A queued same-workspace lifecycle lease keeps admission continuously blocked while unrelated workspace leases remain independent. — Prevents an allocation gap between sequential lifecycle mutations without a global lock.
+- [Phase 123]: SIGTERM and SIGKILL are attempts only; the shared PTY exit promise is the sole successful close signal. — Signal delivery cannot prove process exit or authorize filesystem mutation.
+- [Phase 123]: Internal workspace shutdown returns only status and counts, never cross-principal session metadata. — Lifecycle cleanup needs cross-principal authority without client-visible enumeration authority.
 
 ## Validated Inputs
 
@@ -123,9 +126,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 |------|----------|-------|-------|
 | Phase 123 P01 | 11 min | 2 tasks | 10 files |
 | Phase 123 P02 | 10 min | 2 tasks | 12 files |
+| Phase 123 P03 | 7 min | 2 tasks | 3 files |
 
 ## Session
 
-**Last session:** 2026-07-16T06:19:57.847Z
-**Stopped at:** Completed 123-02-PLAN.md
+**Last session:** 2026-07-16T06:36:29.448Z
+**Stopped at:** Completed 123-03-PLAN.md
 **Resume file:** None
