@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeDashboardCoreState, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeConfigMock, makeDashboardCoreState, makeLifecycleMock, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — MUST be set before any import that touches paths.ts
 // Each test file has its own Bun module scope, so this env override takes effect
@@ -63,7 +63,7 @@ const registryFixture = [
 
 // Mock config module — ensures listWorkspaces and readWorkspace return our fixture
 // data even when paths.ts module cache resolves to a different configDir.
-mock.module("@git-stacks/core/config", () => ({
+mock.module("@git-stacks/core/config", () => makeConfigMock({
   // Workspace operations
   listWorkspaces: mock(() => [syncWsFixture]),
   readWorkspace: mock((_name: string) => syncWsFixture),
@@ -136,7 +136,7 @@ mock.module("@git-stacks/core/workspace-yaml", () => makeWorkspaceYamlMock({
 }))
 
 // Mock lifecycle hooks to prevent hook execution
-mock.module("@git-stacks/core/lifecycle", () => ({
+mock.module("@git-stacks/core/lifecycle", () => makeLifecycleMock({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => {}),
 }))
@@ -148,6 +148,7 @@ mock.module("@git-stacks/service/client", () => ({
   subscribeServiceEvents: mock(async () => "0"),
   fetchEventCursor: mock(async () => "0"),
   fetchWorkspaceFileStatus: mock(async () => ({ workspace: { scope: "workspace", name: "sync-ws", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] }, repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] })),
+  fetchWorkspaceFileStatusProjection: mock(async () => { throw new Error("unused") }),
   fetchWorkspaceNotes: mock(async () => []),
   fetchEditTarget: mock(async () => ({ kind: "registry", path: "/tmp/registry.yml" })),
   runCoreMutation: mock(async (name: string, _request: unknown, options?: { onOperation?: (operation: any) => void }) => {
@@ -161,6 +162,10 @@ mock.module("@git-stacks/service/client", () => ({
     return { state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: { synced: [{ repo: "sync-repo", commits: 1 }], skipped: [] } }
   }),
   createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
+mock.module("../../../packages/tui/src/official-service", () => ({
+  officialService: { fetchWorkspaceActionInventory: mock(async () => { throw new Error("unused") }) },
 }))
 
 // Dynamic imports happen AFTER env is set and mocks are registered

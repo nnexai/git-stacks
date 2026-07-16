@@ -57,7 +57,7 @@ import { matchesLabels } from "@git-stacks/core/labels"
 import { createForgeReviewCoordinator, createOperationTracker, issueTrackerLabels, type OperationTracker, type OperationTrackerState } from "@git-stacks/client"
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
-import * as serviceClient from "@git-stacks/service/client"
+import { officialService } from "./official-service"
 import type {
   Operation,
   WebOperation,
@@ -273,9 +273,9 @@ export default function App() {
   const [notesError, setNotesError] = createSignal("")
   const [notesMutationError, setNotesMutationError] = createSignal("")
   const forgeReview = createForgeReviewCoordinator({
-    resolve: (request) => serviceClient.resolveForgeSourceReview(request),
+    resolve: (request) => officialService.resolveForgeSourceReview(request),
     create: async (request) => {
-      const operation = await serviceClient.submitWebOperation({ kind: "workspace.create.reviewed", request })
+      const operation = await officialService.submitWebOperation({ kind: "workspace.create.reviewed", request })
       return { operationId: operation.operation_id }
     },
   })
@@ -562,7 +562,7 @@ export default function App() {
         }
     setView({ view: "lifecycle-progress", target, action, message: `${action}: ${target.name}` })
     try {
-      await serviceClient.runWorkspaceLifecycleMutation(request, {
+      await officialService.runWorkspaceLifecycleMutation(request, {
         onOperation: (operation) => {
           if (operation.state !== "running") return
           setView({
@@ -657,9 +657,9 @@ export default function App() {
     setView({ view: "action-menu", index })
     const entry = filteredEntries()[index]
     const revision = core.state()?.revision
-    if (!entry || !revision || typeof serviceClient.fetchWorkspaceActionInventory !== "function") return
+    if (!entry || !revision || typeof officialService.fetchWorkspaceActionInventory !== "function") return
     try {
-      const actions = await serviceClient.fetchWorkspaceActionInventory({
+      const actions = await officialService.fetchWorkspaceActionInventory({
         workspace_id: entry.workspaceId,
         expected_revision: revision,
       })
@@ -690,7 +690,7 @@ export default function App() {
     const summarize = async (operation: WebOperation) => {
       let cancellable = false
       try {
-        const inventory = await serviceClient.fetchWorkspaceActionInventory({
+        const inventory = await officialService.fetchWorkspaceActionInventory({
           workspace_id: entry.workspaceId,
           expected_revision: core.state()?.revision ?? revision,
         })
@@ -704,9 +704,9 @@ export default function App() {
       return operationSummary(operation, context, cancellable)
     }
     const tracker = createOperationTracker<WebOperationMutation>({
-      submit: async (intent) => summarize(await serviceClient.submitWebOperation(intent)),
-      get: async (operationId) => summarize(await serviceClient.fetchWebOperation(operationId)),
-      cancel: (operationId) => serviceClient.cancelWebOperation(operationId),
+      submit: async (intent) => summarize(await officialService.submitWebOperation(intent)),
+      get: async (operationId) => summarize(await officialService.fetchWebOperation(operationId)),
+      cancel: (operationId) => officialService.cancelWebOperation(operationId),
       refresh: async () => { await reload(); await reloadSignals() },
       reconcile: () => { setSelected(new Set<string>()) },
     })
@@ -729,7 +729,7 @@ export default function App() {
     let current = operation
     while (current.state === "accepted" || current.state === "running") {
       await new Promise<void>((resolve) => setTimeout(resolve, 100))
-      current = await serviceClient.fetchWebOperation(current.operation_id)
+      current = await officialService.fetchWebOperation(current.operation_id)
     }
     if (current.state !== "succeeded") throw new Error(current.error?.message ?? "Workspace operation failed.")
     return current
@@ -741,12 +741,12 @@ export default function App() {
     setCreateSummary({ text: "", color: "green" })
     setView({ view: "create-progress", workspaceName })
     try {
-      let operation = await serviceClient.fetchWebOperation(operationId)
+      let operation = await officialService.fetchWebOperation(operationId)
       while (operation.state === "accepted" || operation.state === "running") {
         const detail = operation.progress?.message ?? (operation.state === "accepted" ? "Waiting to start" : "Creating from reviewed source")
         setCreateRows([{ repo: "Reviewed workspace", status: "creating-worktree", detail }])
         await new Promise<void>((resolve) => setTimeout(resolve, 250))
-        operation = await serviceClient.fetchWebOperation(operationId)
+        operation = await officialService.fetchWebOperation(operationId)
       }
       if (operation.state !== "succeeded") {
         throw new Error(operation.error?.message ?? "Reviewed workspace creation did not complete.")
@@ -774,7 +774,7 @@ export default function App() {
     setNotesLoading(true)
     setNotesError("")
     try {
-      setNotesResponse(await serviceClient.fetchWorkspaceNotesProjection({
+      setNotesResponse(await officialService.fetchWorkspaceNotesProjection({
         workspace_id: entry.workspaceId,
         expected_revision: revision,
       }))
@@ -796,7 +796,7 @@ export default function App() {
       const request = kind === "workspace.notes.add"
         ? { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision, text: text ?? "" }
         : { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision }
-      await waitForWebOperation(await serviceClient.submitWebOperation({ kind, request } as WebOperationMutation))
+      await waitForWebOperation(await officialService.submitWebOperation({ kind, request } as WebOperationMutation))
       const entry = entries().find((candidate) => candidate.workspaceId === v.workspaceId)
       if (entry) await loadWorkspaceNotes(entry)
     } catch {
@@ -839,7 +839,7 @@ export default function App() {
       const next = actionId === "workspace.pin"
         ? [...new Set([...pinned, entry.workspaceId])]
         : pinned.filter((id) => id !== entry.workspaceId)
-      await serviceClient.setWorkspacePins(next, state.revision)
+      await officialService.setWorkspacePins(next, state.revision)
       await reload()
       setView({ view: "list" })
       return

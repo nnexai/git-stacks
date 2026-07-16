@@ -30,8 +30,7 @@ export function HelpOverlay(props: Props) {
         <text fg="white">{"\n"}  Workspaces tab:</text>
         <text fg="gray">    Enter       Open action menu</text>
         <text fg="gray">    Space       Select for batch operation</text>
-        <text fg="gray">    m           View workspace messages</text>
-        <text fg="gray">    u           Create from PR/MR URL</text>
+        <text fg="gray">    m           View messages   u  Create from PR/MR URL</text>
         <text fg="gray">    Actions: o=Open  e=Edit  n=Rename  u=Run  m=Merge  c=Clean  r=Remove</text>
         <text fg="white">{"\n"}  Templates tab:</text>
         <text fg="gray">    Enter       Open action menu</text>

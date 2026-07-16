@@ -182,6 +182,7 @@ mock.module("@git-stacks/service/client", () => ({
     workspace: { scope: "workspace", name: "test-ws", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] },
     repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [],
   })),
+  fetchWorkspaceFileStatusProjection: mock(async () => { throw new Error("unused") }),
   fetchWorkspaceNotes: mock(async () => []),
   runCoreMutation: mock(async (name: string, request: any, options?: { onOperation?: (operation: any) => void }) => {
     const emit = (text: string, stream: "stdout" | "stderr" = "stdout") => options?.onOperation?.({ state: "running", progress: { message: text, data: { kind: "command-output", text, stream } } })
@@ -201,6 +202,13 @@ mock.module("@git-stacks/service/client", () => ({
   }),
   runWorkspaceLifecycleMutation: workspaceLifecycleMutationMock,
   createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
+mock.module("../../../packages/tui/src/official-service", () => ({
+  officialService: {
+    fetchWorkspaceActionInventory: mock(async () => { throw new Error("unused") }),
+    runWorkspaceLifecycleMutation: workspaceLifecycleMutationMock,
+  },
 }))
 
 // Mock lifecycle hooks

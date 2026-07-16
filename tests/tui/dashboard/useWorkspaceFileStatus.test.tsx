@@ -30,6 +30,10 @@ mock.module("@git-stacks/service/client", () => ({
   fetchWorkspaceFileStatusProjection,
 }))
 
+mock.module("../../../packages/tui/src/official-service", () => ({
+  officialService: { fetchWorkspaceFileStatusProjection },
+}))
+
 const { useWorkspaceFileStatus } = await import("../../../packages/tui/src/hooks/useWorkspaceFileStatus")
 
 function workspace(name: string) {
@@ -123,7 +127,10 @@ describe("useWorkspaceFileStatus", () => {
 
   test("production hook uses the official service client and no machine-side helper", async () => {
     const source = await Bun.file("packages/tui/src/hooks/useWorkspaceFileStatus.ts").text()
-    expect(source).toContain('from "@git-stacks/service/client"')
+    const bridge = await Bun.file("packages/tui/src/official-service.ts").text()
+    expect(source).toContain('from "../official-service"')
+    expect(bridge).toContain('from "@git-stacks/service/client"')
+    expect(bridge).toContain("fetchWorkspaceFileStatusProjection")
     expect(source).toContain("fetchWorkspaceFileStatusProjection")
     expect(source).not.toContain("../../../lib/workspace-file-status")
     expect(source).not.toContain("runCli")

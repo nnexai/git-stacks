@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeDashboardCoreState, makeTmpDir, cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeConfigMock, makeDashboardCoreState, makeLifecycleMock, makeTmpDir, cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -20,7 +20,7 @@ const templateFixture = {
 }
 
 // Mock config module with inline fixtures — resilient to module cache ordering
-mock.module("@git-stacks/core/config", () => ({
+mock.module("@git-stacks/core/config", () => makeConfigMock({
   listWorkspaces: mock(() => []),
   readWorkspace: mock(() => null),
   writeWorkspace: mock(() => {}),
@@ -78,7 +78,7 @@ mock.module("@git-stacks/core/workspace-yaml", () => makeWorkspaceYamlMock({
 }))
 
 // Mock lifecycle hooks to prevent hook execution during workspace creation
-mock.module("@git-stacks/core/lifecycle", () => ({
+mock.module("@git-stacks/core/lifecycle", () => makeLifecycleMock({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => {}),
 }))
@@ -90,11 +90,14 @@ mock.module("@git-stacks/service/client", () => ({
   subscribeServiceEvents: mock(async () => "0"),
   fetchEventCursor: mock(async () => "0"),
   fetchWorkspaceFileStatus: mock(async () => { throw new Error("unused") }),
+  fetchWorkspaceFileStatusProjection: mock(async () => { throw new Error("unused") }),
   fetchWorkspaceNotes: mock(async () => []),
   fetchEditTarget: mock(async () => ({ kind: "registry", path: "/tmp/registry.yml" })),
   runCoreMutation: mock(async () => ({ state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: {} })),
   createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
 }))
+
+mock.module("../../../packages/tui/src/official-service", () => ({ officialService: {} }))
 
 // Dynamic imports happen AFTER env is set and mocks are registered
 const { testRender } = await import("@opentui/solid")

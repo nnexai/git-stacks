@@ -16,7 +16,7 @@ exports[`HelpOverlay snapshots renders full keybinding reference for workspaces 
     │ Workspaces tab:                                                      │    
     │ Enter Open action menu                                               │    
     │ Space Select for batch operation                                     │    
-    │ m View workspace messages                                            │    
+    │ m View messages u Create from PR/MR URL                              │    
     │ Actions: o=Open e=Edit n=Rename u=Run m=Merge c=Clean r=Remove       │    
     │                                                                      │    
     │ Templates tab:                                                       │    

@@ -218,6 +218,7 @@ mock.module("@git-stacks/service/client", () => ({
     workspace: { scope: "workspace", name: "target", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] },
     repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [],
   })),
+  fetchWorkspaceFileStatusProjection: mock(async () => { throw new Error("unused") }),
   fetchWorkspaceNotes: mock(async () => []),
   runCoreMutation: mock(async (name: string) => {
     if (name === "workspace.remove") throw new Error("legacy workspace.remove must not own Phase 123 lifecycle")
@@ -225,6 +226,10 @@ mock.module("@git-stacks/service/client", () => ({
   }),
   runWorkspaceLifecycleMutation: lifecycleMutationMock,
   createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
+mock.module("../../../packages/tui/src/official-service", () => ({
+  officialService: { runWorkspaceLifecycleMutation: lifecycleMutationMock },
 }))
 
 const { testRender } = await import("@opentui/solid")

@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
-import { makeDashboardCoreState, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeConfigMock, makeDashboardCoreState, makeLifecycleMock, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 import type { Workspace } from "../../../packages/core/src/config"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
@@ -68,7 +68,7 @@ const removeWorkspaceMock = mock(async (_name: string) => ({ ok: true }))
 const mergeWorkspaceMock = mock(async (_name: string) => ({ ok: true }))
 
 // Mock config module with inline fixtures — resilient to module cache ordering
-mock.module("@git-stacks/core/config", () => ({
+mock.module("@git-stacks/core/config", () => makeConfigMock({
   listWorkspaces: mock(() => [...wsFixtures]),
   readWorkspace: mock((name: string) => wsFixtures.find(ws => ws.name === name) ?? wsFixtures[0]),
   writeWorkspace: mock(() => {}),
@@ -119,7 +119,7 @@ mock.module("@git-stacks/core/workspace-yaml", () => makeWorkspaceYamlMock({
 }))
 
 // Mock lifecycle hooks
-mock.module("@git-stacks/core/lifecycle", () => ({
+mock.module("@git-stacks/core/lifecycle", () => makeLifecycleMock({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => {}),
 }))
@@ -131,6 +131,7 @@ mock.module("@git-stacks/service/client", () => ({
   subscribeServiceEvents: mock(async () => "0"),
   fetchEventCursor: mock(async () => "0"),
   fetchWorkspaceFileStatus: mock(async () => ({ workspace: { scope: "workspace", name: "test", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] }, repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] })),
+  fetchWorkspaceFileStatusProjection: mock(async () => { throw new Error("unused") }),
   fetchWorkspaceNotes: mock(async () => []),
   fetchEditTarget: mock(async () => ({ kind: "registry", path: "/tmp/registry.yml" })),
   runCoreMutation: mock(async (name: string, request: { workspace?: string }) => {
@@ -140,6 +141,12 @@ mock.module("@git-stacks/service/client", () => ({
     return { state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: {} }
   }),
   createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
+mock.module("../../../packages/tui/src/official-service", () => ({ officialService: {} }))
+
+mock.module("../../../packages/service/src/main", () => ({
+  ensureManagedServiceProcess: mock(async () => { throw new Error("unused") }),
 }))
 
 // Dynamic import after mocks are set

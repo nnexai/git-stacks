@@ -909,6 +909,8 @@ export function makeLifecycleMock(overrides: Record<string, unknown> = {}): Reco
     },
     runHooks: mock(async () => {}),
     runHooksCaptured: mock(async () => {}),
+    runShellSequence: mock(async () => ({ ok: true })),
+    runShellSequenceCaptured: mock(async () => ({ ok: true, lines: [] })),
     ...overrides,
   }
 }
