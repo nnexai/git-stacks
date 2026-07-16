@@ -167,6 +167,7 @@ describe("provider-backed forge resolver", () => {
     ["closed", githubJson({ state: "CLOSED" }), "change_closed"],
     ["null head", githubJson({ headRepository: null }), "provider_response_invalid"],
     ["short SHA", githubJson({ headRefOid: "abc" }), "provider_response_invalid"],
+    ["target identity mismatch", githubJson({ baseRepository: { nameWithOwner: "other/api", url: "https://github.com/other/api", sshUrl: "git@github.com:other/api.git" } }), "provider_response_invalid"],
     ["invalid JSON", "not-json", "provider_response_invalid"],
   ])("rejects %s provider data", async (_label, stdout, expected) => {
     const scripted = runner(() => ({ exit_code: 0, stdout }))

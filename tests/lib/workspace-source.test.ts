@@ -118,6 +118,19 @@ describe("trusted reviewed workspace source preparation", () => {
     expect(_source.deleteRef).toHaveBeenCalledTimes(1)
   })
 
+  test("cleans the private ref when the Git fetch helper throws", async () => {
+    _source.fetchSourceRef = mock(async () => { throw new Error("private helper failure") })
+    const result = await prepareReviewedWorkspaceSource({
+      trusted_source: trusted,
+      matched_repo: repo,
+      workspace_name: "review-9",
+      operation_id: "thrown-fetch",
+    })
+    expect(result).toMatchObject({ ok: false, error: "fork_unreachable" })
+    expect(JSON.stringify(result)).not.toContain("private helper")
+    expect(_source.deleteRef).toHaveBeenCalledTimes(1)
+  })
+
   test("reuses an existing branch only when its full SHA matches", async () => {
     _source.checkBranchExists = mock(async () => true)
     _source.resolveRef = mock(async (_path: string, ref: string) => ({

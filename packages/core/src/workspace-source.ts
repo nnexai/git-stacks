@@ -80,14 +80,29 @@ function trustedFetchUrl(source: TrustedForgeChange["source"]): string | null {
   if (source.fetch.https) {
     try {
       const parsed = new URL(source.fetch.https)
-      if (!parsed.username && !parsed.password && (parsed.protocol === "https:" || parsed.protocol === "http:")) {
+      const expectedPath = `${source.repository.path.replace(/^\/+|\/+$/g, "")}.git`.toLowerCase()
+      const actualPath = parsed.pathname.replace(/^\/+|\/+$/g, "").toLowerCase()
+      if (
+        !parsed.username
+        && !parsed.password
+        && (parsed.protocol === "https:" || parsed.protocol === "http:")
+        && parsed.host.toLowerCase() === source.repository.host
+        && actualPath === expectedPath
+      ) {
         return source.fetch.https
       }
     } catch {
       // Fall through to a separately supplied SSH coordinate.
     }
   }
-  return source.fetch.ssh?.trim() || null
+  const ssh = source.fetch.ssh?.trim()
+  if (!ssh || /\s/.test(ssh) || ssh.startsWith("-")) return null
+  const match = /^git@([^:]+):(.+)\.git$/.exec(ssh)
+  return match
+    && match[1].toLowerCase() === source.repository.host
+    && match[2].toLowerCase() === source.repository.path.toLowerCase()
+    ? ssh
+    : null
 }
 
 export async function prepareReviewedWorkspaceSource(
@@ -114,12 +129,22 @@ export async function prepareReviewedWorkspaceSource(
   }
 
   if (!inputs.dry_run) {
-    const fetchResult = await _source.fetchSourceRef(
-      inputs.matched_repo.main_path,
-      fetchUrl,
-      source.source.ref,
-      fetchedRef,
-    )
+    let fetchResult: Awaited<ReturnType<typeof _source.fetchSourceRef>>
+    try {
+      fetchResult = await _source.fetchSourceRef(
+        inputs.matched_repo.main_path,
+        fetchUrl,
+        source.source.ref,
+        fetchedRef,
+      )
+    } catch {
+      await cleanup()
+      return {
+        ok: false,
+        error: "fork_unreachable",
+        message: `Could not fetch the ${source.provider} source repository. Check repository access and authentication.`,
+      }
+    }
     if (!fetchResult.ok) {
       await cleanup()
       return {
@@ -129,7 +154,13 @@ export async function prepareReviewedWorkspaceSource(
       }
     }
 
-    const fetched = await _source.resolveRef(inputs.matched_repo.main_path, fetchedRef)
+    let fetched: Awaited<ReturnType<typeof _source.resolveRef>>
+    try {
+      fetched = await _source.resolveRef(inputs.matched_repo.main_path, fetchedRef)
+    } catch {
+      await cleanup()
+      return { ok: false, error: "source_changed", message: "The provider source changed after review. Resolve the change again." }
+    }
     if (!fetched.ok || fetched.sha !== source.source.sha) {
       await cleanup()
       return {
@@ -139,16 +170,21 @@ export async function prepareReviewedWorkspaceSource(
       }
     }
 
-    if (await _source.checkBranchExists(inputs.matched_repo.main_path, targetBranch)) {
-      const existing = await _source.resolveRef(inputs.matched_repo.main_path, targetBranch)
-      if (!existing.ok || existing.sha !== source.source.sha) {
-        await cleanup()
-        return {
-          ok: false,
-          error: "branch_conflict",
-          message: `The existing local branch '${targetBranch}' points at a different commit.`,
+    try {
+      if (await _source.checkBranchExists(inputs.matched_repo.main_path, targetBranch)) {
+        const existing = await _source.resolveRef(inputs.matched_repo.main_path, targetBranch)
+        if (!existing.ok || existing.sha !== source.source.sha) {
+          await cleanup()
+          return {
+            ok: false,
+            error: "branch_conflict",
+            message: `The existing local branch '${targetBranch}' points at a different commit.`,
+          }
         }
       }
+    } catch {
+      await cleanup()
+      return { ok: false, error: "branch_conflict", message: `The local branch '${targetBranch}' could not be verified.` }
     }
   }
 

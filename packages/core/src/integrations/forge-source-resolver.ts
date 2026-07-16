@@ -388,6 +388,29 @@ function githubFetch(repository: z.infer<typeof githubRepository>): ForgeFetchCo
   return { https: `${repository.url.replace(/\/$/, "")}.git`, ssh: repository.sshUrl }
 }
 
+function repositoryWebIdentity(url: string, host: string, path: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return !parsed.username
+      && !parsed.password
+      && parsed.host.toLowerCase() === host
+      && parsed.pathname.replace(/^\/+|\/+$/g, "").toLowerCase() === path.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function canonicalChangeIdentity(url: string, expected: string): boolean {
+  try {
+    const parsed = new URL(url)
+    parsed.search = ""
+    parsed.hash = ""
+    return parsed.toString().replace(/\/$/, "") === expected
+  } catch {
+    return false
+  }
+}
+
 async function resolveGitHub(
   parsed: ReviewedForgeUrl,
   runner: ForgeCommandRunner,
@@ -408,6 +431,11 @@ async function resolveGitHub(
   if (!pull) return failure("change_not_found", "github")
   if (pull.state !== "OPEN") return failure("change_closed", "github")
   if (!pull.headRepository || pull.number !== parsed.change_number) return failure("provider_response_invalid", "github")
+  if (
+    !canonicalChangeIdentity(pull.url, parsed.canonical_url)
+    || !repositoryWebIdentity(pull.baseRepository.url, parsed.host, parsed.target_repository_path)
+    || !repositoryWebIdentity(pull.headRepository.url, parsed.host, pull.headRepository.nameWithOwner)
+  ) return failure("provider_response_invalid", "github")
   return {
     ok: true,
     change: {
@@ -460,7 +488,9 @@ async function resolveGitLab(
   if (!mr.source_project_id || mr.iid !== parsed.change_number || !mr.diff_refs) {
     return failure("provider_response_invalid", "gitlab")
   }
-  if (mr.diff_refs.head_sha !== mr.sha) return failure("provider_response_invalid", "gitlab")
+  if (mr.diff_refs.head_sha !== mr.sha || !canonicalChangeIdentity(mr.web_url, parsed.canonical_url)) {
+    return failure("provider_response_invalid", "gitlab")
+  }
 
   const projectResult = await invoke(parsed, runner, [
     "glab", "api", "--hostname", parsed.host, `projects/${mr.source_project_id}`,
@@ -471,6 +501,9 @@ async function resolveGitLab(
     return failure("provider_response_invalid", "gitlab")
   }
   const sourceProject = projectDecoded.data
+  if (!repositoryWebIdentity(sourceProject.web_url, parsed.host, sourceProject.path_with_namespace)) {
+    return failure("provider_response_invalid", "gitlab")
+  }
   return {
     ok: true,
     change: {
