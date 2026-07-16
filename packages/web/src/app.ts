@@ -3,8 +3,8 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { FUZZY_FIELD_WEIGHT, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type WorkspaceActionCallback } from "@git-stacks/client"
-import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebNotesResponse, type WebOperation, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
+import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperation, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
 import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
@@ -1878,6 +1878,244 @@ async function showWorkspaceFileStatus(workspace: Workspace): Promise<void> {
   await load()
 }
 
+function forgeFailureText(state: ForgeReviewState): string | undefined {
+  if (!("failure" in state) || !state.failure) return undefined
+  if (state.phase === "review") return `${state.failure.message} Review the highlighted fields, correct the draft when possible, or resolve again.`
+  return state.failure.message
+}
+
+function showForgeCreation(view: OverlayView): void {
+  let coordinator: ReturnType<typeof createForgeReviewCoordinator>
+  let operationPolling = false
+
+  const pollAcceptedOperation = async (operationId: string) => {
+    if (operationPolling) return
+    operationPolling = true
+    try {
+      for (let attempt = 0; attempt < 300; attempt += 1) {
+        const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+        if (operation.state === "succeeded") {
+          await refreshSnapshot()
+          coordinator.reconcile()
+          view.close()
+          toast("Workspace created. Authoritative workspace state has been refreshed.")
+          return
+        }
+        if (operation.state === "failed" || operation.state === "cancelled") {
+          coordinator.observeOperation({
+            operation_id: operation.operation_id,
+            state: operation.state,
+            error: {
+              code: operation.error?.code ?? "operation_failed",
+              message: operation.error?.message ?? "Workspace creation failed.",
+              retryable: operation.error?.code === "conflict",
+              ...(operation.error?.forge ? { forge: operation.error.forge } : {}),
+            },
+          } as WebOperationSummary)
+          operationPolling = false
+          render()
+          return
+        }
+        await delay(100)
+      }
+      throw new Error("Reviewed workspace creation did not finish in time.")
+    } catch {
+      operationPolling = false
+      render("Workspace creation status could not be refreshed. Reconnect before creating again.")
+    }
+  }
+
+  coordinator = createForgeReviewCoordinator({
+    resolve: (request) => api<WebForgeResolveResponse>("forge.source.resolve", request, { scope: "operation.write" }),
+    async create(request) {
+      const expectedRevision = request.expected_revision
+      const operation = await api<WebOperation>("operation.submit", {
+        kind: "workspace.create.reviewed",
+        request: { ...request, expected_revision: expectedRevision },
+      }, {
+        scope: "operation.write",
+        idempotencyKey: `workspace.create.reviewed-${crypto.randomUUID()}`,
+      })
+      const state = coordinator.state()
+      if (state.phase === "creating") pendingWorkspaceCreations.set(operation.operation_id, state.draft.workspace_name)
+      return { operationId: operation.operation_id }
+    },
+  })
+
+  const fieldError = (state: Extract<ForgeReviewState, { phase: "review" | "creating" }>, path: string) => {
+    const message = state.validation.fields[path]
+    return message ? element("div", "field-error", message) : undefined
+  }
+  const labelled = (labelText: string, control: HTMLElement, error?: HTMLElement) => {
+    const label = element("label", "field", labelText)
+    label.append(control)
+    if (error) label.append(error)
+    return label
+  }
+
+  const render = (localError?: string) => {
+    const state = coordinator.state()
+    view.body.replaceChildren()
+    const shell = element("div", "forge-review")
+    const step = element("div", "forge-step", state.phase === "resolve"
+      ? "Step 1 of 2 · Resolve URL"
+      : "Step 2 of 2 · Review workspace")
+    shell.append(step)
+
+    if (state.phase === "resolve") {
+      shell.append(element("h2", "", "Resolve forge URL"))
+      shell.append(element("p", "forge-intro", "Paste a full supported web URL. Resolving does not create a workspace."))
+      const input = element("input")
+      input.type = "url"
+      input.value = state.url
+      input.placeholder = "https://github.com/org/repo/pull/123"
+      input.addEventListener("input", () => coordinator.setUrl(input.value))
+      const error = element("div", "forge-error", localError ?? forgeFailureText(state))
+      error.setAttribute("aria-live", "polite")
+      const resolve = button(state.resolving ? "Resolving change source…" : "Resolve URL", "button primary")
+      resolve.disabled = state.resolving || !state.url.trim()
+      const runResolve = async () => {
+        if (coordinator.state().phase !== "resolve") return
+        const request = coordinator.enter()
+        render()
+        try { await request } catch {}
+        render()
+      }
+      resolve.addEventListener("click", () => void runResolve())
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return
+        event.preventDefault()
+        event.stopPropagation()
+        void coordinator.enter().then(() => render(), () => render())
+      })
+      shell.append(labelled("GitHub pull request or GitLab merge request URL", input), element("div", "detail-hint", "Paste a full supported web URL. Resolving does not create a workspace."), error)
+      const footer = element("div", "forge-review-footer")
+      const close = button("Close")
+      close.addEventListener("click", () => view.close())
+      footer.append(close, resolve)
+      shell.append(footer)
+      view.body.append(shell)
+      view.setPrimaryFocus(() => input.focus())
+      input.focus()
+      return
+    }
+
+    if (state.phase === "accepted") {
+      shell.append(element("h2", "", "Creating workspace"), element("p", "forge-intro", `Creating ${state.draft.workspace_name}…`))
+      const progress = element("div", "forge-operation-progress", "The reviewed source was accepted. Waiting for authoritative workspace reconciliation…")
+      progress.setAttribute("aria-live", "polite")
+      shell.append(progress)
+      view.body.append(shell)
+      void pollAcceptedOperation(state.operationId)
+      return
+    }
+
+    shell.append(element("h2", "", "Review workspace"), element("p", "forge-intro", "Source resolved. Confirm the resolved source and edit the workspace plan before creation."))
+    const anchor = element("section", "forge-source-anchor")
+    anchor.append(
+      element("strong", "", `${state.anchor.terminology.change} source`),
+      element("a", "forge-source-url", state.anchor.source.web_url),
+      element("span", "", `${state.anchor.source.target_repository} · #${state.anchor.source.change_number}`),
+      element("span", "", `${state.anchor.terminology.source_branch}: ${state.anchor.source.source_branch}`),
+      element("span", "", `${state.anchor.terminology.target_branch}: ${state.anchor.source.target_branch}`),
+    )
+    const sourceLink = anchor.querySelector<HTMLAnchorElement>("a")!
+    sourceLink.href = state.anchor.source.web_url
+    sourceLink.target = "_blank"
+    sourceLink.rel = "noreferrer"
+    shell.append(anchor)
+
+    const name = element("input")
+    name.value = state.draft.workspace_name
+    name.addEventListener("input", () => { coordinator.edit({ kind: "workspace_name", value: name.value }); render() })
+    const template = element("select")
+    for (const candidate of state.anchor.candidates.templates) {
+      const option = element("option", "", candidate.name)
+      option.value = candidate.name
+      option.selected = candidate.name === state.draft.template_name
+      template.append(option)
+    }
+    template.addEventListener("change", () => { coordinator.edit({ kind: "template", name: template.value }); render() })
+    const sourceRepository = element("select")
+    for (const candidate of state.anchor.candidates.source_repositories) {
+      const option = element("option", "", candidate.name)
+      option.value = candidate.repository_id
+      option.selected = candidate.repository_id === state.draft.matched_source_repository_id
+      sourceRepository.append(option)
+    }
+    sourceRepository.addEventListener("change", () => { coordinator.edit({ kind: "matched_source_repository", repositoryId: sourceRepository.value }); render() })
+
+    const form = element("section", "forge-review-form")
+    form.append(
+      labelled("Workspace name", name, fieldError(state, "workspace_name")),
+      labelled("Template", template, fieldError(state, "template_name")),
+      labelled("Matched source repository", sourceRepository, fieldError(state, "matched_source_repository_id")),
+    )
+    const repositories = element("div", "forge-repositories")
+    for (const [index, repository] of state.draft.repositories.entries()) {
+      const candidate = state.anchor.candidates.templates.flatMap(({ repositories }) => repositories).find(({ repository_id }) => repository_id === repository.repository_id)
+      const card = element("section", "forge-repository")
+      const includeLabel = element("label", "repository-choice")
+      const include = element("input")
+      include.type = "checkbox"
+      include.checked = repository.included
+      include.disabled = repository.repository_id === state.draft.matched_source_repository_id
+      include.addEventListener("change", () => { coordinator.edit({ kind: "repository_included", repositoryId: repository.repository_id, included: include.checked }); render() })
+      includeLabel.append(include, element("strong", "", candidate?.name ?? repository.repository_id))
+      const base = element("input")
+      base.value = repository.branch.base_branch
+      const workspaceBranch = element("input")
+      workspaceBranch.value = repository.branch.workspace_branch
+      const editBranch = () => { coordinator.edit({ kind: "repository_branch", repositoryId: repository.repository_id, baseBranch: base.value, workspaceBranch: workspaceBranch.value }) }
+      base.addEventListener("change", () => { editBranch(); render() })
+      workspaceBranch.addEventListener("change", () => { editBranch(); render() })
+      card.append(
+        includeLabel,
+        labelled("Base branch", base, fieldError(state, `repositories.${index}.branch.base_branch`)),
+        labelled("Workspace branch", workspaceBranch, fieldError(state, `repositories.${index}.branch.workspace_branch`)),
+      )
+      repositories.append(card)
+    }
+    form.append(repositories)
+    const failure = localError ?? forgeFailureText(state)
+    if (failure) {
+      const error = element("div", "forge-error", failure)
+      error.setAttribute("role", "alert")
+      form.append(error)
+    }
+    shell.append(form)
+
+    const footer = element("div", "forge-review-footer")
+    const change = button("Change URL")
+    const close = button("Close")
+    const create = button(state.phase === "creating" ? `Creating ${state.draft.workspace_name}…` : "Create workspace", "button primary")
+    create.disabled = state.phase === "creating" || !state.validation.valid
+    change.disabled = state.phase === "creating"
+    close.disabled = state.phase === "creating"
+    change.addEventListener("click", () => { coordinator.setUrl(state.url); render() })
+    close.addEventListener("click", () => view.close())
+    create.addEventListener("click", async () => {
+      const request = coordinator.create()
+      render()
+      try {
+        const result = await request
+        render()
+        if (result && typeof result === "object" && "operationId" in result) void pollAcceptedOperation(String(result.operationId))
+      } catch { render() }
+    })
+    shell.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target !== create) event.preventDefault()
+    })
+    footer.append(change, close, create)
+    shell.append(footer)
+    view.body.append(shell)
+    const invalid = form.querySelector<HTMLElement>(".field-error")?.parentElement?.querySelector<HTMLElement>("input, select")
+    view.setPrimaryFocus(() => (invalid ?? name).focus())
+  }
+
+  render()
+}
+
 async function showCreation(): Promise<void> {
   const view = modal("Create workspace")
   if (!view) return
@@ -1911,7 +2149,9 @@ async function showCreation(): Promise<void> {
         toast(`Creating ${workspaceName}`); view.close()
       } catch (error) { toast(String(error), true) }
     })
-    view.body.append(wrap("Name", name), wrap("Branch", branch), wrap("Source", source), repositoryPicker, create)
+    const forge = button("Create from pull or merge request", "button forge-entry")
+    forge.addEventListener("click", () => showForgeCreation(view))
+    view.body.append(forge, wrap("Name", name), wrap("Branch", branch), wrap("Source", source), repositoryPicker, create)
     name.focus()
   } catch (error) { view.body.append(element("div", "", String(error))) }
 }
