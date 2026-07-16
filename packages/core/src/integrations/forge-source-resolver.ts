@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { spawn } from "../node-runtime"
+import { NameSchema, type GlobalConfig, type RepoRegistryEntry, type Template } from "../config"
 import {
   parseReviewedForgeSourceUrl,
   type ReviewedForgeHostConfig,
@@ -140,6 +141,28 @@ export type ForgeResolverFailure = {
 
 export type ForgeProviderResolution = { ok: true; change: TrustedForgeChange } | ForgeResolverFailure
 
+export type ForgeSourceMatchConfidence = "explicit-metadata" | "integration-base-url" | "remote-inference"
+export type ForgeSourceCandidate = {
+  registry_name: string
+  template_name: string
+  template_repository_name: string
+  mode: "worktree"
+  confidence: ForgeSourceMatchConfidence
+}
+export type ForgeSourceMatchResult =
+  | { ok: true; match: ForgeSourceCandidate; candidates: ForgeSourceCandidate[]; suggested_name: string }
+  | { ok: false; error: "repo_not_matched" | "ambiguous_repo" | "template_repo_missing" | "not_worktree_mode" }
+
+export type ForgeSourceMatchInput = {
+  registry: readonly RepoRegistryEntry[]
+  templates: readonly Template[]
+  config?: GlobalConfig
+  remote_urls?: Readonly<Record<string, readonly string[]>>
+  template_name?: string
+  repository_name?: string
+  existing_workspace_names?: readonly string[]
+}
+
 export type ResolveForgeChangeInput = {
   url: string
   configured_hosts?: ReviewedForgeHostConfig
@@ -147,6 +170,126 @@ export type ResolveForgeChangeInput = {
   signal?: AbortSignal
   timeout_ms?: number
   max_output_bytes?: number
+}
+
+function canonicalHost(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  try { return new URL(value).host.toLowerCase() } catch { return undefined }
+}
+
+function configuredIntegration(input: ForgeSourceMatchInput, provider: ReviewedForgeProvider): { enabled: boolean; host?: string } {
+  const raw = input.config?.integrations?.[provider]
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: true }
+  const value = raw as { enabled?: unknown; base_url?: unknown }
+  return {
+    enabled: value.enabled !== false,
+    ...(typeof value.base_url === "string" ? { host: canonicalHost(value.base_url) } : {}),
+  }
+}
+
+function canonicalRemote(remote: string): { host: string; path: string } | null {
+  const scp = /^(?:[^@\s]+@)?([^:/\s]+):(.+)$/.exec(remote)
+  if (scp && !remote.includes("://")) {
+    return { host: scp[1].toLowerCase(), path: scp[2].replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "") }
+  }
+  try {
+    const url = new URL(remote)
+    return { host: url.host.toLowerCase(), path: url.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "") }
+  } catch {
+    return null
+  }
+}
+
+function registryConfidence(
+  change: TrustedForgeChange,
+  entry: RepoRegistryEntry,
+  input: ForgeSourceMatchInput,
+): ForgeSourceMatchConfidence | null {
+  const metadata = entry.forge_metadata
+  const targetPath = change.target.repository.path.toLowerCase()
+  if (metadata?.forge === change.provider && metadata.repo_path?.toLowerCase() === targetPath) {
+    const metadataHost = canonicalHost(metadata.base_url)
+    if (metadataHost === change.host) return "explicit-metadata"
+    const integration = configuredIntegration(input, change.provider)
+    if (!metadata.base_url && integration.enabled && integration.host === change.host) return "integration-base-url"
+    if (!metadata.base_url && change.host === `${change.provider}.com`) return "integration-base-url"
+  }
+
+  const integration = configuredIntegration(input, change.provider)
+  if (!integration.enabled || (integration.host && integration.host !== change.host)) return null
+  const remotes = input.remote_urls?.[entry.name] ?? []
+  const matches = remotes
+    .slice(0, 8)
+    .map(canonicalRemote)
+    .filter((remote): remote is { host: string; path: string } => remote !== null)
+    .some((remote) => remote.host === change.host && remote.path.toLowerCase() === targetPath)
+  return matches ? "remote-inference" : null
+}
+
+export function suggestForgeWorkspaceName(
+  change: TrustedForgeChange,
+  existingNames: readonly string[] = [],
+): string {
+  const repository = change.target.repository.path.split("/").at(-1) ?? "review"
+  const kind = change.provider === "gitlab" ? "mr" : "pr"
+  const branch = change.source.branch.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[.-]+|[.-]+$/g, "")
+  let base = `${repository}-${kind}-${change.change_number}${branch ? `-${branch}` : ""}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+  if (!NameSchema.safeParse(base).success) base = `review-${kind}-${change.change_number}`
+  const occupied = new Set(existingNames)
+  if (!occupied.has(base)) return base
+  let suffix = 2
+  while (occupied.has(`${base}-${suffix}`)) suffix += 1
+  return `${base}-${suffix}`
+}
+
+export function matchForgeSourceRepository(
+  change: TrustedForgeChange,
+  input: ForgeSourceMatchInput,
+): ForgeSourceMatchResult {
+  const ranked = input.registry
+    .filter((entry) => !input.repository_name || entry.name === input.repository_name)
+    .map((entry) => ({ entry, confidence: registryConfidence(change, entry, input) }))
+    .filter((candidate): candidate is { entry: RepoRegistryEntry; confidence: ForgeSourceMatchConfidence } => candidate.confidence !== null)
+  if (ranked.length === 0) return { ok: false, error: "repo_not_matched" }
+
+  const rank: Record<ForgeSourceMatchConfidence, number> = {
+    "explicit-metadata": 3,
+    "integration-base-url": 2,
+    "remote-inference": 1,
+  }
+  const strongest = Math.max(...ranked.map((candidate) => rank[candidate.confidence]))
+  const repositoryMatches = ranked.filter((candidate) => rank[candidate.confidence] === strongest)
+  if (repositoryMatches.length !== 1) return { ok: false, error: "ambiguous_repo" }
+  const repositoryMatch = repositoryMatches[0]
+
+  const templates = input.template_name
+    ? input.templates.filter((template) => template.name === input.template_name)
+    : [...input.templates]
+  const matchingTemplateRepos = templates.flatMap((template) => template.repos
+    .filter((repo) => repo.repo === repositoryMatch.entry.name)
+    .map((repo) => ({ template, repo })))
+  if (matchingTemplateRepos.length === 0) return { ok: false, error: "template_repo_missing" }
+  if (matchingTemplateRepos.some(({ repo }) => repositoryMatch.entry.is_dir || (repo.mode ?? "worktree") !== "worktree")) {
+    return { ok: false, error: "not_worktree_mode" }
+  }
+
+  const candidates = matchingTemplateRepos.map(({ template, repo }) => ({
+    registry_name: repositoryMatch.entry.name,
+    template_name: template.name,
+    template_repository_name: repo.repo,
+    mode: "worktree" as const,
+    confidence: repositoryMatch.confidence,
+  }))
+  return {
+    ok: true,
+    match: candidates[0],
+    candidates,
+    suggested_name: suggestForgeWorkspaceName(change, input.existing_workspace_names),
+  }
 }
 
 const githubRepository = z.object({
