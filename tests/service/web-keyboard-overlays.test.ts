@@ -250,6 +250,26 @@ describe("web singleton keyboard overlays", () => {
     overlay.input.dispatch("keydown", { key: "Enter" })
     expect(selected).toEqual([])
   })
+
+  test("keeps one long result accessible without truncating its full label", () => {
+    const { controller } = harness()
+    const opened = controller.open({ id: "workspace", title: "Switch workspace", closeLabel: "Close workspace switcher", returnTarget: "term" })
+    const longName = "A workspace name that intentionally exceeds the visible row width while remaining available to assistive technology"
+    mountFuzzyOverlay(opened.view!, {
+      inputLabel: "Search active workspaces and repositories",
+      emptyHeading: "No active workspaces",
+      emptyBody: "Create or unarchive a workspace to switch here.",
+      noMatch: "No workspaces or repositories match.",
+      items: [{ id: "only", name: longName, detail: "repository-with-a-long-name / branch-with-a-long-name" }],
+      stableId: (item) => item.id,
+      fields: (item) => [{ text: item.name, weight: 3 }],
+      render: (item) => ({ primary: item.name, secondary: item.detail }),
+      select: () => undefined,
+    })
+    const option = opened.view?.body.querySelector("[role='option']")
+    expect(option?.title).toContain(longName)
+    expect(option?.getAttribute("aria-selected")).toBe("true")
+  })
 })
 
 describe("web authoritative shortcut overlays", () => {
@@ -407,6 +427,7 @@ describe("web authoritative shortcut overlays", () => {
 
   test("wires the executable overlay implementation to service authority without browser persistence", async () => {
     const source = await readFile(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
+    const css = await readFile(new URL("../../packages/web/src/app.css", import.meta.url), "utf8")
     expect(source).toContain("createSingletonOverlayController")
     expect(source).toContain("mountFuzzyOverlay")
     expect(source).toContain("mountShortcutHelp")
@@ -415,5 +436,9 @@ describe("web authoritative shortcut overlays", () => {
     expect(source).toContain('id="next-attention"')
     expect(source).toContain('id="keyboard-shortcuts"')
     expect(source).not.toContain("localStorage")
+    expect(css).toContain(".overlay-result.active")
+    expect(css).toContain(".shortcut-row.capturing")
+    expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*\.toolbar-discovery \{ width: 32px;/)
+    expect(css).not.toMatch(/@media \(max-width: 640px\)[\s\S]*\.toolbar-discovery[^}]*display:\s*none/)
   })
 })
