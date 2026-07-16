@@ -235,8 +235,10 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   let latestAggregate: WorkspaceSnapshotResponse[] | undefined
   let latestCatalog: WorkspaceCatalog | undefined
   const loadConfig = (): GlobalConfig => typeof dependencies.config === "function" ? dependencies.config() : dependencies.config
-  async function project(workspace: IdentityWorkspace, config: GlobalConfig) {
+  async function project(workspace: IdentityWorkspace, config: GlobalConfig, signal?: AbortSignal) {
+    signal?.throwIfAborted()
     const status = await dependencies.getWorkspaceStatus(workspace)
+    signal?.throwIfAborted()
     const root = join(getTasksDir(config.workspace_root), workspace.name)
     const fileStatus = dependencies.getWorkspaceFileStatus(workspace, root)
     const commands = dependencies.listManualCommands(workspace)
@@ -245,6 +247,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       config,
       skipSecrets: true,
     })
+    signal?.throwIfAborted()
     const redacted: string[] = []
     const references: Record<string, string> = {}
     for (const [key, value] of Object.entries(workspace.env ?? {})) {
@@ -313,14 +316,17 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     }
   }
 
-  async function projectStable(name: string, config: GlobalConfig): Promise<Awaited<ReturnType<typeof project>> | null> {
+  async function projectStable(name: string, config: GlobalConfig, signal?: AbortSignal): Promise<Awaited<ReturnType<typeof project>> | null> {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
+        signal?.throwIfAborted()
         const workspace = dependencies.ensureWorkspaceIdentity(name)
         if (workspace.archived === true) return null
         const before = await dependencies.fingerprint(workspace)
-        const projection = await project(workspace, config)
+        signal?.throwIfAborted()
+        const projection = await project(workspace, config, signal)
         const after = await dependencies.fingerprint(workspace)
+        signal?.throwIfAborted()
         if (before !== after) continue
         return projection
       } catch (error) {
@@ -333,15 +339,15 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     throw new SnapshotBusyError(3)
   }
 
-  async function buildWorkspace(name: string, requestId = `req_${randomUUID().replaceAll("-", "")}`): Promise<WorkspaceSnapshotResponse> {
-    const projection = await projectStable(name, loadConfig())
+  async function buildWorkspace(name: string, requestId = `req_${randomUUID().replaceAll("-", "")}`, signal?: AbortSignal): Promise<WorkspaceSnapshotResponse> {
+    const projection = await projectStable(name, loadConfig(), signal)
     if (!projection) throw new Error(`Workspace '${name}' not found.`)
     const revision = await dependencies.revisionStore.update(digest(projection))
     return WorkspaceSnapshotResponseSchema.parse({ protocol: "v1", request_id: requestId, ok: true, revision, generated_at: dependencies.clock().toISOString(), workspace: projection })
   }
 
-  async function buildAll(): Promise<WorkspaceSnapshotResponse[]> {
-    return (await buildCatalog()).workspaces
+  async function buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]> {
+    return (await buildCatalog(signal)).workspaces
   }
 
   function archivedActivity(workspace: IdentityWorkspace): string {
@@ -350,7 +356,8 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return Date.parse(archivedAt) >= Date.parse(persisted) ? archivedAt : persisted
   }
 
-  async function buildCatalog(): Promise<WorkspaceCatalog> {
+  async function buildCatalog(signal?: AbortSignal): Promise<WorkspaceCatalog> {
+    signal?.throwIfAborted()
     const names = [...dependencies.listWorkspaceNames()].sort((a, b) => a.localeCompare(b))
     const config = loadConfig()
     // One aggregate generation owns one revision. Per-workspace concurrent
@@ -358,6 +365,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     const projections = []
     const archived: ArchivedWorkspaceSummary[] = []
     for (const name of names) {
+      signal?.throwIfAborted()
       let definition: IdentityWorkspace
       try {
         definition = dependencies.ensureWorkspaceIdentity(name)
@@ -369,7 +377,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
         archived.push({ id: definition.id, name: definition.name, activity_at: archivedActivity(definition) })
         continue
       }
-      const projection = await projectStable(name, config)
+      const projection = await projectStable(name, config, signal)
       if (projection) {
         projections.push(projection)
         continue
@@ -383,6 +391,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
         if (workspaceDefinitionExists(name)) throw error
       }
     }
+    signal?.throwIfAborted()
     archived.sort((left, right) => Date.parse(right.activity_at) - Date.parse(left.activity_at)
       || left.name.localeCompare(right.name)
       || left.id.localeCompare(right.id))
@@ -401,14 +410,16 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return aggregateRevision
   }
 
-  async function resolveTerminalLaunch(request: TerminalLaunchResolutionRequest): Promise<TerminalLaunchResolution> {
+  async function resolveTerminalLaunch(request: TerminalLaunchResolutionRequest, signal?: AbortSignal): Promise<TerminalLaunchResolution> {
+    signal?.throwIfAborted()
     // The client can only request a terminal from a snapshot it already
     // received. Reuse that exact aggregate instead of running Git status for
     // every workspace again on the latency-sensitive shell creation path.
     // A missing or mismatched generation still forces an authoritative rebuild.
     const snapshots = latestAggregate !== undefined && aggregateRevision === request.expected_revision
       ? latestAggregate
-      : await buildAll()
+      : await buildAll(signal)
+    signal?.throwIfAborted()
     const snapshot = snapshots.find((entry) => entry.workspace.id === request.workspace_id)
     const fail = (code: "not_found" | "conflict" | "operation_failed", message: string): TerminalLaunchResolution =>
       TerminalLaunchResolutionSchema.parse({ resolved: false, error: { code, message } })
@@ -419,6 +430,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     const base = snapshot.workspace.launch
     let agentEnvironment: Record<string, string> = {}
     try {
+      signal?.throwIfAborted()
       dependencies.ensureAgentSignals?.(repository.path, snapshot.workspace.name)
       agentEnvironment = dependencies.prepareAgentSignals?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
     } catch (error) {
@@ -431,6 +443,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
         GIT_STACKS_AGENT_INTEGRATION_ERROR: error instanceof Error ? error.message : String(error),
       }
     }
+    signal?.throwIfAborted()
     const shellEnvironment = { ...base.environment, ...agentEnvironment }
     if (!request.command_id) {
       const shell = process.env.SHELL || "/bin/sh"

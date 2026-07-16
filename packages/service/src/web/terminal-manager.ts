@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto"
 
 import { spawn as spawnPty } from "node-pty"
-import type { Signal } from "@git-stacks/protocol"
+import type { Signal, TerminalLaunchResolution } from "@git-stacks/protocol"
 import type { SnapshotAdapter } from "../snapshot-adapter"
 import type { TerminalAttachment } from "../terminal-attachment"
 import {
@@ -16,6 +16,7 @@ export const WEB_TERMINAL_MAX_PER_PRINCIPAL = 16
 export const WEB_TERMINAL_REPLAY_BYTES = 1024 * 1024
 export const WEB_TERMINAL_SOCKET_PRESSURE_BYTES = 512 * 1024
 export const WEB_TERMINAL_ENDED_RETENTION_MS = 60 * 60 * 1_000
+export const WEB_TERMINAL_LAUNCH_RESOLUTION_TIMEOUT_MS = 10_000
 
 type OutputChunk = { cursor: bigint; bytes: Uint8Array }
 type Attachment = { socket: TerminalAttachment; ack: bigint; pressured: boolean; streaming: boolean }
@@ -82,6 +83,12 @@ export type WorkspaceTerminalCloseResult =
   | { ok: true; status: "closed"; requested: number; closed: number; failed: 0 }
   | { ok: false; status: "cleanup_failed"; requested: number; closed: number; failed: number }
 
+export type WebTerminalManagerTiming = {
+  launchResolutionTimeoutMs?: number
+  setTimeout?: (callback: () => void, delayMs: number) => unknown
+  clearTimeout?: (handle: unknown) => void
+}
+
 function terminalId(): string { return `term_${randomBytes(16).toString("base64url")}` }
 function activityId(session: Session, signal: Pick<TerminalSignal, "provider" | "sessionId">): string {
   return `sig_${createHash("sha256").update(`${session.surfaceId}\0${signal.provider}\0${signal.sessionId}`).digest("hex").slice(0, 32)}`
@@ -115,6 +122,7 @@ export class WebTerminalManager {
     private readonly spawn: PtyFactory = productionPty,
     private readonly workspaceLifecycleAdmission: Pick<WorkspaceLifecycleAdmission, "admitTerminal"> = createWorkspaceLifecycleAdmission(),
     private readonly closeTimeoutMs = 1_000,
+    private readonly timing: WebTerminalManagerTiming = {},
   ) {}
 
   get activeCount(): number { return [...this.sessions.values()].filter((session) => session.state === "starting" || session.state === "running" || session.state === "closing").length }
@@ -146,7 +154,7 @@ export class WebTerminalManager {
     }
     const admission = this.workspaceLifecycleAdmission.admitTerminal(input.workspace_id)
     try {
-      const resolution = await this.snapshot.resolveTerminalLaunch({
+      const resolution = await this.resolveTerminalLaunch({
         workspace_id: input.workspace_id,
         repository_id: input.repository_id,
         ...(input.command_id ? { command_id: input.command_id } : {}),
@@ -229,6 +237,48 @@ export class WebTerminalManager {
     } finally {
       admission.release()
     }
+  }
+
+  private resolveTerminalLaunch(
+    request: Parameters<NonNullable<SnapshotAdapter["resolveTerminalLaunch"]>>[0],
+  ): Promise<TerminalLaunchResolution> {
+    const resolveLaunch = this.snapshot.resolveTerminalLaunch!
+    const controller = new AbortController()
+    const timeoutMs = this.timing.launchResolutionTimeoutMs ?? WEB_TERMINAL_LAUNCH_RESOLUTION_TIMEOUT_MS
+    const setTimer = this.timing.setTimeout ?? ((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
+    const clearTimer = this.timing.clearTimeout ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>))
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+      let timer: unknown
+      const finish = (settle: () => void) => {
+        if (settled) return
+        settled = true
+        clearTimer(timer)
+        settle()
+      }
+      timer = setTimer(() => {
+        if (settled) return
+        controller.abort()
+        finish(() => reject(Object.assign(new Error(`Terminal launch resolution timed out after ${timeoutMs}ms`), {
+          status: 504,
+          code: "request_timeout",
+        })))
+      }, timeoutMs)
+      ;(timer as { unref?: () => void } | undefined)?.unref?.()
+
+      let pending: Promise<TerminalLaunchResolution>
+      try {
+        pending = resolveLaunch(request, controller.signal)
+      } catch (error) {
+        finish(() => reject(error))
+        return
+      }
+      void pending.then(
+        (resolution) => finish(() => resolve(resolution)),
+        (error) => finish(() => reject(error)),
+      )
+    })
   }
 
   rename(principalId: string, id: string, title: string, mode: "manual" | "automatic"): WebTerminal | undefined {

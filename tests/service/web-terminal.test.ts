@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
-import type { Signal } from "../../packages/protocol/src/service"
+import type { Signal, TerminalLaunchResolution } from "../../packages/protocol/src/service"
 import { createWorkspaceLifecycleAdmission } from "../../packages/service/src/policy/workspace-lifecycle-admission"
 import type { TerminalAttachment } from "../../packages/service/src/terminal-attachment"
 import {
@@ -15,6 +15,12 @@ const WORKSPACE_B = "33333333-3333-4333-8333-333333333333"
 const REPOSITORY = "22222222-2222-4222-8222-222222222222"
 
 type FakeExitBehavior = "term" | "kill" | "never"
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((settle) => { resolve = settle })
+  return { promise, resolve }
+}
 
 function createPtyFactory(behaviors: FakeExitBehavior[]): {
   spawn: PtyFactory
@@ -151,6 +157,78 @@ describe("service-owned web terminal", () => {
     expect(terminal.workspace_id).toBe(WORKSPACE_A)
     expect(manager.activeCount).toBe(0)
     lease.release()
+  })
+
+  test("times out a stalled launch, releases lifecycle admission, and ignores its late resolution", async () => {
+    const admission = createWorkspaceLifecycleAdmission()
+    const ptys = createPtyFactory(["term"])
+    const stalled = deferred<TerminalLaunchResolution>()
+    let attempt = 0
+    let launchSignal: AbortSignal | undefined
+    let timeoutCallback: (() => void) | undefined
+    const resolvedLaunch: TerminalLaunchResolution = { resolved: true, revision: "1", launch: {
+      argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+    } }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async (_request, signal) => {
+        attempt += 1
+        if (attempt === 1) {
+          launchSignal = signal
+          return stalled.promise
+        }
+        return resolvedLaunch
+      },
+    }, undefined, undefined, Date.now, ptys.spawn, admission, 10, {
+      launchResolutionTimeoutMs: 25,
+      setTimeout(callback, delayMs) {
+        expect(delayMs).toBe(25)
+        timeoutCallback = callback
+        return callback
+      },
+      clearTimeout() {},
+    })
+
+    const creating = manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    await Promise.resolve()
+    expect(launchSignal?.aborted).toBe(false)
+
+    let lifecycleGranted = false
+    const lifecycle = admission.acquire(WORKSPACE_A).then((lease) => {
+      lifecycleGranted = true
+      return lease
+    })
+    await Promise.resolve()
+    expect(lifecycleGranted).toBe(false)
+    timeoutCallback?.()
+    await expect(creating).rejects.toMatchObject({ code: "request_timeout", status: 504 })
+    const lease = await lifecycle
+    expect(launchSignal?.aborted).toBe(true)
+    expect(ptys.allocations()).toBe(0)
+
+    stalled.resolve(resolvedLaunch)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(ptys.allocations()).toBe(0)
+
+    lease.release()
+    const recovered = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    expect(recovered.workspace_id).toBe(WORKSPACE_A)
+    expect(ptys.allocations()).toBe(1)
+    await manager.close("browser-1", recovered.id)
   })
 
   test("confirms TERM and KILL exits and reports a never-exiting PTY honestly", async () => {
