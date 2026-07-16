@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gsd-hook-version: 1.34.2
+// gsd-hook-version: 1.7.0
 // Context Monitor - PostToolUse/AfterTool hook (Gemini uses AfterTool)
 // Reads context metrics from the statusline bridge file and injects
 // warnings when context usage is high. This makes the AGENT aware of
@@ -21,6 +21,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const WARNING_THRESHOLD = 35;  // remaining_percentage <= 35%
 const CRITICAL_THRESHOLD = 25; // remaining_percentage <= 25%
@@ -52,29 +53,34 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // Check if context warnings are disabled via config
+    // Check if context warnings are disabled via config.
+    // Collapsed existsSync+readFileSync into a single read guarded by try/catch
+    // (ENOENT or parse error → use defaults, same as old "planningDir absent" branch).
     const cwd = data.cwd || process.cwd();
-    const configPath = path.join(cwd, '.planning', 'config.json');
-    if (fs.existsSync(configPath)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        if (config.hooks?.context_warnings === false) {
-          process.exit(0);
-        }
-      } catch (e) {
-        // Ignore config parse errors
+    try {
+      const configPath = path.join(cwd, '.planning', 'config.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.hooks?.context_warnings === false) {
+        process.exit(0);
       }
+    } catch (e) {
+      // Missing or unparseable config → proceed with defaults (context warnings enabled)
     }
 
     const tmpDir = os.tmpdir();
     const metricsPath = path.join(tmpDir, `claude-ctx-${sessionId}.json`);
 
-    // If no metrics file, this is a subagent or fresh session -- exit silently
-    if (!fs.existsSync(metricsPath)) {
-      process.exit(0);
+    // If no metrics file, this is a subagent or fresh session -- exit silently.
+    // Collapsed existsSync+readFileSync: ENOENT → exit 0 (identical to old !existsSync branch),
+    // other errors rethrow to the outer catch (swallowed → exit 0, as before).
+    let metricsRaw;
+    try {
+      metricsRaw = fs.readFileSync(metricsPath, 'utf8');
+    } catch (e) {
+      if (e && e.code === 'ENOENT') process.exit(0);
+      throw e;
     }
-
-    const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
+    const metrics = JSON.parse(metricsRaw);
     const now = Math.floor(Date.now() / 1000);
 
     // Ignore stale metrics
@@ -95,13 +101,13 @@ process.stdin.on('end', () => {
     let warnData = { callsSinceWarn: 0, lastLevel: null };
     let firstWarn = true;
 
-    if (fs.existsSync(warnPath)) {
-      try {
-        warnData = JSON.parse(fs.readFileSync(warnPath, 'utf8'));
-        firstWarn = false;
-      } catch (e) {
-        // Corrupted file, reset
-      }
+    // Collapsed existsSync+readFileSync: ENOENT or parse error → keep default warnData
+    // (same as old "file absent" branch). firstWarn tracks whether we read a valid sentinel.
+    try {
+      warnData = JSON.parse(fs.readFileSync(warnPath, 'utf8'));
+      firstWarn = false;
+    } catch (e) {
+      // Missing or corrupted sentinel → firstWarn stays true, warnData stays at defaults
     }
 
     warnData.callsSinceWarn = (warnData.callsSinceWarn || 0) + 1;
@@ -125,6 +131,32 @@ process.stdin.on('end', () => {
 
     // Detect if GSD is active (has .planning/STATE.md in working directory)
     const isGsdActive = fs.existsSync(path.join(cwd, '.planning', 'STATE.md'));
+
+    // On CRITICAL with active GSD project, auto-record session state as a
+    // breadcrumb for /gsd-resume-work (#1974). Fire-and-forget subprocess —
+    // doesn't block the hook or the agent. Fires ONCE per CRITICAL session,
+    // guarded by warnData.criticalRecorded to prevent repeated overwrites
+    // of the "crash moment" record on every debounce cycle.
+    if (isCritical && isGsdActive && !warnData.criticalRecorded) {
+      try {
+        // Runtime-agnostic path: this hook lives at <runtime-config>/hooks/
+        // and gsd-tools.cjs lives at <runtime-config>/gsd-core/bin/.
+        // Using __dirname makes this work on Claude Code, OpenCode, Gemini,
+        // Kilo, etc. without hardcoding ~/.claude/.
+        const gsdTools = path.join(__dirname, '..', 'gsd-core', 'bin', 'gsd-tools.cjs');
+        // Coerce usedPct to a safe number in case bridge file is malformed
+        const safeUsedPct = Number(usedPct) || 0;
+        const stoppedAt = `context exhaustion at ${safeUsedPct}% (${new Date().toISOString().split('T')[0]})`;
+        spawn(
+          process.execPath,
+          [gsdTools, 'state', 'record-session', '--stopped-at', stoppedAt],
+          { cwd, detached: true, stdio: 'ignore', windowsHide: true }
+        ).unref();
+        warnData.criticalRecorded = true;
+        // Persist the sentinel so subsequent debounce cycles don't re-fire
+        fs.writeFileSync(warnPath, JSON.stringify(warnData));
+      } catch { /* non-critical — don't let state recording break the hook */ }
+    }
 
     // Build advisory warning message (never use imperative commands that
     // override user preferences — see #884)
@@ -150,7 +182,8 @@ process.stdin.on('end', () => {
 
     const output = {
       hookSpecificOutput: {
-        hookEventName: process.env.GEMINI_API_KEY ? "AfterTool" : "PostToolUse",
+        hookEventName: (data.hook_event_name && data.hook_event_name.trim())
+          || (process.env.GEMINI_API_KEY ? "AfterTool" : "PostToolUse"),
         additionalContext: message
       }
     };
