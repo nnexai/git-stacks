@@ -79,6 +79,19 @@ export type WebShortcutSettings = z.infer<typeof WebShortcutSettingsSchema>
 export const WebShortcutGetRequestSchema = z.strictObject({ platform: WebShortcutPlatformSchema })
 export type WebShortcutGetRequest = z.infer<typeof WebShortcutGetRequestSchema>
 
+const WebShortcutMutationBase = {
+  platform: WebShortcutPlatformSchema,
+  action_id: WebShortcutActionIdSchema,
+  expected_revision: RevisionSchema,
+}
+export const WebShortcutMutationSchema = z.discriminatedUnion("intent", [
+  z.strictObject({ ...WebShortcutMutationBase, intent: z.literal("set-primary"), binding: WebShortcutBindingSchema }),
+  z.strictObject({ ...WebShortcutMutationBase, intent: z.literal("set-aliases"), aliases: WebShortcutAliasesSchema }),
+  z.strictObject({ ...WebShortcutMutationBase, intent: z.literal("unbind") }),
+  z.strictObject({ ...WebShortcutMutationBase, intent: z.literal("reset") }),
+])
+export type WebShortcutMutation = z.infer<typeof WebShortcutMutationSchema>
+
 export const WebPairingExchangeSchema = z.strictObject({ code: z.string().min(32).max(128) })
 export const WebTerminalCreateSchema = z.strictObject({
   workspace_id: EntityIdSchema,
