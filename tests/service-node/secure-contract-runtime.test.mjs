@@ -13,6 +13,21 @@ const scopes = [
   "terminal.read", "terminal.write", "terminal.create", "terminal.close", "target.select",
 ]
 const workspaceId = "11111111-1111-4111-8111-111111111111"
+const repositoryId = "22222222-2222-4222-8222-222222222222"
+
+function activeSnapshot(revision = "7") {
+  const generatedAt = "2026-07-16T12:00:00.000Z"
+  return {
+    protocol: "v1", request_id: "req_abcdefghijklmnop", ok: true, revision, generated_at: generatedAt,
+    workspace: {
+      id: workspaceId, name: "demo", activity_at: generatedAt, branch: "topic", labels: [], priority: 0,
+      repositories: [{ id: repositoryId, name: "app", mode: "worktree", path: "/fixtures/demo/app" }],
+      status: [{ repository_id: repositoryId, name: "app", exists: true, dirty: false, branch: "topic", default_branch: "main", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, remote: "available", degraded: false }],
+      file_status: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0 },
+      launch: { commands: [], environment: {}, redacted: [], references: {}, named: [] },
+    },
+  }
+}
 
 async function connect(descriptor, mode, token) {
   return authenticateSecureCarrier(await connectLocalTls(descriptor.local_tls), {
@@ -29,9 +44,10 @@ async function waitFor(predicate, timeoutMs = 2_000) {
 
 test("secure routing preserves catalog, idempotent operations, ownership, events, and signals", async () => {
   const root = await mkdtemp(join(tmpdir(), "git-stacks-secure-contract-"))
+  let workspaceCreated = false
   const snapshot = {
     currentRevision: async () => "7",
-    buildAll: async () => [],
+    buildAll: async () => workspaceCreated ? [activeSnapshot()] : [],
     buildWorkspace: async () => { throw new Error("unused") },
   }
   const service = await startManagedService({
@@ -42,7 +58,7 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
       client_model: CLIENT_MODEL_LIMITS,
     }),
     workspaceCreate: (request) => ({
-      steps: [{ name: "workspace.create", stage: "executing", message: "Creating", run: async (report) => { await report({ message: "Created" }) } }],
+      steps: [{ name: "workspace.create", stage: "executing", message: "Creating", run: async (report) => { workspaceCreated = true; await report({ message: "Created" }) } }],
       result: { workspace_name: request.name, snapshot_changed: true },
     }),
   })

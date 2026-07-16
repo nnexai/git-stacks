@@ -13,10 +13,26 @@ const scopes = [
   "snapshot.read", "operation.write", "event.read", "signal.read", "signal.dismiss",
   "terminal.read", "terminal.write", "terminal.create", "terminal.close", "target.select",
 ]
+const workspaceId = "11111111-1111-4111-8111-111111111111"
+const repositoryId = "22222222-2222-4222-8222-222222222222"
+
+function activeSnapshot() {
+  const generatedAt = "2026-07-16T12:00:00.000Z"
+  return {
+    protocol: "v1", request_id: "req_abcdefghijklmnop", ok: true, revision: "1", generated_at: generatedAt,
+    workspace: {
+      id: workspaceId, name: "remote-demo", activity_at: generatedAt, branch: "topic", labels: [], priority: 0,
+      repositories: [{ id: repositoryId, name: "app", mode: "worktree", path: "/fixtures/remote-demo/app" }],
+      status: [{ repository_id: repositoryId, name: "app", exists: true, dirty: false, branch: "topic", default_branch: "main", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, remote: "available", degraded: false }],
+      file_status: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0 },
+      launch: { commands: [], environment: {}, redacted: [], references: {}, named: [] },
+    },
+  }
+}
 
 const snapshot = {
   currentRevision: async () => "1",
-  buildAll: async () => [],
+  buildAll: async () => [activeSnapshot()],
   buildWorkspace: async () => { throw new Error("not used") },
   resolveTerminalLaunch: async () => ({
     resolved: true, revision: "1",
@@ -74,13 +90,13 @@ test("a paired helper relays an authenticated target session and rejects a wrong
     const relayed = await localSession(helper.descriptor, launch.token, target.id)
     const discovery = await relayed.rpc.request("service.discovery")
     assert.equal(discovery.protocol, "git-stacks/2")
-    assert.deepEqual(await relayed.rpc.request("snapshot.all"), [])
+    assert.equal((await relayed.rpc.request("snapshot.all"))[0].workspace.id, workspaceId)
     const events = []
     relayed.rpc.observeEvents((event) => events.push(event))
     await relayed.rpc.request("events.subscribe", { cursor: "0" })
     const notification = {
       version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation",
-      workspace_id: "11111111-1111-4111-8111-111111111111", title: "Remote attention",
+      workspace_id: workspaceId, title: "Remote attention",
       occurred_at: new Date().toISOString(),
     }
     await relayed.rpc.request("signals.publish", notification)
@@ -88,8 +104,8 @@ test("a paired helper relays an authenticated target session and rejects a wrong
     assert.deepEqual((await relayed.rpc.request("signals.list")).signals, [notification])
 
     const terminal = await relayed.rpc.request("terminal.create", {
-      workspace_id: "11111111-1111-4111-8111-111111111111",
-      repository_id: "22222222-2222-4222-8222-222222222222",
+      workspace_id: workspaceId,
+      repository_id: repositoryId,
       expected_revision: "1", cols: 80, rows: 24,
     })
     const frames = []
