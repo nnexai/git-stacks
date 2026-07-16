@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@test/api"
 import type { Workspace } from "../../../packages/core/src/config"
+import * as Protocol from "../../../packages/protocol/src/service"
 import {
   SnapshotBusyError,
   createSnapshotBuilder,
@@ -56,6 +57,66 @@ function dependencies(overrides: Record<string, unknown> = {}) {
 }
 
 describe("authoritative service snapshots", () => {
+  test("PHASE123_RED catalog activity ordering contract", async () => {
+    const archived = {
+      ...workspace("archived"),
+      id: "018f47f4-5ab1-7c2d-8e90-123456789abd",
+      created: "2026-07-01T00:00:00.000Z",
+      last_opened: "2026-07-10T00:00:00.000Z",
+      archived: true as const,
+      archived_at: "2026-07-12T00:00:00.000Z",
+    }
+    const active = {
+      ...workspace("active"),
+      id: "018f47f4-5ab1-7c2d-8e90-123456789abe",
+      last_opened: "2026-07-11T09:30:00.000Z",
+    }
+    let activeProjectionReads = 0
+    const builder = createSnapshotBuilder(dependencies({
+      listWorkspaceNames: () => ["archived", "active"],
+      ensureWorkspaceIdentity: (name: string) => name === "archived" ? archived : active,
+      getWorkspaceStatus: async (entry: Workspace) => {
+        if (entry.archived === true) throw new Error("archived definitions must not be projected")
+        activeProjectionReads++
+        return [{ name: "git-stacks", exists: true, dirty: false, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }]
+      },
+    })) as ReturnType<typeof createSnapshotBuilder> & { buildCatalog(): Promise<unknown> }
+
+    const catalog = await builder.buildCatalog()
+    const schema = (Protocol as Record<string, unknown>).WorkspaceCatalogSchema as { parse(value: unknown): Record<string, unknown> }
+    const parsed = schema.parse(catalog)
+    expect(activeProjectionReads).toBe(1)
+    expect(parsed.workspaces).toEqual([expect.objectContaining({
+      workspace: expect.objectContaining({ name: "active", activity_at: active.last_opened }),
+    })])
+    expect(parsed.archived_workspaces).toEqual([{
+      id: archived.id,
+      name: archived.name,
+      activity_at: archived.archived_at,
+    }])
+  })
+
+  test("catalog revision advances through active, all-archived, and archive-only changes", async () => {
+    const store = new MemoryStore()
+    let definition: Workspace & { id: string } = workspace()
+    const builder = createSnapshotBuilder(dependencies({
+      revisionStore: store,
+      ensureWorkspaceIdentity: () => definition,
+    })) as ReturnType<typeof createSnapshotBuilder> & { buildCatalog(): Promise<{ revision: string; workspaces: unknown[]; archived_workspaces: unknown[] }> }
+
+    const active = await builder.buildCatalog()
+    definition = { ...definition, archived: true, archived_at: "2026-07-12T00:00:00.000Z" }
+    const archived = await builder.buildCatalog()
+    definition = { ...definition, archived_at: "2026-07-13T00:00:00.000Z" }
+    const archiveOnlyChange = await builder.buildCatalog()
+
+    expect(active.workspaces).toHaveLength(1)
+    expect(archived.workspaces).toHaveLength(0)
+    expect(archived.archived_workspaces).toHaveLength(1)
+    expect(BigInt(archived.revision)).toBeGreaterThan(BigInt(active.revision))
+    expect(BigInt(archiveOnlyChange.revision)).toBeGreaterThan(BigInt(archived.revision))
+  })
+
   test("retries a raced generation and never returns mixed inputs", async () => {
     const fingerprints = ["a", "b", "c", "c"]
     let statusReads = 0

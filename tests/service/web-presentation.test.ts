@@ -1,5 +1,8 @@
 import { describe, expect, test } from "@test/api"
+import * as ClientPresentation from "../../packages/client/src/presentation"
 import { deduplicateProviderSessions, isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../packages/client/src/presentation"
+import * as ServiceProtocol from "../../packages/protocol/src/service"
+import * as WebProtocol from "../../packages/protocol/src/web"
 
 const base: PresentedSignal = {
   kind: "activity",
@@ -12,6 +15,44 @@ const base: PresentedSignal = {
 }
 
 describe("web signal presentation", () => {
+  test("shared successor order proves every tie tier independently", () => {
+    const order = (ClientPresentation as Record<string, unknown>).workspaceSuccessorOrder as (left: Record<string, unknown>, right: Record<string, unknown>) => number
+    const base = { pinned: false, priority: 10, activity_at: "2026-07-10T00:00:00.000Z", name: "same", id: "018f47f4-5ab1-7c2d-8e90-123456789abc" }
+    expect(order({ ...base, pinned: true }, base)).toBeLessThan(0)
+    expect(order({ ...base, priority: 11 }, base)).toBeLessThan(0)
+    expect(order({ ...base, activity_at: "2026-07-11T00:00:00.000Z" }, base)).toBeLessThan(0)
+    expect(order({ ...base, name: "alpha" }, base)).toBeLessThan(0)
+    expect(order({ ...base, id: "018f47f4-5ab1-7c2d-8e90-123456789abb" }, base)).toBeLessThan(0)
+  })
+
+  test("lifecycle contracts are strict, bounded, and force-specific", () => {
+    const service = ServiceProtocol as Record<string, { safeParse(value: unknown): { success: boolean }; parse(value: unknown): unknown }>
+    const mutation = service.WorkspaceLifecycleMutationSchema
+    const details = service.WorkspaceLifecycleFailureDetailsSchema
+    const result = service.WorkspaceLifecycleResultSchema
+    const id = "018f47f4-5ab1-7c2d-8e90-123456789abc"
+
+    expect(mutation.parse({ kind: "workspace.archive", workspace_id: id, expected_revision: "4" })).toEqual({ kind: "workspace.archive", workspace_id: id, expected_revision: "4" })
+    expect(mutation.parse({ kind: "workspace.force-remove", workspace_id: id, expected_revision: "4", confirmation_name: "alpha" })).toEqual({ kind: "workspace.force-remove", workspace_id: id, expected_revision: "4", confirmation_name: "alpha" })
+    expect(mutation.safeParse({ kind: "workspace.remove", workspace_id: id, expected_revision: "4", confirmation_name: "alpha" }).success).toBe(false)
+    expect(mutation.safeParse({ kind: "workspace.force-remove", workspace_id: id, expected_revision: "4", confirmation_name: "alpha", path: "/tmp/alpha" }).success).toBe(false)
+    expect(details.safeParse({ kind: "workspace_dirty", blocking_repositories: Array.from({ length: 9 }, (_, index) => `repo-${index}`), terminals_stopped: true, force_allowed: true }).success).toBe(false)
+    expect(details.safeParse({ kind: "workspace_dirty", blocking_repositories: ["repo"], terminals_stopped: true, force_allowed: true, path: "/tmp/repo" }).success).toBe(false)
+    expect(result.safeParse({ revision: "5", terminals_stopped: true, path: "/tmp/alpha" }).success).toBe(false)
+  })
+
+  test("trusted and browser active/archive schemas retain only bounded activity fields", () => {
+    const service = ServiceProtocol as Record<string, { safeParse(value: unknown): { success: boolean }; parse(value: unknown): unknown }>
+    const web = WebProtocol as Record<string, { safeParse(value: unknown): { success: boolean }; parse(value: unknown): unknown }>
+    const archived = { id: "018f47f4-5ab1-7c2d-8e90-123456789abc", name: "alpha", activity_at: "2026-07-11T00:00:00.000Z" }
+    expect(service.ArchivedWorkspaceSummarySchema.parse(archived)).toEqual(archived)
+    expect(service.ArchivedWorkspaceSummarySchema.safeParse({ ...archived, path: "/tmp/alpha" }).success).toBe(false)
+    expect(web.WebSnapshotSchema.safeParse({
+      protocol: "web-v1", revision: "1", generated_at: archived.activity_at,
+      pinned_workspace_ids: [], workspaces: [], archived_workspaces: [{ ...archived, repositories: [] }],
+    }).success).toBe(false)
+  })
+
   test("separates attention from recent activity without treating activity as unread", () => {
     expect(signalGroup(base)).toBe("recent-activity")
     expect(signalGroup({ ...base, state: "completed" })).toBe("recent-activity")

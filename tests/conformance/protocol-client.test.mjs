@@ -6,11 +6,13 @@ import {
   OperationIdSchema,
   OperationSchema,
   ServiceEventSchema,
+  WorkspaceLifecycleMutationSchema,
 } from "../../packages/protocol/dist/index.js"
 import {
   deduplicateProviderSessions,
   reduceServiceEvent,
   workspacePriorityOrder,
+  workspaceSuccessorOrder,
 } from "../../packages/client/dist/index.js"
 
 const fixtures = JSON.parse(await readFile(new URL("./fixtures.json", import.meta.url), "utf8"))
@@ -31,6 +33,15 @@ test("shared client priority and provider presentation is deterministic", () => 
   assert.deepEqual(ordered, fixtures.priorityOrder)
   const providers = deduplicateProviderSessions(fixtures.signals).map(({ source }) => source)
   assert.deepEqual(providers, fixtures.activeProviders)
+})
+
+test("shared lifecycle mutation and successor contracts survive package builds", () => {
+  const base = { pinned: false, priority: 10, activity_at: "2026-07-10T00:00:00.000Z", name: "same", id: fixtures.ids.entity }
+  assert.equal(workspaceSuccessorOrder({ ...base, pinned: true }, base) < 0, true)
+  assert.equal(workspaceSuccessorOrder({ ...base, activity_at: "2026-07-11T00:00:00.000Z" }, base) < 0, true)
+  assert.equal(WorkspaceLifecycleMutationSchema.safeParse({
+    kind: "workspace.remove", workspace_id: fixtures.ids.entity, expected_revision: "4", confirmation_name: "alpha",
+  }).success, false)
 })
 
 test("replay gaps advance the cursor and retain recovery bounds", () => {
