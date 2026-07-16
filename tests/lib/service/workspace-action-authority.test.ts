@@ -139,6 +139,26 @@ describe("canonical workspace action authority", () => {
     expect(byId(stale, "workspace.remove").availability).toMatchObject({ available: false, reason: "stale_revision" })
   })
 
+  test("keeps missing, non-worktree, dirty, and closed states explicit", () => {
+    const missing = deriveWorkspaceActionInventory({
+      state: state(),
+      workspaceId: "44444444-4444-4444-8444-444444444444",
+    })
+    expect(missing.every(({ availability }) =>
+      availability.available === false && availability.reason === "workspace_unavailable")).toBe(true)
+
+    const nonWorktree = deriveWorkspaceActionInventory({ state: state({ mode: "dir", remote: "not_applicable" }), workspaceId: ACTIVE_ID })
+    expect(byId(nonWorktree, "workspace.sync").availability).toMatchObject({ available: false })
+    expect(byId(nonWorktree, "workspace.merge").availability).toMatchObject({ available: false, reason: "merge_unavailable" })
+
+    const dirty = deriveWorkspaceActionInventory({ state: state({ dirty: true }), workspaceId: ACTIVE_ID })
+    expect(byId(dirty, "workspace.merge").availability).toMatchObject({ available: false, reason: "merge_unavailable" })
+
+    const closed = deriveWorkspaceActionInventory({ state: state(), workspaceId: ACTIVE_ID, openState: "closed" })
+    expect(byId(closed, "workspace.open").availability).toEqual({ available: true })
+    expect(byId(closed, "workspace.close").availability).toMatchObject({ available: false, reason: "workspace_closed" })
+  })
+
   test("exposes Force Remove only from a fresh typed dirty inspection after terminals stopped", () => {
     const failures = [
       undefined,
