@@ -388,6 +388,8 @@ export class ForgeSourceReviewAuthority {
       canonicalUrl: record.canonicalUrl,
     })
     if (!reserved.ok) return reserved
+    const binding = reserved.reservation.record.binding
+    if (!binding) return { ok: false, failure: safeFailure("review_expired") }
     const existing = this.admissions.get(input.token)
     if (existing) return existing
     const admission = this.admitReserved(reserved.reservation, input.idempotencyKey)
@@ -396,18 +398,20 @@ export class ForgeSourceReviewAuthority {
       const result = await admission
       if (!result.ok) {
         this.admissions.delete(input.token)
-        if (correctableBeforeCommit(result.failure)) this.releaseBinding(reserved.reservation.record)
+        if (correctableBeforeCommit(result.failure)) this.releaseBinding(reserved.reservation.record, binding)
       }
       return result
     } catch (error) {
       this.admissions.delete(input.token)
-      this.releaseBinding(reserved.reservation.record)
+      this.releaseBinding(reserved.reservation.record, binding)
       throw error
     }
   }
 
   private async admitReserved(reservation: ForgeReviewReservation, idempotencyKey: string): Promise<ReviewedCreateAdmissionResult> {
     const { record, draft } = reservation
+    const binding = record.binding
+    if (!binding) return { ok: false, failure: safeFailure("review_expired") }
     const current = await this.options.catalog()
     if (current.revision !== record.revision) return { ok: false, failure: safeFailure("stale_revision") }
 
@@ -485,14 +489,21 @@ export class ForgeSourceReviewAuthority {
     const operationIdentity = `review_${requestHash({ token: reservation.token, idempotencyKey }).slice(0, 32)}`
     let started = false
     let cleanupPending: (() => Promise<void>) | undefined
+    let releaseAfterCleanup = false
     const cleanupPrepared = async () => {
-      if (!cleanupPending) return
-      await cleanupPending()
-      cleanupPending = undefined
+      if (cleanupPending) {
+        await cleanupPending()
+        cleanupPending = undefined
+      }
+      if (releaseAfterCleanup && record.binding === binding) {
+        this.releaseBinding(record, binding)
+        this.admissions.delete(reservation.token)
+        releaseAfterCleanup = false
+      }
     }
     const abortAdmission = async () => {
       if (!started) {
-        this.releaseBinding(record)
+        this.releaseBinding(record, binding)
         this.admissions.delete(reservation.token)
         return
       }
@@ -527,6 +538,7 @@ export class ForgeSourceReviewAuthority {
                 this.records.delete(reservation.token)
                 this.admissions.delete(reservation.token)
               }
+              if (code === "branch_conflict") releaseAfterCleanup = true
               throw reviewedOperationFailure(safeFailure(code, record.trustedSource.provider))
             }
             cleanupPending = prepared.cleanup
@@ -564,8 +576,8 @@ export class ForgeSourceReviewAuthority {
     return { ok: true, execution, cleanup: abortAdmission }
   }
 
-  private releaseBinding(record: TrustedForgeReview): void {
-    delete record.binding
+  private releaseBinding(record: TrustedForgeReview, binding: ReviewBinding): void {
+    if (record.binding === binding) delete record.binding
   }
 
   private draftBelongsToRecord(record: TrustedForgeReview, draft: WebReviewedWorkspaceDraft): boolean {

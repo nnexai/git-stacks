@@ -30,6 +30,7 @@ import type { WebTerminalManager } from "./web/terminal-manager"
 import { createDynamicEnvironmentStore, type DynamicEnvironmentStore } from "./policy/dynamic-environment"
 import type { SecureServiceRouterOptions } from "./secure/router"
 import { ForgeSourceReviewAuthority } from "./policy/forge-source-review"
+import { initializeOperationRecovery, recoverReviewedSourceRefs } from "./policy/reviewed-source-recovery"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
@@ -416,7 +417,10 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
         if (operation.state === "succeeded" && operation.result?.snapshot_changed === true) await monitor.invalidate()
       },
     })
-    await operations.initialize()
+    await initializeOperationRecovery({
+      initializeOperations: () => operations.initialize(),
+      recoverReviewedSources: () => recoverReviewedSourceRefs({ repositories: readRegistry() }),
+    })
     const { startSecureServiceRuntime } = await import("./secure/runtime.js")
     let running: Awaited<ReturnType<typeof startSecureServiceRuntime>>
     let stopManaged: () => Promise<void> = async () => { await running.stop() }

@@ -441,7 +441,14 @@ export async function fetchSourceRef(
 }
 
 export async function deleteRef(repoPath: string, ref: string): Promise<void> {
-  await $`git -C ${repoPath} update-ref -d ${ref}`.quiet().nothrow()
+  const result = await $`git -C ${repoPath} update-ref -d ${ref}`.quiet().nothrow()
+  if (result.exitCode !== 0) throw new Error("Git ref deletion failed")
+}
+
+export async function listRefsByPrefix(repoPath: string, prefix: string): Promise<string[]> {
+  const result = await $`git -C ${repoPath} for-each-ref --format=${"%(refname)"} ${prefix}`.quiet().nothrow()
+  if (result.exitCode !== 0) throw new Error("Git ref listing failed")
+  return result.stdout.toString().split("\n").map((ref) => ref.trim()).filter(Boolean)
 }
 
 export async function resolveRef(repoPath: string, ref: string): Promise<{ ok: true; sha: string } | { ok: false; error: string }> {

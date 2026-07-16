@@ -1,7 +1,7 @@
 import { type RepoRegistryEntry, type WorkspaceRepo, type WorkspaceSource } from "./config"
 import { createHash } from "node:crypto"
 
-import { checkBranchExists, deleteRef, fetchSourceRef, resolveRef } from "./git"
+import { checkBranchExists, deleteRef, fetchSourceRef, listRefsByPrefix, resolveRef } from "./git"
 import { parseForgeSourceUrl, type ForgeSourceId, type ForgeSourceResolutionError } from "./integrations/forge-source"
 import { resolveForgeChangeSource, type TrustedForgeChange } from "./integrations/forge-source-resolver"
 
@@ -56,9 +56,19 @@ export type PreparedReviewedWorkspaceSource = PreparedWorkspaceSource & { cleanu
 export const _source = {
   fetchSourceRef,
   deleteRef,
+  listRefsByPrefix,
   resolveRef,
   checkBranchExists,
   resolveForgeChangeSource,
+}
+
+const REVIEWED_SOURCE_REF_PREFIX = "refs/git-stacks/review/"
+
+export async function cleanupReviewedWorkspaceSourceRefs(repoPath: string): Promise<number> {
+  const refs = await _source.listRefsByPrefix(repoPath, REVIEWED_SOURCE_REF_PREFIX)
+  const reviewedRefs = refs.filter((ref) => ref.startsWith(REVIEWED_SOURCE_REF_PREFIX))
+  for (const ref of reviewedRefs) await _source.deleteRef(repoPath, ref)
+  return reviewedRefs.length
 }
 
 function sanitizeBranch(raw: string): string | null {
@@ -76,7 +86,7 @@ function privateSourceRef(inputs: PrepareReviewedWorkspaceSourceInputs): string 
     .update(inputs.matched_repo.repo)
     .digest("hex")
     .slice(0, 24)
-  return `refs/git-stacks/review/${inputs.matched_repo.repo}/${digest}`
+  return `${REVIEWED_SOURCE_REF_PREFIX}${inputs.matched_repo.repo}/${digest}`
 }
 
 function trustedFetchUrl(source: TrustedForgeChange["source"]): string | null {

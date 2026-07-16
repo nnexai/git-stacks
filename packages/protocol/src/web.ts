@@ -394,6 +394,7 @@ const WebOperationErrorSummarySchema = z.strictObject({
   code: utf8BoundedString(96, 1),
   message: SafeBrowserMessageSchema,
   retryable: z.boolean(),
+  forge: z.lazy(() => WebForgeErrorDetailsSchema).optional(),
 })
 export const WebOperationSummarySchema = z.discriminatedUnion("state", [
   z.strictObject({

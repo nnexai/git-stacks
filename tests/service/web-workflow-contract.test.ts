@@ -162,6 +162,23 @@ describe("web workflow protocol contract", () => {
     expect(WebOperationSummarySchema.parse(running)).toEqual(running)
     expect(WebOperationSummarySchema.parse(succeeded)).toEqual(succeeded)
     expect(WebOperationSummarySchema.parse(failed)).toEqual(failed)
+    const forgeFailed = {
+      ...failed,
+      error: {
+        ...failed.error,
+        forge: {
+          kind: "forge_failure" as const,
+          reason: "branch_conflict" as const,
+          recovery: "change_branch" as const,
+          context: { kind: "provider" as const, provider: "github" as const },
+        },
+      },
+    }
+    expect(WebOperationSummarySchema.parse(forgeFailed)).toEqual(forgeFailed)
+    expect(WebOperationSummarySchema.safeParse({
+      ...forgeFailed,
+      error: { ...forgeFailed.error, forge: { ...forgeFailed.error.forge, path: "/private/path" } },
+    }).success).toBe(false)
     expect(WebOperationSummarySchema.safeParse({ ...running, progress: { ...running.progress, data: { cwd: "/secret" } } }).success).toBe(false)
     expect(WebOperationSummarySchema.safeParse({ ...running, result: { raw: "provider output" } }).success).toBe(false)
     expect(WebOperationSummarySchema.safeParse({ ...running, action_id: "workspace.notes.list", cancellation: { state: "available" } }).success).toBe(false)
