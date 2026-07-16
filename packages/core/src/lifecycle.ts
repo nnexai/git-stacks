@@ -180,11 +180,11 @@ export async function runHooksCapturedWithExecutor(
       stderr: "pipe",
       signal,
     })
-    await Promise.all([
+    const [, , exitCode] = await Promise.all([
       readOutputStream(handle.stdout!, "stdout", onOutput),
       readOutputStream(handle.stderr!, "stderr", onOutput),
+      handle.exited,
     ])
-    const exitCode = await handle.exited
     results.push({ exitCode, failed: exitCode !== 0, command })
     if (abortOnFailure && exitCode !== 0) break
   }
@@ -241,11 +241,11 @@ export async function runShellSequenceCaptured(
       stderr: "pipe",
       signal,
     })
-    await Promise.all([
+    const [, , exitCode] = await Promise.all([
       readOutputStream(handle.stdout!, "stdout", onOutput),
       readOutputStream(handle.stderr!, "stderr", onOutput),
+      handle.exited,
     ])
-    const exitCode = await handle.exited
     if (exitCode !== 0) return { exitCode, failedCommand: command }
   }
   return { exitCode: 0 }
