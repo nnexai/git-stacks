@@ -154,6 +154,24 @@ describe("service v1 contract", () => {
     expect(() => TerminalLaunchResolutionSchema.parse({ ...resolution, launch: { ...resolution.launch, references: { TOKEN: "secret://token" } } })).toThrow()
   })
 
+  test("PHASE124_RED terminal steps SSH rotation contract", () => {
+    const commandResolution = {
+      resolved: true,
+      revision: "7",
+      launch: {
+        steps: [
+          { bucket: "pre", scope: "workspace", command: "prepare", cwd: "/work", environment: { PATH: "/phase124/bin" } },
+          { bucket: "main", scope: "repo", command: "run --exact '$VALUE'", cwd: "/work/repo", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", repository_name: "repo", environment: { SSH_AUTH_SOCK: "/tmp/phase124-agent.sock" } },
+          { bucket: "post", scope: "workspace", command: "cleanup", cwd: "/work", environment: {} },
+        ],
+        ports: {},
+        configuration: { command_id: "cmd_0123456789abcdef", shell: false },
+        redacted: ["TOKEN"],
+      },
+    }
+    expect(() => TerminalLaunchResolutionSchema.parse(commandResolution), "PHASE124_RED terminal steps SSH rotation contract").not.toThrow()
+  })
+
   test("validates activity states and strict signal identity nesting", () => {
     for (const state of ["working", "waiting", "completed", "failed", "idle"] as const) {
       expect(SignalSchema.parse({ version: 1, kind: "activity", id: `sig_0123456789abcde${state.length}`, state, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012346", session_id: "session-a", source: "claude", title: state, occurred_at: "2026-07-11T00:00:00.000Z" }).state).toBe(state)
