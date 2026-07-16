@@ -54,6 +54,21 @@ describe("forge resolve-review-create coordinator", () => {
     expect(validateForgeReviewDraft(after.phase === "review" ? after.draft : resolution.draft)).toEqual({ valid: true, fields: {} })
   })
 
+  test("locally flags edited selections outside the resolved candidates without submitting", async () => {
+    const create = vi.fn()
+    const coordinator = createForgeReviewCoordinator({ resolve: vi.fn(async () => resolution), create })
+    coordinator.setUrl(url)
+    await coordinator.resolve()
+
+    coordinator.edit({ kind: "template", name: "missing-template" })
+    expect(coordinator.state()).toMatchObject({
+      phase: "review",
+      validation: { valid: false, fields: { template_name: "Select a resolved template." } },
+    })
+    expect(await coordinator.create()).toMatchObject({ status: "invalid" })
+    expect(create).not.toHaveBeenCalled()
+  })
+
   test("submits the complete reviewed draft once under rapid activation", async () => {
     let accept!: (value: { operationId: string }) => void
     const create = vi.fn(() => new Promise<{ operationId: string }>((resolve) => { accept = resolve }))
