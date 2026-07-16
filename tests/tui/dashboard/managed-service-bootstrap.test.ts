@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { ServiceDescriptor } from "../../../packages/service/src/main"
 import { ensureManagedServiceProcess } from "../../../packages/service/src/main"
 
@@ -42,5 +44,21 @@ describe("TUI managed service bootstrap", () => {
       async () => { events.push("terminal.create") },
     )).rejects.toThrow("unauthorized")
     expect(events).not.toContain("terminal.create")
+  })
+
+  test("PHASE124_RED local launchers await refresh before browser, TUI, or managed-process launch", () => {
+    const root = join(import.meta.dirname, "../../..")
+    const dashboard = readFileSync(join(root, "packages/tui/src/run.tsx"), "utf8")
+    const web = readFileSync(join(root, "packages/cli/src/commands/web.ts"), "utf8")
+    const cli = readFileSync(join(root, "packages/cli/src/lib/cli-program.ts"), "utf8")
+
+    expect(dashboard.indexOf("await prepareLocalServiceEnvironment()"), "direct TUI refresh must precede rendering")
+      .toBeGreaterThanOrEqual(0)
+    expect(dashboard.indexOf("await prepareLocalServiceEnvironment()"))
+      .toBeLessThan(dashboard.indexOf("await render("))
+    expect(web.indexOf("await prepareLocalServiceEnvironment()"), "web refresh must precede browser launch")
+      .toBeLessThan(web.indexOf("await createBrowserLaunch("))
+    expect(cli.indexOf("await prepareLocalServiceEnvironment()"), "manage refresh must precede TUI spawn")
+      .toBeLessThan(cli.indexOf("spawn([executable]"))
   })
 })
