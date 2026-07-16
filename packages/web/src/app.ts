@@ -3,8 +3,8 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, workspacePriorityOrder } from "@git-stacks/client"
-import type { WebRepository as Repository, WebSnapshot as Snapshot, WebTerminal as TerminalMeta, WebWorkspace as Workspace, Signal, WorkspaceCreationCatalog as Catalog, SecureScope } from "@git-stacks/protocol"
+import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
+import type { WebOperation, WebRepository as Repository, WebSnapshot as Snapshot, WebTerminal as TerminalMeta, WebWorkspace as Workspace, Signal, WorkspaceCreationCatalog as Catalog, SecureScope, WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
 
 if (window.top !== window) {
@@ -122,6 +122,15 @@ function toast(message: string, error = false): void {
   node.setAttribute("role", error ? "alert" : "status")
   toastRegion.append(node)
   window.setTimeout(() => node.remove(), 6000)
+}
+function actionToast(message: string, label: string, action: () => void): void {
+  const node = element("div", "toast toast-action")
+  node.setAttribute("role", "status")
+  const control = button(label, "button")
+  control.addEventListener("click", () => { node.remove(); action() })
+  node.append(element("span", "", message), control)
+  toastRegion.append(node)
+  window.setTimeout(() => node.remove(), 10_000)
 }
 
 class TerminalView {
@@ -357,7 +366,7 @@ class TerminalView {
     }, 120)
   }
   private send(message: unknown): void { this.socket?.send(message) }
-  private dispose(): void {
+  dispose(): void {
     this.disposed = true
     if (this.ackTimer !== undefined) clearTimeout(this.ackTimer)
     if (this.titleTimer !== undefined) clearTimeout(this.titleTimer)
@@ -385,8 +394,10 @@ let signals: Signal[] = []
 let eventCursor = "0"
 const terminalViews = new Map<string, TerminalView>()
 const pendingWorkspaceCreations = new Map<string, string>()
+const pendingLifecycleOperations = new Set<string>()
+let activeModalClose: (() => void) | undefined
 
-app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
+app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button" id="archived" type="button">Archived</button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
 const nav = document.querySelector<HTMLUListElement>("#nav")!
 const scope = document.querySelector<HTMLElement>("#scope")!
@@ -417,6 +428,11 @@ function selectPair(pair: Pair): void {
   activeTerminalId = first?.id
   renderAll()
   void refreshSignals()
+}
+
+const workspaceLifecycleActionRegistry = {
+  archive: (workspace: Workspace) => { void archiveWorkspace(workspace) },
+  remove: (workspace: Workspace) => { showRemoveConfirmation(workspace) },
 }
 
 function attentionCount(workspaceId: string, repositoryId?: string, surfaceId?: string): number {
@@ -579,6 +595,8 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
       { label: "Run configured command…", run: showLauncher },
       { label: "Open workspace", run: () => void workspaceOperation("workspace.open", workspace) },
       { label: "Close workspace", run: () => void workspaceOperation("workspace.close", workspace), destructive: true },
+      { label: "Archive", run: () => workspaceLifecycleActionRegistry.archive(workspace) },
+      { label: "Remove…", run: () => workspaceLifecycleActionRegistry.remove(workspace), destructive: true },
     ])
   })
   const pin = button(pinned ? "★" : "☆", `pin-button${pinned ? " pin" : ""}`)
@@ -647,6 +665,8 @@ function renderScope(): void {
     menuAction("Copy terminal selection", () => { if (activeTerminalId) terminalViews.get(activeTerminalId)?.copySelection() })
     menuAction("Open workspace", () => void workspaceOperation("workspace.open", workspace))
     menuAction("Close workspace", () => void workspaceOperation("workspace.close", workspace))
+    menuAction("Archive", () => workspaceLifecycleActionRegistry.archive(workspace))
+    menuAction("Remove…", () => workspaceLifecycleActionRegistry.remove(workspace))
     toggle.addEventListener("click", () => { menu.hidden = !menu.hidden; toggle.setAttribute("aria-expanded", String(!menu.hidden)) })
     actions.append(toggle, menu)
     scope.append(shell, actions)
@@ -835,6 +855,7 @@ async function dismissSignal(id: string): Promise<void> {
 }
 
 function modal(title: string): { body: HTMLElement; close: () => void } {
+  activeModalClose?.()
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
   const backdrop = element("div", "modal-backdrop")
   const dialog = element("section", "modal")
@@ -842,10 +863,200 @@ function modal(title: string): { body: HTMLElement; close: () => void } {
   const head = element("div", "modal-head"); head.append(element("strong", "", title))
   const closeButton = button("×", "button icon"); closeButton.setAttribute("aria-label", "Close"); head.append(closeButton)
   const bodyNode = element("div", "modal-body"); dialog.append(head, bodyNode); backdrop.append(dialog); document.body.append(backdrop)
-  const close = () => { backdrop.remove(); previousFocus?.focus() }
+  let closed = false
+  const close = () => {
+    if (closed) return
+    closed = true
+    backdrop.remove()
+    if (activeModalClose === close) activeModalClose = undefined
+    previousFocus?.focus()
+  }
+  activeModalClose = close
   closeButton.addEventListener("click", close); backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close() })
   dialog.addEventListener("keydown", (event) => { if (event.key === "Escape") { close(); event.preventDefault() } })
   return { body: bodyNode, close }
+}
+
+type LifecycleKind = "workspace.archive" | "workspace.unarchive" | "workspace.remove" | "workspace.force-remove"
+type LifecycleTarget = { id: string; name: string }
+
+const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+
+async function observeLifecycleOperation(initial: WebOperation): Promise<WebOperation> {
+  let operation = initial
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (["succeeded", "failed", "cancelled"].includes(operation.state)) return operation
+    if (operation.progress?.message) statusNode.textContent = operation.progress.message
+    await delay(100)
+    operation = await api<WebOperation>("operation.get", { operation_id: operation.operation_id }, { scope: "operation.write" })
+  }
+  throw new Error("Workspace lifecycle operation did not finish in time")
+}
+
+async function submitWorkspaceLifecycle(
+  kind: LifecycleKind,
+  workspace: LifecycleTarget,
+  confirmationName?: string,
+): Promise<WebOperation | undefined> {
+  try {
+    const operation = await api<WebOperation>("operation.submit", {
+      kind,
+      workspace_id: workspace.id,
+      expected_revision: snapshot.revision,
+      ...(kind === "workspace.force-remove" ? { confirmation_name: confirmationName } : {}),
+    }, {
+      scope: "operation.write",
+      idempotencyKey: `${kind}-${workspace.id}-${crypto.randomUUID()}`,
+    })
+    pendingLifecycleOperations.add(operation.operation_id)
+    try { return await observeLifecycleOperation(operation) }
+    finally { pendingLifecycleOperations.delete(operation.operation_id) }
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.code === "conflict") {
+      await reconcileAuthoritativeState()
+      toast("Workspace state changed. Review it and confirm the action again.", true)
+      return
+    }
+    await reconcileAuthoritativeState().catch(() => undefined)
+    toast(`Workspace action stopped: ${error instanceof Error ? error.message : String(error)}. Invoke and confirm it again after reconnecting.`, true)
+    return
+  }
+}
+
+async function reconcileAuthoritativeState(): Promise<void> {
+  await refreshSnapshot()
+  await Promise.all([loadTerminals(), refreshSignals(true)])
+  renderAll()
+}
+
+async function runWorkspaceLifecycle(
+  kind: LifecycleKind,
+  workspace: LifecycleTarget,
+  confirmationName?: string,
+): Promise<WebOperation | undefined> {
+  const operation = await submitWorkspaceLifecycle(kind, workspace, confirmationName)
+  if (!operation) return
+  if (operation.state === "succeeded") {
+    await reconcileAuthoritativeState()
+    return operation
+  }
+  await reconcileAuthoritativeState()
+  if (operation.error) toast(operation.error.message, true)
+  return operation
+}
+
+async function archiveWorkspace(workspace: Workspace): Promise<void> {
+  const operation = await runWorkspaceLifecycle("workspace.archive", workspace)
+  if (operation?.state !== "succeeded") return
+  actionToast(`${workspace.name} archived. Its terminals were stopped.`, "Undo", () => {
+    void unarchiveWorkspace({ id: workspace.id, name: workspace.name })
+  })
+}
+
+async function unarchiveWorkspace(workspace: LifecycleTarget): Promise<void> {
+  const operation = await runWorkspaceLifecycle("workspace.unarchive", workspace)
+  if (operation?.state === "succeeded") toast(`${workspace.name} unarchived. Stopped terminals were not recreated.`)
+}
+
+function showArchivedWorkspaces(): void {
+  const view = modal("Archived Workspaces")
+  const list = element("div", "archived-list")
+  if (!snapshot.archived_workspaces.length) {
+    list.append(element("div", "archived-empty", "No archived workspaces"))
+  } else {
+    for (const workspace of snapshot.archived_workspaces) {
+      const row = element("div", "archived-row")
+      const identity = element("div", "archived-identity")
+      identity.append(element("strong", "", workspace.name), element("span", "", relativeTime(workspace.activity_at) || workspace.activity_at))
+      const unarchive = button("Unarchive")
+      unarchive.addEventListener("click", async () => {
+        const operation = await runWorkspaceLifecycle("workspace.unarchive", workspace)
+        if (operation?.state !== "succeeded") return
+        view.close()
+        toast(`${workspace.name} unarchived. Stopped terminals were not recreated.`)
+      })
+      row.append(identity, unarchive)
+      list.append(row)
+    }
+  }
+  view.body.append(list)
+}
+
+function showRemoveConfirmation(workspace: Workspace): void {
+  const view = modal(`Remove ${workspace.name}?`)
+  view.body.append(
+    element("p", "lifecycle-warning", `Remove ${workspace.name} permanently. This cannot be undone.`),
+  )
+  const inventory = element("ul", "removal-inventory")
+  for (const item of ["Service-owned terminals", "Managed Git worktrees", "Workspace directory", "Workspace YAML definition"]) {
+    inventory.append(element("li", "", item))
+  }
+  const actions = element("div", "modal-actions")
+  const cancel = button("Cancel")
+  const remove = button("Remove", "button danger")
+  cancel.addEventListener("click", view.close)
+  remove.addEventListener("click", async () => {
+    view.close()
+    const operation = await runWorkspaceLifecycle("workspace.remove", workspace)
+    const details = operation?.state === "failed" ? operation.error?.lifecycle : undefined
+    if (details?.kind === "workspace_dirty" && details.terminals_stopped && details.force_allowed) {
+      const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
+      if (current) showDirtyRemovalFailure(current, details)
+    }
+  })
+  actions.append(cancel, remove)
+  view.body.append(inventory, actions)
+  cancel.focus()
+}
+
+function showDirtyRemovalFailure(workspace: Workspace, details: WorkspaceLifecycleFailureDetails): void {
+  const view = modal(`Dirty worktrees block ${workspace.name}`)
+  view.body.append(element("p", "lifecycle-warning", "Workspace terminals are already stopped. No workspace files were deleted."))
+  const blockers = element("ul", "removal-blockers")
+  for (const repository of details.blocking_repositories ?? []) blockers.append(element("li", "", repository))
+  const actions = element("div", "modal-actions")
+  const cancel = button("Keep workspace")
+  cancel.addEventListener("click", view.close)
+  actions.append(cancel)
+  if (details.force_allowed) {
+    const force = button("Force Remove…", "button danger")
+    force.addEventListener("click", () => { view.close(); void showForceRemoveConfirmation(workspace) })
+    actions.append(force)
+  }
+  view.body.append(element("strong", "", "Dirty repositories"), blockers, actions)
+  cancel.focus()
+}
+
+async function showForceRemoveConfirmation(requestedWorkspace: Workspace): Promise<void> {
+  await refreshSnapshot()
+  const workspace = snapshot.workspaces.find(({ id }) => id === requestedWorkspace.id)
+  if (!workspace) { toast("Workspace no longer exists.", true); return }
+  const view = modal(`Force Remove ${workspace.name}?`)
+  view.body.append(element("p", "lifecycle-warning", "This irreversibly deletes dirty worktrees and the workspace resources listed in the previous confirmation."))
+  const confirmation = element("input")
+  confirmation.placeholder = workspace.name
+  confirmation.setAttribute("aria-label", `Type ${workspace.name} to enable Force Remove`)
+  const actions = element("div", "modal-actions")
+  const cancel = button("Cancel")
+  const force = button("Force Remove", "button danger")
+  force.disabled = true
+  confirmation.addEventListener("input", () => { force.disabled = !(confirmation.value === workspace.name) })
+  cancel.addEventListener("click", view.close)
+  force.addEventListener("click", async () => {
+    if (!(confirmation.value === workspace.name)) return
+    await refreshSnapshot()
+    const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
+    if (!current || current.name !== workspace.name || confirmation.value !== current.name) {
+      view.close()
+      toast("Workspace identity changed. Start Force Remove again from a fresh dirty-worktree result.", true)
+      return
+    }
+    view.close()
+    await runWorkspaceLifecycle("workspace.force-remove", current, confirmation.value)
+  })
+  actions.append(cancel, force)
+  view.body.append(confirmation, actions)
+  cancel.focus()
 }
 
 function showLauncher(): void {
@@ -932,7 +1143,11 @@ async function refreshSnapshot(): Promise<void> {
   if (!selectedPair) {
     const restoredWorkspace = snapshot.workspaces.find((workspace) => workspace.id === preferences.lastPair?.workspaceId)
     const restoredRepository = restoredWorkspace?.repositories.find((repository) => repository.id === preferences.lastPair?.repositoryId)
-    const workspace = restoredWorkspace && restoredRepository ? restoredWorkspace : snapshot.workspaces.find((item) => preferences.pins.has(item.id)) ?? snapshot.workspaces[0]
+    const ordered = [...snapshot.workspaces].sort((left, right) => workspaceSuccessorOrder(
+      { ...left, pinned: preferences.pins.has(left.id) },
+      { ...right, pinned: preferences.pins.has(right.id) },
+    ))
+    const workspace = restoredWorkspace && restoredRepository ? restoredWorkspace : ordered[0]
     const repository = restoredWorkspace && restoredRepository ? restoredRepository : workspace?.repositories[0]
     if (workspace && repository) { selectedPair = { workspaceId: workspace.id, repositoryId: repository.id }; preferences.lastPair = selectedPair; preferencesChanged = true }
   }
@@ -955,7 +1170,21 @@ async function refreshSignals(resetCursor = false): Promise<void> {
 async function loadTerminals(): Promise<void> {
   const items = await api<TerminalMeta[]>("terminal.list", undefined, { scope: "terminal.read" })
   await Promise.all(items.filter((meta) => meta.state === "ended" && !meta.command_id).map((meta) => api("terminal.close", { terminal_id: meta.id }, { scope: "terminal.close" }).catch(() => undefined)))
-  for (const meta of items) if ((meta.state !== "ended" || meta.command_id) && !terminalViews.has(meta.id)) terminalViews.set(meta.id, new TerminalView(meta))
+  const retained = items.filter((meta) => meta.state !== "ended" || meta.command_id)
+  const retainedIds = new Set(retained.map(({ id }) => id))
+  for (const [id, view] of terminalViews) {
+    if (retainedIds.has(id)) continue
+    view.dispose()
+    terminalViews.delete(id)
+  }
+  for (const meta of retained) {
+    const current = terminalViews.get(meta.id)
+    if (current) current.meta = meta
+    else terminalViews.set(meta.id, new TerminalView(meta))
+  }
+  preferences.tabOrder = preferences.tabOrder.filter((id) => retainedIds.has(id))
+  if (activeTerminalId && !retainedIds.has(activeTerminalId)) activeTerminalId = undefined
+  savePreferences()
 }
 function connectEvents(): void {
   statusNode.textContent = connectionSummary()
@@ -969,7 +1198,7 @@ function connectEvents(): void {
         state: "accepted" | "running" | "succeeded" | "failed" | "cancelled"
         progress?: { message?: string }
         result?: { snapshot_changed?: boolean }
-        error?: { message?: string }
+        error?: { message?: string; lifecycle?: WorkspaceLifecycleFailureDetails }
       }
     }
     if (data.sequence) eventCursor = data.sequence
@@ -977,6 +1206,10 @@ function connectEvents(): void {
     else if (data.type === "signal") void refreshSignals()
     else if (data.type === "operation" && data.operation) {
       const operation = data.operation
+      if (pendingLifecycleOperations.has(operation.operation_id)) {
+        if (operation.progress?.message) statusNode.textContent = operation.progress.message
+        return
+      }
       const workspaceName = pendingWorkspaceCreations.get(operation.operation_id)
       if (operation.state === "succeeded") {
         pendingWorkspaceCreations.delete(operation.operation_id)
@@ -1009,6 +1242,7 @@ function showStartupFailure(title: string, error: unknown, hint: string): void {
 
 document.querySelector("#launcher")!.addEventListener("click", showLauncher)
 document.querySelector("#create")!.addEventListener("click", () => void showCreation())
+document.querySelector("#archived")!.addEventListener("click", showArchivedWorkspaces)
 for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) control.addEventListener("click", () => {
   preferences.organization = control.dataset.organization as Organization
   savePreferences(); renderNav()
