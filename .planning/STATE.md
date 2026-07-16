@@ -4,15 +4,15 @@ milestone: v0.22.0
 milestone_name: Workspace Productivity
 current_phase: 126
 current_phase_name: Web Workflow and Forge-Source Parity
-status: planning
-stopped_at: Phase 125 verified complete; Phase 126 ready for discussion
-last_updated: "2026-07-16T16:41:52.992Z"
+status: ready_to_execute
+stopped_at: Phase 126 planned; 8 plans ready across 6 waves
+last_updated: "2026-07-16T17:13:50.000Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 125 complete, transitioned to Phase 126
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 20
+  total_plans: 28
   completed_plans: 20
   percent: 60
 ---
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 126 — Web Workflow and Forge-Source Parity
-Plan: Not started
-Status: Ready to discuss
-Last activity: 2026-07-16 — Phase 125 complete, transitioned to Phase 126
+Plan: 0 of 8
+Status: Ready to execute
+Last activity: 2026-07-16 — Phase 126 planned in 8 plans across 6 waves
 
 ## Decisions
 
@@ -148,5 +148,5 @@ The following pre-existing backlog items remain open for explicit triage; milest
 ## Session
 
 **Last session:** 2026-07-16T16:41:52.992Z
-**Stopped at:** Phase 125 verified complete; Phase 126 ready for discussion
+**Stopped at:** Phase 126 planned; ready to execute Wave 1
 **Resume file:** .planning/ROADMAP.md

@@ -101,6 +101,35 @@ Plans:
 **Depends on:** Phases 123 and 125
 **Requirements:** PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, SOURCE-01, SOURCE-02, SOURCE-03, SOURCE-04
 
+**Plans:** 0/8 plans complete
+
+Plans:
+**Wave 1**
+
+- [ ] 126-01-PLAN.md — Strict action, note, file, operation, and reviewed-source protocol contracts
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 126-02-PLAN.md — Provider-backed GitHub/GitLab resolver and real-SHA source preparation
+- [ ] 126-03-PLAN.md — Canonical service action authority, Pull/notes adapters, and honest cancellation
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 126-04-PLAN.md — Secure projections/routes, review-token authority, and SHA-safe creation
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 126-05-PLAN.md — Shared action registry, operation tracker, and resolve-review state
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 126-06-PLAN.md — OpenTUI action/detail/operation/review parity
+- [ ] 126-07-PLAN.md — Web action/detail/operation/review parity
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 126-08-PLAN.md — Cross-client conformance, security/full gates, and Phase 127 handoff
+
 **Success criteria:**
 
 1. Web actions cover archive/unarchive, remove, rename, open/close, pin, sync, pull, push, merge, notes, and file-sync status through the same action registry, service operations, guards, and projections as TUI/CLI.
