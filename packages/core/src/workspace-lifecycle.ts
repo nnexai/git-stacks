@@ -74,7 +74,11 @@ async function runWorkspaceHooksCaptured(
   onOutput: (output: { line: string; stream: "stdout" | "stderr" }) => void,
   abortOnFailure = true
 ): Promise<void> {
-  await runHooksCapturedWithExecutor(_exec, commands, cwd, env, onOutput, abortOnFailure)
+  const results = await runHooksCapturedWithExecutor(_exec, commands, cwd, env, onOutput, abortOnFailure)
+  const failed = results.find((result) => result.failed)
+  if (abortOnFailure && failed) {
+    throw new Error(`Hook failed (exit ${failed.exitCode}): ${failed.command}`)
+  }
 }
 
 type ProgressCallback = (message: string) => void
