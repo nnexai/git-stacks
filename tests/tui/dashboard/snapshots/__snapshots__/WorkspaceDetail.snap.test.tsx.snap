@@ -10,9 +10,9 @@ exports[`WorkspaceDetail snapshots renders ordered detail sections with notes an
  - web                      [trunk]
 
  Files:
- 2 entries, 1 need attention
- workspace files
- ! pullable  sync    .env.local - source newer
+ 1 entries, 1 need attention
+ Workspace files (1)
+ ! pullable  copy    .env.local — Source and target content differ.
 
  Source/Issues:
  jira       OPS-7
@@ -22,7 +22,7 @@ exports[`WorkspaceDetail snapshots renders ordered detail sections with notes an
  ✓ tmux        [global]
 
  Notes:
- 2 shown, latest 122d
+ 2 total, latest 122d
  - Review file sync drift 122d
  - Ping owner before merge 123d
 
@@ -33,7 +33,7 @@ exports[`WorkspaceDetail snapshots renders ordered detail sections with notes an
 
 exports[`WorkspaceDetail snapshots renders scrolled long detail content 1`] = `
 " Notes:
- 2 shown, latest 122d
+ 2 total, latest 122d
  - Review file sync drift 122d
  - Ping owner before merge 123d
 

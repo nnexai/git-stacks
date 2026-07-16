@@ -25,20 +25,6 @@ mock.module("@git-stacks/core/integrations/types", () => ({
   isWindowDetecting: mock(() => false),
 }))
 
-mock.module("@git-stacks/core/notes", () => ({
-  listWorkspaceNotes: mock(async () => [
-    { text: "Review file sync drift", created: "2026-01-15T10:00:00Z" },
-    { text: "Ping owner before merge", created: "2026-01-14T10:00:00Z" },
-  ]),
-}))
-
-mock.module("@git-stacks/service/client", () => ({
-  fetchWorkspaceNotes: mock(async () => [
-    { text: "Review file sync drift", created: "2026-01-15T10:00:00Z" },
-    { text: "Ping owner before merge", created: "2026-01-14T10:00:00Z" },
-  ]),
-}))
-
 const { WorkspaceDetail } = await import("../../../../packages/tui/src/WorkspaceDetail")
 
 const FROZEN_NOW = new Date("2026-01-15T10:00:00Z").getTime() + (122 * 24 * 60 * 60 * 1000)
@@ -72,30 +58,37 @@ const fileStatus = {
   state: "loaded" as const,
   workspaceName: "operator-ws",
   view: {
-    summary: { total: 2, ok: 1, warnings: 1, errors: 0, attention: 1, sections: 2, byState: {}, byType: {} },
-    warnings: [],
-    errors: [],
-    workspace: {
+    workspace_id: "00000000-0000-4000-8000-000000000126",
+    revision: "7",
+    generated_at: "2026-07-16T12:00:00.000Z",
+    summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
+    groups: [{
       scope: "workspace" as const,
-      name: "operator-ws",
-      root: "/tmp/operator-ws",
-      summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1, sections: 1, byState: {}, byType: {} },
-      warnings: [],
-      errors: [],
+      name: "Workspace files",
+      summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
       entries: [{
-        scope: "workspace" as const,
-        repo: null,
-        type: "sync" as any,
+        id: "file_1234567890123456",
+        type: "copy" as const,
         target: ".env.local",
-        state: "pullable" as any,
+        state: "pullable" as const,
         severity: "warning" as const,
-        needsAttention: true,
-        hint: "source newer",
-        details: { warnings: [], errors: [] },
+        needs_attention: true,
+        reason: "content_differs" as const,
+        message: "Source and target content differ.",
       }],
-    },
-    repos: [],
+    }],
   },
+}
+
+const notes = {
+  workspace_id: "00000000-0000-4000-8000-000000000126",
+  revision: "7",
+  notes_revision: "notes-7",
+  count: 2,
+  records: [
+    { text: "Review file sync drift", created_at: "2026-01-15T10:00:00Z" },
+    { text: "Ping owner before merge", created_at: "2026-01-14T10:00:00Z" },
+  ],
 }
 
 describe("WorkspaceDetail snapshots", () => {
@@ -109,7 +102,7 @@ describe("WorkspaceDetail snapshots", () => {
 
   test("renders ordered detail sections with notes and file status", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[{ version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation", workspace_id: "118f47f4-5ab1-7c2d-8e90-123456789abc", title: "Build failed", occurred_at: "2026-01-15T10:00:00Z", unread: true }]} tick={0} fileStatus={fileStatus as any} config={detailConfig as any} />,
+      () => <WorkspaceDetail entry={entry as any} signals={[{ version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation", workspace_id: "118f47f4-5ab1-7c2d-8e90-123456789abc", title: "Build failed", occurred_at: "2026-01-15T10:00:00Z", unread: true }]} tick={0} fileStatus={fileStatus as any} notes={notes as any} config={detailConfig as any} />,
       { width: 100, height: 28, kittyKeyboard: true }
     )
     await renderOnce()
@@ -125,7 +118,7 @@ describe("WorkspaceDetail snapshots", () => {
   test("renders scrolled long detail content", async () => {
     const [scrollRequest, setScrollRequest] = createSignal({ sequence: 0, direction: 1 as -1 | 1 })
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} fileStatus={fileStatus as any} scrollRequest={scrollRequest()} config={detailConfig as any} />,
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} fileStatus={fileStatus as any} notes={notes as any} scrollRequest={scrollRequest()} config={detailConfig as any} />,
       { width: 100, height: 10, kittyKeyboard: true }
     )
     await renderOnce()

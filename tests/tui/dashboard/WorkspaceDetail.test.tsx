@@ -101,22 +101,6 @@ mock.module("@git-stacks/core/config", () => ({
   RepoRegistryEntrySchema: {} as any,
 }))
 
-mock.module("@git-stacks/core/notes", () => ({
-  listWorkspaceNotes: mock(async () => [
-    { text: "Check rollout logs", created: "2026-01-15T10:00:00Z" },
-    { text: "Confirm workspace owner", created: "2026-01-14T10:00:00Z" },
-  ]),
-}))
-
-const fetchWorkspaceNotesMock = mock(async () => [
-    { text: "Check rollout logs", created: "2026-01-15T10:00:00Z" },
-    { text: "Confirm workspace owner", created: "2026-01-14T10:00:00Z" },
-  ])
-
-mock.module("@git-stacks/service/client", () => ({
-  fetchWorkspaceNotes: fetchWorkspaceNotesMock,
-}))
-
 const { testRender } = await import("@opentui/solid")
 const { WorkspaceDetail } = await import("../../../packages/tui/src/WorkspaceDetail")
 
@@ -159,24 +143,6 @@ describe("WorkspaceDetail integration display", () => {
     setConfig({ workspace_root: "/tmp", integrations: { vscode: { enabled: true, cmd: "code-insiders" } }, ports: { range_start: 10000, range_end: 65000 } })
     await renderOnce()
     expect(captureCharFrame()).toContain("cmd: code-insiders")
-  })
-
-  test("caches notes when revisiting a workspace", async () => {
-    fetchWorkspaceNotesMock.mockClear()
-    const [entry, setEntry] = createSignal(makeEntry({ workspace: { name: "alpha" } }))
-    const { renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry() as any} signals={[]} tick={0} />
-    )
-    await renderOnce()
-    await Bun.sleep(5)
-    setEntry(makeEntry({ workspace: { name: "bravo" } }))
-    await renderOnce()
-    await Bun.sleep(5)
-    setEntry(makeEntry({ workspace: { name: "alpha" } }))
-    await renderOnce()
-    await Bun.sleep(5)
-
-    expect(fetchWorkspaceNotesMock.mock.calls.map((call) => call[0])).toEqual(["alpha", "bravo"])
   })
 
   test("Test 2: shows enabled integration with checkmark and [global] source when no overrides", async () => {
@@ -399,8 +365,9 @@ describe("WorkspaceDetail operational sections", () => {
 
   test("renders notes only in detail content", async () => {
     const entry = makeEntry()
+    const notes = { workspace_id: "00000000-0000-4000-8000-000000000126", revision: "7", notes_revision: "notes-7", count: 1, records: [{ text: "Check rollout logs", created_at: "2026-01-15T10:00:00Z" }] }
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} notes={notes as any} />
     )
     await renderOnce()
     await renderOnce()
@@ -415,29 +382,25 @@ describe("WorkspaceDetail operational sections", () => {
       state: "loaded" as const,
       workspaceName: "test-ws",
       view: {
-        summary: { total: 2, ok: 1, warnings: 1, errors: 0, attention: 1, sections: 2, byState: {}, byType: {} },
-        warnings: [],
-        errors: [],
-        workspace: {
+        workspace_id: "00000000-0000-4000-8000-000000000126",
+        revision: "7",
+        generated_at: "2026-07-16T12:00:00.000Z",
+        summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
+        groups: [{
           scope: "workspace" as const,
-          name: "test-ws",
-          root: "/tmp/test-ws",
-          summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1, sections: 1, byState: {}, byType: {} },
-          warnings: [],
-          errors: [],
+          name: "Workspace files",
+          summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
           entries: [{
-            scope: "workspace" as const,
-            repo: null,
-            type: "sync" as any,
+            id: "file_1234567890123456",
+            type: "copy" as const,
             target: ".env.local",
-            state: "pullable" as any,
+            state: "pullable" as const,
             severity: "warning" as const,
-            needsAttention: true,
-            hint: "source newer",
-            details: { warnings: [], errors: [] },
+            needs_attention: true,
+            reason: "content_differs" as const,
+            message: "Source and target content differ.",
           }],
-        },
-        repos: [],
+        }],
       },
     }
     const { captureCharFrame, renderOnce } = await testRender(
@@ -447,7 +410,7 @@ describe("WorkspaceDetail operational sections", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("Files:")
     expect(frame).toContain(".env.local")
-    expect(frame).toContain("source newer")
+    expect(frame).toContain("Source and target content differ")
 
     const source = await Bun.file("packages/tui/src/WorkspaceDetail.tsx").text()
     expect(source).not.toContain("git-stacks files status")

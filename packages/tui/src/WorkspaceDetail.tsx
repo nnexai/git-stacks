@@ -1,15 +1,13 @@
 /** @jsxImportSource @opentui/solid */
 
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
+import { For, Show, createEffect, createMemo } from "solid-js"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { formatSignalAge, signalText } from "./signalUtils"
 import { formatConfigValue } from "./configUtils"
 import type { WorkspaceEntry, WorkspaceFileStatusState } from "./types"
 import type { DashboardSignal } from "./hooks/useSignals"
-import type { WorkspaceFileStatusEntry, WorkspaceFileStatusRepoSection } from "@git-stacks/core/workspace-file-status"
-import type { WorkspaceNoteRecord } from "@git-stacks/core/notes"
+import type { WebFileEntry, WebNotesResponse } from "@git-stacks/protocol"
 import type { GlobalConfig, Template } from "@git-stacks/core/config"
-import { fetchWorkspaceNotes } from "@git-stacks/service/client"
 import { integrations } from "@git-stacks/core/integrations"
 import { isConditional, resolveEnabledGlobally } from "@git-stacks/core/integrations/types"
 
@@ -20,36 +18,21 @@ type Props = {
   signals: DashboardSignal[]
   tick: number
   fileStatus?: WorkspaceFileStatusState
+  notes?: WebNotesResponse
   scrollRequest?: { sequence: number; direction: -1 | 1 }
   config?: GlobalConfig
   templates?: Template[]
 }
 
-type NoteState =
-  | { state: "loading"; workspaceName: string }
-  | { state: "loaded"; workspaceName: string; notes: WorkspaceNoteRecord[] }
-  | { state: "error"; workspaceName: string; message: string }
-
-function entryIcon(entry: WorkspaceFileStatusEntry): { icon: string; color: "green" | "yellow" | "red" | "gray" } {
-  if (entry.severity === "error") return { icon: "✗", color: "red" }
+function entryIcon(entry: WebFileEntry): { icon: string; color: "green" | "yellow" | "red" } {
+  if (entry.severity === "error") return { icon: "×", color: "red" }
   if (entry.severity === "warning") return { icon: "!", color: "yellow" }
   return { icon: "✓", color: "green" }
 }
 
-function renderFileEntry(entry: WorkspaceFileStatusEntry) {
+function renderFileEntry(entry: WebFileEntry) {
   const icon = entryIcon(entry)
-  const label = entry.repo ? `${entry.repo}:${entry.target}` : entry.target
-  const details = entry.hint ? ` - ${entry.hint}` : ""
-  return <text fg={icon.color}>    {icon.icon} {entry.state.padEnd(9)} {entry.type.padEnd(7)} {label}{details}</text>
-}
-
-function renderRepoFileSection(section: WorkspaceFileStatusRepoSection): unknown[] {
-  const rows: unknown[] = [<text fg="gray">    repo {section.name} ({section.mode})</text>]
-  if (section.entries.length === 0) rows.push(<text fg="gray">      no file config entries</text>)
-  else rows.push(...section.entries.map((entry) => renderFileEntry(entry)))
-  rows.push(...section.warnings.map((warning) => <text fg="yellow">      {warning}</text>))
-  rows.push(...section.errors.map((error) => <text fg="red">      {error}</text>))
-  return rows
+  return <text fg={icon.color}>    {icon.icon} {entry.state.padEnd(9)} {entry.type.padEnd(7)} {entry.target} — {entry.message}</text>
 }
 
 function detailRow(row: unknown) {
@@ -57,43 +40,9 @@ function detailRow(row: unknown) {
 }
 
 export function WorkspaceDetail(props: Props) {
-  const [notesState, setNotesState] = createSignal<NoteState | null>(null)
-  const notesCache = new Map<string, NoteState>()
-  const notesInFlight = new Map<string, Promise<void>>()
-  let currentWorkspaceName: string | undefined
   let scrollView: ScrollBoxRenderable | undefined
   let renderedWorkspaceName: string | undefined
   let handledScrollSequence = 0
-
-  createEffect(() => {
-    const workspaceName = props.entry?.workspace.name
-    currentWorkspaceName = workspaceName
-    if (!workspaceName) {
-      setNotesState(null)
-      return
-    }
-    const cached = notesCache.get(workspaceName)
-    if (cached) {
-      setNotesState(cached)
-      return
-    }
-    setNotesState({ state: "loading", workspaceName })
-    if (!notesInFlight.has(workspaceName)) {
-      const request = fetchWorkspaceNotes(workspaceName).then((notes) => {
-        const next: NoteState = { state: "loaded", workspaceName, notes }
-        notesCache.set(workspaceName, next)
-        if (currentWorkspaceName === workspaceName) setNotesState(next)
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err)
-        const next: NoteState = { state: "error", workspaceName, message }
-        notesCache.set(workspaceName, next)
-        if (currentWorkspaceName === workspaceName) setNotesState(next)
-      })
-      .finally(() => { notesInFlight.delete(workspaceName) })
-      notesInFlight.set(workspaceName, request)
-    }
-  })
 
   const syncScrollView = () => {
     const workspaceName = props.entry?.workspace.name
@@ -190,11 +139,11 @@ export function WorkspaceDetail(props: Props) {
           } else {
             const view = fileStatus.view
             out.push(<text fg="gray">    {view.summary.total} entries, {view.summary.attention} need attention</text>)
-            if (view.workspace.entries.length > 0) {
-              out.push(<text fg="gray">    workspace files</text>)
-              for (const fileEntry of view.workspace.entries) out.push(renderFileEntry(fileEntry))
+            for (const group of view.groups) {
+              out.push(<text fg="gray">    {group.name} ({group.summary.total})</text>)
+              for (const fileEntry of group.entries.slice(0, 3)) out.push(renderFileEntry(fileEntry))
+              if (group.entries.length > 3) out.push(<text fg="gray">      +{group.entries.length - 3} rows; open file status</text>)
             }
-            for (const repoSection of view.repos) out.push(...renderRepoFileSection(repoSection))
             if (view.summary.total === 0) out.push(<text fg="gray">    no file config entries</text>)
           }
 
@@ -264,17 +213,15 @@ export function WorkspaceDetail(props: Props) {
 
           out.push(<text>{""}</text>)
           out.push(<text fg="white">  Notes:</text>)
-          const notes = notesState()
-          if (!notes || notes.state === "loading") {
-            out.push(<text fg="gray">    Loading notes...</text>)
-          } else if (notes.state === "error") {
-            out.push(<text fg="red">    Error: {notes.message}</text>)
-          } else if (notes.notes.length === 0) {
+          const notes = props.notes
+          if (!notes) {
+            out.push(<text fg="gray">    Open Workspace notes to load.</text>)
+          } else if (notes.count === 0) {
             out.push(<text fg="gray">    0 notes</text>)
           } else {
-            out.push(<text fg="gray">    {notes.notes.length} shown, latest {formatSignalAge(notes.notes[0]!.created)}</text>)
-            for (const note of notes.notes) {
-              out.push(<text fg="white">    - {note.text}  {formatSignalAge(note.created)}</text>)
+            out.push(<text fg="gray">    {notes.count} total, latest {formatSignalAge(notes.records[0]!.created_at)}</text>)
+            for (const note of notes.records.slice(0, 3)) {
+              out.push(<text fg="white">    - {note.text}  {formatSignalAge(note.created_at)}</text>)
             }
           }
 

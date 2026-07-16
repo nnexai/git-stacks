@@ -1,7 +1,6 @@
-import { createRenderEffect, createSignal, onCleanup, untrack, type Accessor } from "solid-js"
+import { createSignal, onCleanup, type Accessor } from "solid-js"
 
-import type { Workspace } from "@git-stacks/core/config"
-import { fetchWorkspaceFileStatus } from "@git-stacks/service/client"
+import { fetchWorkspaceFileStatusProjection } from "@git-stacks/service/client"
 import type { WorkspaceFileStatusState } from "../types"
 
 function errorMessage(err: unknown): string {
@@ -9,7 +8,7 @@ function errorMessage(err: unknown): string {
 }
 
 export function useWorkspaceFileStatus(
-  selectedWorkspace?: Accessor<Workspace | undefined>,
+  selectedWorkspace?: Accessor<{ workspaceId: string; workspaceName: string } | undefined>,
   selectedRevision?: Accessor<string | undefined>,
 ) {
   const [state, setState] = createSignal<WorkspaceFileStatusState>({ state: "idle" })
@@ -40,7 +39,7 @@ export function useWorkspaceFileStatus(
       cacheRevision = revision
       cache.clear()
     }
-    const workspaceName = workspace.name
+    const workspaceName = workspace.workspaceName
     const key = `${revision ?? "0"}\0${workspaceName}`
     visibleKey = key
     if (!options.force && cache.has(key)) {
@@ -50,7 +49,10 @@ export function useWorkspaceFileStatus(
     setState({ state: "loading", workspaceName })
     let request = inFlight.get(key)
     if (!request || options.force) {
-      request = Promise.resolve().then(() => fetchWorkspaceFileStatus(workspace.name)).then((view) => {
+      request = Promise.resolve().then(() => fetchWorkspaceFileStatusProjection({
+        workspace_id: workspace.workspaceId,
+        expected_revision: revision ?? "0",
+      })).then((view) => {
         const next: WorkspaceFileStatusState = { state: "loaded", workspaceName, view }
         cache.set(key, next)
         if (!disposed && visibleKey === key) setState(next)
@@ -67,18 +69,6 @@ export function useWorkspaceFileStatus(
   function reset(): void {
     visibleKey = undefined
     setState({ state: "idle" })
-  }
-
-  if (selectedWorkspace) {
-    createRenderEffect(() => {
-      const selected = selectedWorkspace()
-      const revision = selectedRevision?.()
-      if (!selected) {
-        reset()
-        return
-      }
-      void untrack(() => load(selected, { force: false, revision }))
-    })
   }
 
   return { state, load, reset }

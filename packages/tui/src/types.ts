@@ -1,7 +1,6 @@
 import type { Workspace } from "@git-stacks/core/config"
 
-import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
-import type { ArchivedWorkspaceSummary } from "@git-stacks/protocol"
+import type { ArchivedWorkspaceSummary, WebFileStatusResponse } from "@git-stacks/protocol"
 
 export type RepoStatus = {
   name: string
@@ -35,7 +34,7 @@ export type GroupedWorkspaceItem =
 export type WorkspaceFileStatusState =
   | { state: "idle" }
   | { state: "loading"; workspaceName: string }
-  | { state: "loaded"; workspaceName: string; view: WorkspaceFileStatusView }
+  | { state: "loaded"; workspaceName: string; view: WebFileStatusResponse }
   | { state: "error"; workspaceName?: string; message: string }
 
 export type Tab = "workspaces" | "templates" | "repos"
@@ -72,6 +71,8 @@ export type UIView =
   | { view: "lifecycle-progress"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
   | { view: "lifecycle-failure"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
   | { view: "workspace-operation" }
+  | { view: "workspace-notes"; workspaceId: string; workspaceName: string; initialMode?: "list" | "add" | "clear" }
+  | { view: "workspace-files"; workspaceId: string; workspaceName: string }
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
   | { view: "sync-progress"; message: string }

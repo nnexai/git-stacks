@@ -15,6 +15,8 @@ import { RepoList } from "./RepoList"
 import { RepoDetail } from "./RepoDetail"
 import { ActionMenu } from "./ActionMenu"
 import { WorkspaceOperationView } from "./WorkspaceOperationView"
+import { WorkspaceNotesDialog } from "./WorkspaceNotesDialog"
+import { WorkspaceFileStatusDialog } from "./WorkspaceFileStatusDialog"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
@@ -60,6 +62,7 @@ import type {
   WebOperation,
   WebOperationMutation,
   WebOperationSummary,
+  WebNotesResponse,
   WebWorkspaceAction,
   WebWorkspaceActionId,
   WorkspaceLifecycleFailureDetails,
@@ -264,6 +267,10 @@ export default function App() {
   const [operationState, setOperationState] = createSignal<OperationTrackerState>({ phase: "ready" })
   const [operationCards, setOperationCards] = createSignal<WebOperationSummary[]>([])
   const [operationOverflow, setOperationOverflow] = createSignal(0)
+  const [notesResponse, setNotesResponse] = createSignal<WebNotesResponse>()
+  const [notesLoading, setNotesLoading] = createSignal(false)
+  const [notesError, setNotesError] = createSignal("")
+  const [notesMutationError, setNotesMutationError] = createSignal("")
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -383,7 +390,11 @@ export default function App() {
 
   const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
   const selectedWorkspace = createMemo(() => currentEntry()?.workspace)
-  const fileStatus = useWorkspaceFileStatus(selectedWorkspace, () => core.state()?.revision)
+  const selectedFileTarget = createMemo(() => {
+    const entry = currentEntry()
+    return entry ? { workspaceId: entry.workspaceId, workspaceName: entry.workspace.name } : undefined
+  })
+  const fileStatus = useWorkspaceFileStatus(selectedFileTarget, () => core.state()?.revision)
   const selectedIssueCandidates = createMemo(() => buildIssueCandidates(selectedWorkspace()))
   const selectedManualCommands = createMemo(() => {
     const workspace = selectedWorkspace()
@@ -706,12 +717,76 @@ export default function App() {
     }
   }
 
+  async function waitForWebOperation(operation: WebOperation): Promise<WebOperation> {
+    let current = operation
+    while (current.state === "accepted" || current.state === "running") {
+      await new Promise<void>((resolve) => setTimeout(resolve, 100))
+      current = await serviceClient.fetchWebOperation(current.operation_id)
+    }
+    if (current.state !== "succeeded") throw new Error(current.error?.message ?? "Workspace operation failed.")
+    return current
+  }
+
+  async function loadWorkspaceNotes(entry: WorkspaceEntry): Promise<void> {
+    const revision = core.state()?.revision
+    if (!revision) return
+    setNotesLoading(true)
+    setNotesError("")
+    try {
+      setNotesResponse(await serviceClient.fetchWorkspaceNotesProjection({
+        workspace_id: entry.workspaceId,
+        expected_revision: revision,
+      }))
+    } catch {
+      setNotesError("Workspace notes could not be loaded. Retry without changing stored notes.")
+    } finally {
+      setNotesLoading(false)
+    }
+  }
+
+  async function mutateWorkspaceNotes(kind: "workspace.notes.add" | "workspace.notes.clear", text?: string): Promise<void> {
+    const v = view()
+    if (v.view !== "workspace-notes") return
+    const response = notesResponse()
+    const revision = core.state()?.revision
+    if (!response || !revision) return
+    setNotesMutationError("")
+    try {
+      const request = kind === "workspace.notes.add"
+        ? { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision, text: text ?? "" }
+        : { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision }
+      await waitForWebOperation(await serviceClient.submitWebOperation({ kind, request } as WebOperationMutation))
+      const entry = entries().find((candidate) => candidate.workspaceId === v.workspaceId)
+      if (entry) await loadWorkspaceNotes(entry)
+    } catch {
+      setNotesMutationError(kind === "workspace.notes.clear"
+        ? "Workspace notes were not cleared. Refresh the list before retrying."
+        : "Workspace note was not added. Existing notes were preserved.")
+      throw new Error("Workspace note mutation failed")
+    }
+  }
+
   async function runCanonicalWorkspaceAction(actionId: WebWorkspaceActionId, index: number): Promise<void> {
     const entry = filteredEntries()[index]
     if (!entry) return
     if (actionId === "operation.cancel") {
       const tracker = operationTracker()
       if (tracker) { await tracker.cancel(); syncTrackedOperation(tracker) }
+      return
+    }
+    if (actionId === "workspace.notes.list" || actionId === "workspace.notes.add" || actionId === "workspace.notes.clear") {
+      const initialMode = actionId === "workspace.notes.add" ? "add" : actionId === "workspace.notes.clear" ? "clear" : "list"
+      setNotesMutationError("")
+      setView({ view: "workspace-notes", workspaceId: entry.workspaceId, workspaceName: entry.workspace.name, initialMode })
+      await loadWorkspaceNotes(entry)
+      return
+    }
+    if (actionId === "workspace.files.inspect") {
+      setView({ view: "workspace-files", workspaceId: entry.workspaceId, workspaceName: entry.workspace.name })
+      await fileStatus.load({ workspaceId: entry.workspaceId, workspaceName: entry.workspace.name }, {
+        force: true,
+        revision: core.state()?.revision,
+      })
       return
     }
     if (actionId === "workspace.pin" || actionId === "workspace.unpin") {
@@ -1404,6 +1479,7 @@ export default function App() {
     if (v.view === "push-progress") return
 
     if (v.view === "workspace-operation") return
+    if (v.view === "workspace-notes" || v.view === "workspace-files") return
 
     if (v.view === "lifecycle-progress") return
     if (v.view === "lifecycle-failure") {
@@ -1802,6 +1878,49 @@ export default function App() {
         />
       </Show>
 
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "workspace-notes"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "workspace-notes" }>
+          return (
+            <WorkspaceNotesDialog
+              workspaceName={v.workspaceName}
+              response={notesResponse()}
+              loading={notesLoading()}
+              error={notesError() || undefined}
+              mutationError={notesMutationError() || undefined}
+              initialMode={v.initialMode}
+              onAdd={(text) => mutateWorkspaceNotes("workspace.notes.add", text)}
+              onClear={() => mutateWorkspaceNotes("workspace.notes.clear")}
+              onRetry={async () => {
+                const entry = entries().find((candidate) => candidate.workspaceId === v.workspaceId)
+                if (entry) await loadWorkspaceNotes(entry)
+              }}
+              onBack={() => setView({ view: "action-menu", index: tabCursor.workspaces[0]() })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "workspace-files"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "workspace-files" }>
+          const current = fileStatus.state()
+          return (
+            <WorkspaceFileStatusDialog
+              workspaceName={v.workspaceName}
+              response={current.state === "loaded" ? current.view : undefined}
+              loading={current.state === "loading"}
+              error={current.state === "error" ? current.message : undefined}
+              onRetry={() => fileStatus.load({ workspaceId: v.workspaceId, workspaceName: v.workspaceName }, {
+                force: true,
+                revision: core.state()?.revision,
+              })}
+              onBack={() => setView({ view: "action-menu", index: tabCursor.workspaces[0]() })}
+            />
+          )
+        })()}
+      </Show>
+
       <Show when={!helpOpen() && !signalsOpen() && view().view === "issue-picker"}>
         {(() => {
           const v = view() as { view: "issue-picker"; index: number; candidates: IssueCandidate[] }
@@ -2051,6 +2170,7 @@ export default function App() {
                   signals={currentEntry() ? (signalMap().get(currentEntry()!.workspace.name) ?? []) : []}
                   tick={tick()}
                   fileStatus={fileStatus.state()}
+                  notes={notesResponse()}
                   scrollRequest={detailScrollRequest()}
                   config={core.state()?.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }}
                   templates={templateEntries()}
