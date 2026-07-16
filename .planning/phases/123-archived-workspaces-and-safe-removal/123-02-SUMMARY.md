@@ -28,17 +28,19 @@ key-files:
     - packages/service/src/policy/core-contract.ts
     - packages/service/src/policy/core-state.ts
     - packages/service/src/web/projection.ts
+    - tests/lib/service/snapshot.test.ts
     - tests/fixtures/service-v1/workspace-snapshot.json
     - tests/service-node/secure-contract-runtime.test.mjs
 
 key-decisions:
   - "Catalog revision digests both active projections and minimal archived summaries, including all-archived state."
+  - "A supported date-only created fallback is normalized to midnight UTC at the service read-model boundary without rewriting workspace YAML or weakening the protocol timestamp schema."
   - "Force eligibility is schema-valid only for workspace_dirty after terminals are confirmed stopped; confirmation_name exists only on workspace.force-remove."
   - "The legacy workspacePriorityOrder export delegates to workspaceSuccessorOrder with neutral activity and ID defaults instead of retaining a divergent algorithm."
 
 patterns-established:
   - "Archived definitions are partitioned before active project() and represented only as id, name, and activity_at."
-  - "Persisted last_opened with created fallback is carried unchanged on every active projection and drives shared successor ordering."
+  - "Persisted RFC3339 last_opened is carried unchanged; a date-only created fallback is projected deterministically as midnight UTC and drives shared successor ordering."
 
 requirements-completed: [ARCH-02, ARCH-03, ARCH-05, ARCH-06, REMOVE-01, REMOVE-03, REMOVE-05]
 
@@ -66,7 +68,7 @@ coverage:
         status: pass
     human_judgment: false
   - id: D3
-    description: "Active activity_at is preserved through service snapshot, trusted CoreWorkspace, and browser projection contracts."
+    description: "Active activity_at is canonicalized from persisted activity through service snapshot, trusted CoreWorkspace, and browser projection contracts."
     requirement: ARCH-02
     verification:
       - kind: unit
@@ -77,6 +79,9 @@ coverage:
         status: pass
       - kind: integration
         ref: "tests/lib/service/contract.test.ts#parses and exactly round-trips golden fixtures"
+        status: pass
+      - kind: unit
+        ref: "tests/lib/service/snapshot.test.ts#normalizes supported date-only created activity for catalog and core state"
         status: pass
     human_judgment: false
   - id: D4
@@ -113,6 +118,7 @@ status: complete
 - Added active `activity_at`, minimal archived summaries, and a catalog whose revision covers both active and archived state even when no active workspace remains.
 - Added strict bounded lifecycle mutation, phase, failure-detail, result, and browser operation contracts with dirty-only Force Remove eligibility.
 - Partitioned archived definitions before active projection and propagated catalog state into the trusted CoreState contract.
+- Normalized the CLI's supported date-only creation fallback to a deterministic RFC3339 instant at the service boundary while preserving YAML and strict protocol validation.
 - Replaced divergent successor selection with one shared pin, priority, activity, name, and stable-ID comparator while retaining a delegating compatibility export.
 
 ## Task Commits
@@ -125,6 +131,7 @@ Each task was committed atomically:
 Post-wave integration repair:
 
 - **Align trusted and browser golden snapshots with the required catalog fields** - `98a351c7` (fix)
+- **Normalize supported date-only creation activity discovered by the Plan 08 live fixture** - `4479a5e6` (fix)
 
 ## Verification
 
@@ -134,7 +141,7 @@ Post-wave integration repair:
 - Built conformance: 4/4 Node contract tests pass.
 - Workspace typecheck: every package passes.
 - Architecture: `npm run test:deps` reports `Package architecture: OK`.
-- Full post-wave gate: `npm test` passes 135 Vitest files / 1766 tests, 42 Node contract/runtime tests, and the complete OpenTUI test matrix.
+- Full post-wave gate: `npm test` passes 136 Vitest files / 1788 tests, 42 Node contract/runtime tests, and the complete OpenTUI test matrix.
 
 ## Deviations from Plan
 
@@ -156,9 +163,17 @@ Post-wave integration repair:
 - **Verification:** The focused service contract suite passes 9/9, secure runtime passes 1/1, and the complete `npm test` gate passes.
 - **Committed in:** `98a351c7`
 
+**3. [Rule 1 - Live Fixture Regression] Normalized supported date-only creation activity**
+- **Found during:** Plan 08 live fixture verification after `8d3ef1d1`
+- **Issue:** CLI-created workspace YAML legitimately persists `created: YYYY-MM-DD`; when `last_opened` was absent, the catalog copied that date-only fallback into required RFC3339 `activity_at`, causing the official `core.state` path to fail strict internal validation.
+- **Fix:** Added one shared service read-model normalizer that maps only the supported date-only `created` fallback to midnight UTC, uses it for active and archived activity, and leaves persisted YAML and `TimestampSchema` unchanged.
+- **Files modified:** `packages/service/src/policy/snapshot.ts`, `packages/service/src/policy/core-state.ts`, `tests/lib/service/snapshot.test.ts`
+- **Verification:** The pre-fix regression failed at `workspace.activity_at`; focused snapshot/contract coverage passes 24/24, trusted CoreWorkspace parsing and archived ordering are asserted, equal aggregates retain their revision while activity changes advance it, typecheck and dependency gates pass, and the complete `npm test` gate passes.
+- **Committed in:** `4479a5e6`
+
 ---
 
-**Total deviations:** 2 auto-fixed (1 missing critical compatibility seam, 1 integration fixture regression). **Impact:** The strict contract is usable immediately and every golden transport fixture now records its required bounded catalog fields without implementing the later archived browser UI ahead of Plan 06.
+**Total deviations:** 3 auto-fixed (1 missing critical compatibility seam, 2 integration/live-fixture regressions). **Impact:** The strict contract accepts canonical service timestamps from supported persisted workspace activity, every golden transport fixture records its required bounded catalog fields, and no later archived browser UI was implemented ahead of Plan 06.
 
 ## Known Stubs
 
@@ -167,6 +182,7 @@ Post-wave integration repair:
 ## Issues Encountered
 
 - The newly required active activity field exposed one pre-existing browser projection fixture that manually constructed a trusted snapshot without `activity_at`; the fixture now asserts the authoritative value survives projection.
+- Plan 08's live CLI-created fixture exposed that a supported date-only `created` value needs service-boundary normalization before entering the strict RFC3339 read model.
 
 ## User Setup Required
 
@@ -181,7 +197,7 @@ None - no external service configuration required.
 
 ## Self-Check: PASSED
 
-- Task commits `58e8a14b`, `4f6cf0a8`, and integration repair `98a351c7` exist in history.
+- Task commits `58e8a14b`, `4f6cf0a8`, and integration repairs `98a351c7` and `4479a5e6` exist in history.
 - Every modified source and test file exists.
 - All four coverage deliverables have current passing automated evidence.
 
