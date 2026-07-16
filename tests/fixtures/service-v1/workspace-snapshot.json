@@ -7,6 +7,7 @@
   "workspace": {
     "id": "018f47f4-5ab1-7c2d-8e90-123456789abc",
     "name": "feature-one",
+    "activity_at": "2026-07-10T18:30:00.000Z",
     "branch": "feature/one",
     "repositories": [{
       "id": "018f47f4-5ab1-7c2d-8e90-abcdef012345",

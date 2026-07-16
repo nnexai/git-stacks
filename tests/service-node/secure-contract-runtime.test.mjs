@@ -52,7 +52,7 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
     browser.rpc.observeEvents((event) => events.push(event))
     const webSnapshot = await browser.rpc.request("web.snapshot")
     assert.deepEqual({ ...webSnapshot, generated_at: "<timestamp>" }, {
-      protocol: "web-v1", revision: "0", generated_at: "<timestamp>", pinned_workspace_ids: [], workspaces: [],
+      protocol: "web-v1", revision: "0", generated_at: "<timestamp>", pinned_workspace_ids: [], workspaces: [], archived_workspaces: [],
     })
     assert.ok(Number.isFinite(Date.parse(webSnapshot.generated_at)))
     const catalog = await browser.rpc.request("workspace-creation.catalog")
