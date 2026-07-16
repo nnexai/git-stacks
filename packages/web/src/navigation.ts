@@ -126,6 +126,21 @@ export type WebShortcutDispatcher = {
   handleXterm(event: BoundaryKeyEvent): boolean
 }
 
+export async function loadAuthoritativeWebActionSettings(
+  registry: WebActionRegistry,
+  load: () => Promise<WebShortcutSettings>,
+): Promise<WebShortcutSettings> {
+  registry.setSettings(undefined)
+  try {
+    const settings = await load()
+    registry.setSettings(settings)
+    return settings
+  } catch (error) {
+    registry.setSettings(undefined)
+    throw error
+  }
+}
+
 export function createWebShortcutDispatcher(registry: WebActionRegistry): WebShortcutDispatcher {
   const owners = new WeakMap<object, WebActionSource>()
 

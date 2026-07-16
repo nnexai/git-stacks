@@ -4,8 +4,9 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
 import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
-import type { WebOperation, WebRepository as Repository, WebSnapshot as Snapshot, WebTerminal as TerminalMeta, WebWorkspace as Workspace, Signal, WorkspaceCreationCatalog as Catalog, SecureScope, WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { WEB_SHORTCUT_ACTION_IDS, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
+import { createWebActionRegistry, createWebShortcutDispatcher, loadAuthoritativeWebActionSettings, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 
 if (window.top !== window) {
   document.documentElement.replaceChildren()
@@ -251,6 +252,7 @@ class TerminalView {
     this.terminal = terminal
     this.fit = fit
     this.enableWebgl()
+    terminal.attachCustomKeyEventHandler((event) => shortcutDispatcher.handleXterm(event))
     terminal.onData((data) => this.send({ type: "input", data }))
     terminal.onResize(({ cols, rows }) => this.send({ type: "resize", cols, rows }))
     terminal.onTitleChange((title) => this.scheduleAutomaticTitle(title))
@@ -396,6 +398,61 @@ const terminalViews = new Map<string, TerminalView>()
 const pendingWorkspaceCreations = new Map<string, string>()
 const pendingLifecycleOperations = new Set<string>()
 let activeModalClose: (() => void) | undefined
+let activeModalShortcutAction: WebShortcutActionId | undefined
+let activeModalPrimaryFocus: (() => void) | undefined
+
+const shortcutPlatform: WebShortcutPlatform = /Mac(?:intosh| OS X)/i.test(navigator.userAgent) ? "macos" : "linux"
+const overlayShortcutActions = new Map<WebShortcutActionId, (invocation: WebActionInvocation) => void>()
+
+function registerOverlayShortcutAction(actionId: "workspace.switch" | "commands.open", callback: (invocation: WebActionInvocation) => void): void {
+  overlayShortcutActions.set(actionId, callback)
+}
+
+function shortcutAvailability(actionId: WebShortcutActionId): WebActionAvailability {
+  if (activeModalClose && activeModalShortcutAction !== actionId) {
+    return { available: false, disabledReason: "Another dialog is active." }
+  }
+  if ((actionId === "workspace.switch" || actionId === "commands.open") && !overlayShortcutActions.has(actionId)) {
+    return { available: false, disabledReason: "This navigation surface is not available yet." }
+  }
+  if (actionId === "attention.next") return { available: false, disabledReason: "Attention navigation is not available yet." }
+  return { available: true }
+}
+
+function moveVisibleTerminal(direction: -1 | 1): void {
+  const items = visibleTerminals()
+  if (!items.length) return
+  const current = Math.max(0, items.findIndex((item) => item.id === activeTerminalId))
+  selectTerminal(items[(current + direction + items.length) % items.length]!.id)
+}
+
+const actionRegistrations = Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((actionId) => [actionId, {
+  availability: () => shortcutAvailability(actionId),
+  callback: (invocation: WebActionInvocation) => {
+    if (actionId === "workspace.switch" || actionId === "commands.open") {
+      overlayShortcutActions.get(actionId)?.(invocation)
+    } else if (actionId === "workspace.new") {
+      void showCreation()
+    } else if (actionId === "terminal.new") {
+      void createTerminal()
+    } else if (actionId === "terminal.close") {
+      if (activeTerminalId) void terminalViews.get(activeTerminalId)?.close()
+    } else if (actionId === "terminal.previous") {
+      moveVisibleTerminal(-1)
+    } else if (actionId === "terminal.next") {
+      moveVisibleTerminal(1)
+    }
+  },
+} satisfies WebActionRegistration])) as Record<WebShortcutActionId, WebActionRegistration>
+const webActionRegistry = createWebActionRegistry(actionRegistrations)
+const shortcutDispatcher = createWebShortcutDispatcher(webActionRegistry)
+registerOverlayShortcutAction("commands.open", (invocation) => {
+  if (invocation.kind === "refocus") {
+    if (activeModalShortcutAction === "commands.open") activeModalPrimaryFocus?.()
+    return
+  }
+  showLauncher()
+})
 
 app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button" id="archived" type="button">Archived</button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
@@ -854,7 +911,7 @@ async function dismissSignal(id: string): Promise<void> {
   try { await api("signals.dismiss", { signal_id: id }, { scope: "signal.dismiss" }); await refreshSignals() } catch (error) { toast(String(error), true) }
 }
 
-function modal(title: string): { body: HTMLElement; close: () => void } {
+function modal(title: string, shortcutAction?: WebShortcutActionId): { body: HTMLElement; close: () => void; setPrimaryFocus: (focus: () => void) => void } {
   activeModalClose?.()
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
   const backdrop = element("div", "modal-backdrop")
@@ -868,13 +925,19 @@ function modal(title: string): { body: HTMLElement; close: () => void } {
     if (closed) return
     closed = true
     backdrop.remove()
-    if (activeModalClose === close) activeModalClose = undefined
+    if (activeModalClose === close) {
+      activeModalClose = undefined
+      activeModalShortcutAction = undefined
+      activeModalPrimaryFocus = undefined
+    }
     previousFocus?.focus()
   }
   activeModalClose = close
+  activeModalShortcutAction = shortcutAction
+  activeModalPrimaryFocus = () => closeButton.focus()
   closeButton.addEventListener("click", close); backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close() })
   dialog.addEventListener("keydown", (event) => { if (event.key === "Escape") { close(); event.preventDefault() } })
-  return { body: bodyNode, close }
+  return { body: bodyNode, close, setPrimaryFocus: (focus) => { activeModalPrimaryFocus = focus } }
 }
 
 type LifecycleKind = "workspace.archive" | "workspace.unarchive" | "workspace.remove" | "workspace.force-remove"
@@ -1069,7 +1132,7 @@ async function showForceRemoveConfirmation(requestedWorkspace: Workspace): Promi
 function showLauncher(): void {
   const workspace = selectedWorkspace(), repository = selectedRepository()
   if (!workspace || !repository) { toast("Select a repository first", true); return }
-  const view = modal("Run a command")
+  const view = modal("Run a command", "commands.open")
   const available = workspace.commands.filter((command) => command.scope === "workspace" || command.repository_id === repository.id)
     .sort((a, b) => {
       const left = preferences.recent.indexOf(a.id), right = preferences.recent.indexOf(b.id)
@@ -1099,7 +1162,16 @@ function showLauncher(): void {
     if (event.key === "ArrowDown") { first?.focus(); event.preventDefault() }
     else if (event.key === "Enter") { first?.click(); event.preventDefault() }
   })
+  view.setPrimaryFocus(() => search.focus())
   view.body.append(search, results); render(); search.focus()
+}
+
+async function loadShortcutSettings(): Promise<void> {
+  try {
+    await loadAuthoritativeWebActionSettings(webActionRegistry, () => api<WebShortcutSettings>("shortcuts.get", { platform: shortcutPlatform }, { scope: "snapshot.read" }))
+  } catch {
+    toast("Shortcuts could not be loaded. Retry to enable keyboard actions.", true)
+  }
 }
 
 async function showCreation(): Promise<void> {
@@ -1265,13 +1337,7 @@ document.querySelector("#theme")!.addEventListener("click", () => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !contextMenu.hidden) { hideContextMenu(); event.preventDefault(); return }
   if (event.key === "Escape" && !signalInbox.hidden) { closeSignalInbox(); event.preventDefault(); return }
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); showLauncher() }
-  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "t") { event.preventDefault(); void createTerminal() }
-  if (event.ctrlKey && (event.key === "PageDown" || event.key === "PageUp")) {
-    const items = visibleTerminals(); if (!items.length) return
-    const current = Math.max(0, items.findIndex((item) => item.id === activeTerminalId)); const delta = event.key === "PageDown" ? 1 : -1
-    selectTerminal(items[(current + delta + items.length) % items.length]!.id); event.preventDefault()
-  }
+  shortcutDispatcher.handleDocument(event)
 })
 document.addEventListener("pointerdown", (event) => { if (!contextMenu.hidden && !contextMenu.contains(event.target as Node)) hideContextMenu() })
 window.addEventListener("blur", hideContextMenu)
@@ -1288,6 +1354,7 @@ void (async () => {
     showStartupFailure("Pairing required", error, "Run git-stacks web to open a fresh one-use link.")
     return
   }
+  await loadShortcutSettings()
   try {
     await refreshSnapshot()
   } catch (error) {
