@@ -98,7 +98,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<voi
 }
 
 describe("service-owned web terminal", () => {
-  test("applies the authoritative PTY overlay and sources commands despite hostile profile aliases and functions", () => {
+  test("applies and verifies the PTY overlay and directly runs commands despite hostile profile dispatch functions", () => {
     const fixtures = ([
       {
         family: "bash" as const,
@@ -110,6 +110,7 @@ describe("service-owned web terminal", () => {
           "alias source='false'",
           "alias printf='false'",
           "function builtin { return 91; }",
+          "function . { return 94; }",
           "function export { return 91; }",
           "function source { return 92; }",
           "function printf { return 93; }",
@@ -125,7 +126,9 @@ describe("service-owned web terminal", () => {
           "alias export=false",
           "alias source=false",
           "alias printf=false",
+          "function builtin { return 90 }",
           "function export { return 91 }",
+          "function . { return 94 }",
           "function source { return 92 }",
           "function printf { return 93 }",
         ].join("\n"),
@@ -153,9 +156,10 @@ describe("service-owned web terminal", () => {
       writeFileSync(profilePath, fixture.profile)
       const initialization = createPtyInitialization(fixture.family, { AUTHORITATIVE_OVERLAY: `ready-${fixture.family}` }, "/usr/bin/printf '%s' \"$AUTHORITATIVE_OVERLAY\"")
       try {
-        const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; ${initialization.runCommand}`), {
+        expect(initialization.bootstrap).not.toContain(`ready-${fixture.family}`)
+        const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; ${initialization.command}`), {
           encoding: "utf8",
-          env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...fixture.environment(root) },
+          env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...initialization.environment, ...fixture.environment(root) },
           timeout: 3_000,
         })
         expect(result.status, `${fixture.family}: ${result.stderr}`).toBe(0)
@@ -179,7 +183,7 @@ describe("service-owned web terminal", () => {
     try {
       spawnSync("/usr/bin/bash", ["--noprofile", "--rcfile", profilePath, "-i", "-c", initialization.bootstrap], {
         encoding: "utf8",
-        env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile" },
+        env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...initialization.environment },
         timeout: 3_000,
       })
       expect(existsSync(initialization.readyPath)).toBe(false)
@@ -244,10 +248,10 @@ describe("service-owned web terminal", () => {
         pid: 910_000 + processes.length,
         write(data) {
           record.writes.push(data)
-          const readyPath = data.match(/(?:\: >|touch --|printf '' >) '([^']+\/ready)'/)?.[1]
+          const readyPath = data.match(/> '([^']+\/ready)'/)?.[1]
           if (readyPath) writeFileSync(readyPath, "ready")
           if (data === "typed-input\r") finish()
-          if (data.includes("command.") && processes.length > 1) finish()
+          if (data.includes("printf done") && processes.length > 1) finish()
         },
         resize(columns, rows) { record.resizes.push([columns, rows]) },
         kill: () => finish(),
@@ -269,7 +273,7 @@ describe("service-owned web terminal", () => {
 
     const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, command_id: "cmd_0123456789abcdef", expected_revision: "1", cols: 80, rows: 24 })
     const { socket } = attach(manager, terminal.id)
-    await waitFor(() => processes[0]?.writes.some((write) => write.includes("command.")) === true)
+    await waitFor(() => processes[0]?.writes.some((write) => write.includes("read answer")) === true)
     manager.message(socket, JSON.stringify({ type: "resize", cols: 101, rows: 37 }))
     manager.message(socket, JSON.stringify({ type: "input", data: "typed-input\r" }))
     await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
@@ -277,7 +281,7 @@ describe("service-owned web terminal", () => {
     expect(processes).toHaveLength(2)
     expect(processes[0]!.writes).toContain("typed-input\r")
     expect(processes[0]!.resizes).toContainEqual([101, 37])
-    expect(processes[1]!.writes.some((write) => write.includes("command."))).toBe(true)
+    expect(processes[1]!.writes.some((write) => write.includes("printf done"))).toBe(true)
     await manager.close("browser-1", terminal.id)
   })
 

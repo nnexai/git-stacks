@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -60,61 +60,73 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
-function serializePtyEnvironment(environment: Record<string, string>): Buffer {
+function ptyOverlay(environment: Record<string, string>): {
+  entries: Array<{ key: string; shadow: string }>
+  environment: Record<string, string>
+} {
   const entries = Object.entries(environment).sort(([left], [right]) => left.localeCompare(right))
   for (const [key, value] of entries) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value.includes("\0")) throw new TypeError(`Invalid PTY environment entry: ${key}`)
   }
-  return Buffer.concat(entries.map(([key, value]) => Buffer.from(`${key}=${value}\0`, "utf8")))
-}
-
-function serializePosixPtyOverlay(environment: Record<string, string>, readyPath: string): string {
-  const entries = Object.entries(environment).sort(([left], [right]) => left.localeCompare(right))
-  for (const [key, value] of entries) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value.includes("\0")) throw new TypeError(`Invalid PTY environment entry: ${key}`)
+  const nonce = randomBytes(12).toString("hex")
+  return {
+    entries: entries.map(([key], index) => ({ key, shadow: `__GS_PTY_${nonce}_${index}` })),
+    environment: Object.fromEntries(entries.map(([, value], index) => [`__GS_PTY_${nonce}_${index}`, value])),
   }
-  const assignments = entries.map(([key, value]) => `${key}=${shellQuote(value)}`)
-  const checks = entries.map(([key, value]) => `case \"\${${key}-}\" in ${shellQuote(value)})`)
-  return [
-    ...assignments,
-    ...checks,
-    `> ${shellQuote(readyPath)}`,
-    ...entries.map(() => ";; *) ;; esac"),
-  ].join("\n")
 }
 
 export function createPtyInitialization(
   shell: "bash" | "zsh" | "fish",
   environment: Record<string, string>,
   command?: string,
-): { root: string; readyPath: string; bootstrap: string; runCommand?: string } {
+): { root: string; readyPath: string; statusPathPrefix: string; bootstrap: string; environment: Record<string, string>; command?: string } {
   const root = mkdtempSync(join(tmpdir(), "git-stacks-pty-"))
   chmodSync(root, 0o700)
-  const environmentPath = join(root, "environment")
   const readyPath = join(root, "ready")
-  if (shell === "fish") writeFileSync(environmentPath, serializePtyEnvironment(environment), { mode: 0o600 })
-  else writeFileSync(environmentPath, serializePosixPtyOverlay(environment, readyPath), { mode: 0o600 })
-  let runCommand: string | undefined
-  if (command !== undefined) {
-    const commandPath = join(root, shell === "fish" ? "command.fish" : "command.sh")
-    writeFileSync(commandPath, command, { mode: 0o600 })
-    runCommand = shell === "fish"
-      ? `builtin source ${shellQuote(commandPath)}; builtin set -l __gs_status $status; builtin exit $__gs_status`
-      : `\\. ${shellQuote(commandPath)}; __gs_status=$?; exit "$__gs_status"`
-  }
+  const statusPathPrefix = join(root, "status.")
+  const overlay = ptyOverlay(environment)
+  const ok = `__GS_PTY_OK_${randomBytes(12).toString("hex")}`
   const bootstrap = shell === "fish"
     ? [
-        `for __gs_entry in (builtin string split0 < ${shellQuote(environmentPath)})`,
-        "builtin set -l __gs_pair (builtin string split -m 1 = -- $__gs_entry)",
-        "builtin test (builtin count $__gs_pair) -eq 2; or builtin exit 126",
-        "builtin set -gx $__gs_pair[1] $__gs_pair[2]",
-        "end",
-        `builtin printf '' > ${shellQuote(readyPath)}`,
+        `builtin set -l ${ok} 1`,
+        ...overlay.entries.flatMap(({ key, shadow }) => [
+          `builtin set -gx ${key} $${shadow}`,
+          `builtin test \"$${key}\" = \"$${shadow}\"; or builtin set ${ok} 0`,
+        ]),
+        `builtin test \"$${ok}\" = 1; and builtin printf '' > ${shellQuote(readyPath)}`,
       ].join("; ")
     : [
-        `\\. ${shellQuote(environmentPath)}`,
+        `${ok}=1`,
+        ...overlay.entries.flatMap(({ key, shadow }) => [
+          `${key}=\"$${shadow}\"`,
+          `case \"\${${key}-}\" in \"$${shadow}\") ;; *) ${ok}= ;; esac`,
+        ]),
+        `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
       ].join("; ")
-  return { root, readyPath, bootstrap, ...(runCommand ? { runCommand } : {}) }
+  return { root, readyPath, statusPathPrefix, bootstrap, environment: overlay.environment, ...(command === undefined ? {} : { command }) }
+}
+
+function ptyCommandBatch(shell: "bash" | "zsh" | "fish", command: string, statusPathPrefix: string): string {
+  const status = `__GS_PTY_STATUS_${randomBytes(12).toString("hex")}`
+  return shell === "fish"
+    ? `begin\n${command}\nend\nbuiltin set -l ${status} $status; builtin printf '' > ${shellQuote(statusPathPrefix)}$${status}\n`
+    : `{\n${command}\n}\n${status}=$?; > ${shellQuote(statusPathPrefix)}\"$${status}\"\n`
+}
+
+async function waitForPtyCommand(
+  childExited: Promise<{ exitCode: number; signal?: number }>,
+  statusPathPrefix: string,
+): Promise<{ exitCode: number; signal?: number; shellExited: boolean }> {
+  while (true) {
+    for (let exitCode = 0; exitCode <= 255; exitCode += 1) {
+      if (existsSync(`${statusPathPrefix}${exitCode}`)) return { exitCode, shellExited: false }
+    }
+    const result = await Promise.race([
+      childExited.then((event) => ({ event })),
+      new Promise<undefined>((resolve) => setTimeout(resolve, 10)),
+    ])
+    if (result) return { ...result.event, shellExited: true }
+  }
 }
 
 async function waitForPtyInitialization(
@@ -317,10 +329,17 @@ export class WebTerminalManager {
         }
         const launch = resolution.launch
         if ("argv" in launch) {
+          const initialization = launch.initialization
+            ? createPtyInitialization(launch.initialization.shell, {
+                ...launch.environment,
+                ...terminalEnvironment,
+              })
+            : undefined
           const spawned = bufferPty(this.spawn(launch.argv, {
               cwd: launch.cwd,
               env: {
                 ...launch.environment,
+                ...initialization?.environment,
                 TERM: launch.environment.TERM ?? "xterm-256color",
                 COLORTERM: launch.environment.COLORTERM ?? "truecolor",
                 ...terminalEnvironment,
@@ -329,12 +348,8 @@ export class WebTerminalManager {
               rows: input.rows,
               name: "xterm-256color",
             }))
-          if (launch.initialization) {
+          if (initialization) {
             const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
-            const initialization = createPtyInitialization(launch.initialization.shell, {
-              ...launch.environment,
-              ...terminalEnvironment,
-            })
             try {
               await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs)
             } catch (error) {
@@ -502,6 +517,7 @@ export class WebTerminalManager {
             env: {
               ...process.env,
               ...step.environment,
+              ...initialization.environment,
               ...terminalEnvironment,
               TERM: process.env.TERM ?? "xterm-256color",
               COLORTERM: process.env.COLORTERM ?? "truecolor",
@@ -533,17 +549,25 @@ export class WebTerminalManager {
             if (cancelled) {
               child.kill("SIGTERM")
             } else {
-              child.write(`${initialization.runCommand}\r`)
+              child.write(ptyCommandBatch(shell.family, initialization.command!, initialization.statusPathPrefix))
               acceptsInput = true
               for (const input of pendingInput.splice(0)) child.write(input)
             }
-            const event = await childExited
+            const event = await waitForPtyCommand(childExited, initialization.statusPathPrefix)
             acceptsInput = false
-            active = undefined
             if (cancelled) {
               finish(event.exitCode || 130, event.signal)
               return
             }
+            if (!event.shellExited) {
+              try {
+                await this.terminatePtyProcessGroup(child, childExited)
+              } catch (cleanupError) {
+                dataListener(`\r\n[git-stacks shell cleanup] ${(cleanupError as Error).message}\r\n`)
+                return
+              }
+            }
+            active = undefined
             if (event.exitCode !== 0) {
               finish(event.exitCode, event.signal)
               return
