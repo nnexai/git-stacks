@@ -22,6 +22,17 @@ export type WebActionAvailability =
   | { available: true; disabledReason?: never }
   | { available: false; disabledReason: string }
 
+export function overlayAwareActionAvailability(
+  actionId: WebShortcutActionId,
+  state: { exclusive: boolean; navigationRegistered: boolean },
+): WebActionAvailability {
+  if (state.exclusive) return { available: false, disabledReason: "Another dialog is active." }
+  if ((actionId === "workspace.switch" || actionId === "commands.open") && !state.navigationRegistered) {
+    return { available: false, disabledReason: "This navigation surface is not available yet." }
+  }
+  return { available: true }
+}
+
 export type WebActionRegistration = {
   callback: (invocation: WebActionInvocation) => void
   availability?: () => WebActionAvailability

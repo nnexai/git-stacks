@@ -8,6 +8,7 @@ import {
   mountShortcutHelp,
   mountShortcutSettings,
 } from "../../packages/web/src/overlay-controller"
+import { overlayAwareActionAvailability } from "../../packages/web/src/navigation"
 
 type Listener = (event: FakeEvent) => void
 
@@ -104,7 +105,8 @@ class FakeElement {
   querySelectorAll(selector: string): FakeElement[] {
     const descendants = this.children.flatMap((child) => [child, ...child.querySelectorAll(selector)])
     if (selector.includes(":")) {
-      return descendants.filter((node) => ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(node.tagName) && !node.disabled && !node.hidden)
+      return descendants.filter((node) => ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(node.tagName)
+        && node.getAttribute("tabindex") !== "-1" && !node.disabled && !node.hidden)
     }
     if (selector.startsWith(".")) return descendants.filter((node) => node.className.split(" ").includes(selector.slice(1)))
     if (selector.startsWith("[")) {
@@ -193,6 +195,26 @@ describe("web singleton keyboard overlays", () => {
     expect(controller.activeSurface()).toBeUndefined()
   })
 
+  test("lets compatible shortcut surfaces replace each other while dynamic capture exclusivity blocks replacement", () => {
+    const { document, restores, controller } = harness()
+    const first = controller.open({ id: "workspace.switch", title: "Switch workspace", closeLabel: "Close workspace switcher", returnTarget: "term-original" })
+    expect(first.kind).toBe("opened")
+    expect(overlayAwareActionAvailability("commands.open", { exclusive: controller.isExclusive(), navigationRegistered: true })).toEqual({ available: true })
+
+    const second = controller.open({ id: "commands.open", title: "Configured commands", closeLabel: "Close commands", returnTarget: "wrong" })
+    expect(second.kind).toBe("opened")
+    expect(controller.activeSurface()).toBe("commands.open")
+    expect(document.body.querySelectorAll(".modal-backdrop")).toHaveLength(1)
+    expect(restores).toEqual([])
+
+    second.view.setExclusive(true)
+    expect(overlayAwareActionAvailability("workspace.switch", { exclusive: controller.isExclusive(), navigationRegistered: true })).toEqual({
+      available: false,
+      disabledReason: "Another dialog is active.",
+    })
+    expect(controller.open({ id: "workspace.switch", title: "Switch workspace", closeLabel: "Close workspace switcher" }).kind).toBe("unavailable")
+  })
+
   test("executes top fuzzy partials, synchronizes active rows, wraps navigation, and contains palette keys", () => {
     const { document, controller } = harness()
     const opened = controller.open({ id: "workspace", title: "Switch workspace", closeLabel: "Close workspace switcher", returnTarget: "term" })
@@ -226,6 +248,48 @@ describe("web singleton keyboard overlays", () => {
     overlay.input.dispatch("keydown", { key: "Home" })
     expect(overlay.input.getAttribute("aria-activedescendant")).toContain("active-alpha")
     expect(document.body.querySelectorAll("[role='option']")).toHaveLength(2)
+    expect(document.body.querySelectorAll("[role='option']").every((option) => option.getAttribute("tabindex") === "-1")).toBe(true)
+    expect(document.activeElement).toBe(overlay.input)
+    overlay.input.dispatch("keydown", { key: "Tab" })
+    expect(document.activeElement.getAttribute("aria-label")).toBe("Close workspace switcher")
+  })
+
+  test("latches async selection across Enter repeats and pointer activation, then unlocks coherently", async () => {
+    const { controller } = harness()
+    const opened = controller.open({ id: "commands", title: "Configured commands", closeLabel: "Close commands", returnTarget: "term" })
+    let selected = 0
+    const releases: Array<() => void> = []
+    const overlay = mountFuzzyOverlay(opened.view!, {
+      inputLabel: "Search configured commands",
+      emptyHeading: "No configured commands",
+      emptyBody: "This workspace and repository have no configured commands.",
+      noMatch: "No configured commands match.",
+      items: [{ id: "build", name: "Build" }],
+      stableId: (item) => item.id,
+      fields: (item) => [{ text: item.name, weight: 3 }],
+      render: (item) => ({ primary: item.name }),
+      select: () => {
+        selected += 1
+        return new Promise<void>((resolve) => releases.push(resolve))
+      },
+    })
+    const option = overlay.results.querySelector("[role='option']")!
+    overlay.input.dispatch("keydown", { key: "Enter" })
+    overlay.input.dispatch("keydown", { key: "Enter", repeat: true })
+    overlay.input.dispatch("keydown", { key: "Enter" })
+    option.dispatch("click")
+    expect(selected).toBe(1)
+    expect(overlay.results.getAttribute("aria-busy")).toBe("true")
+    expect(option.disabled).toBe(true)
+
+    releases.shift()?.()
+    await overlay.idle()
+    expect(overlay.results.getAttribute("aria-busy")).toBe("false")
+    expect(option.disabled).toBe(false)
+    option.dispatch("click")
+    expect(selected).toBe(2)
+    releases.shift()?.()
+    await overlay.idle()
   })
 
   test("renders exact zero and no-match states while keeping Enter inert", () => {
@@ -288,6 +352,19 @@ describe("web authoritative shortcut overlays", () => {
     expect(text).toContain("Unbound")
     expect(opened.view!.body.querySelectorAll(".shortcut-row")).toHaveLength(8)
     expect(opened.view!.body.querySelectorAll("KBD").length).toBeGreaterThan(8)
+  })
+
+  test("chooses help initial focus from safe invoker context", () => {
+    const { document, controller } = harness()
+    const settings = defaultShortcutSettings("linux", "4")
+    const withoutInvoker = controller.open({ id: "help-none", title: "Keyboard shortcuts", closeLabel: "Close keyboard shortcuts" })
+    mountShortcutHelp(withoutInvoker.view!, settings, () => undefined, { hasInvoker: false })
+    expect(document.activeElement.textContent).toBe("Close help")
+    withoutInvoker.view?.close(false)
+
+    const withInvoker = controller.open({ id: "help-invoked", title: "Keyboard shortcuts", closeLabel: "Close keyboard shortcuts", returnTarget: "term" })
+    mountShortcutHelp(withInvoker.view!, settings, () => undefined, { hasInvoker: true })
+    expect(document.activeElement.textContent).toBe("Customize shortcuts")
   })
 
   test("loads authoritatively, emits distinct revisioned intents, and accepts only complete successful responses", async () => {
@@ -374,6 +451,8 @@ describe("web authoritative shortcut overlays", () => {
     const primary = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-shortcut-primary") === "workspace.switch")
     primary?.dispatch("click")
     const capture = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-capture") === "workspace.switch")
+    expect(controller.isExclusive()).toBe(true)
+    expect(controller.open({ id: "commands.open", title: "Configured commands", closeLabel: "Close commands" }).kind).toBe("unavailable")
     document.dispatch(new FakeEvent("keydown", capture!, { key: "Escape" }))
     expect(controller.activeSurface()).toBe("settings")
     capture?.dispatch("keydown", { code: "ControlLeft", key: "Control", ctrlKey: true })
@@ -381,6 +460,9 @@ describe("web authoritative shortcut overlays", () => {
     capture?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, altGraph: true } as Partial<FakeEvent>)
     expect(mutations).toBe(0)
     expect(opened.view?.body.textContent).toContain("Press shortcut…")
+    capture?.dispatch("keydown", { key: "Escape" })
+    expect(controller.isExclusive()).toBe(false)
+    expect(opened.view?.body.textContent).not.toContain("Press shortcut…")
   })
 
   test("retries authoritative loading and uses set-aliases for add and remove", async () => {
@@ -442,6 +524,29 @@ describe("web authoritative shortcut overlays", () => {
     expect(css).toContain(".overlay-result.active")
     expect(css).toContain(".shortcut-row.capturing")
     expect(css).toMatch(/@media \(max-width: 640px\)[\s\S]*\.toolbar-discovery \{ width: 32px;/)
+    expect(css).toMatch(/@media \(max-width: 400px\)[\s\S]*\.brand > :not\(\.brand-mark\) \{ display: none;/)
+    expect(css).toMatch(/@media \(max-width: 400px\)[\s\S]*\.toolbar \.button \{ width: 32px; min-width: 32px;/)
     expect(css).not.toMatch(/@media \(max-width: 640px\)[\s\S]*\.toolbar-discovery[^}]*display:\s*none/)
+  })
+
+  test("keeps filled accent and light warning normal text above WCAG AA contrast", async () => {
+    const css = await readFile(new URL("../../packages/web/src/app.css", import.meta.url), "utf8")
+    const root = css.match(/^:root \{([\s\S]*?)\n\}/)?.[1] ?? ""
+    const light = css.match(/:root\[data-theme="light"\] \{([^}]*)\}/)?.[1] ?? ""
+    const token = (block: string, name: string) => block.match(new RegExp(`--${name}:\\s*(#[0-9a-f]+)`, "i"))?.[1] ?? ""
+    const luminance = (hex: string) => {
+      const channels = hex.match(/[0-9a-f]{2}/gi)!.map((part) => Number.parseInt(part, 16) / 255)
+        .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+      return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!
+    }
+    const contrast = (left: string, right: string) => {
+      const values = [luminance(left), luminance(right)].sort((a, b) => b - a)
+      return (values[0]! + 0.05) / (values[1]! + 0.05)
+    }
+    expect(contrast(token(root, "accent"), token(root, "accent-text"))).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(token(light, "accent"), token(light, "accent-text"))).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(token(light, "warning"), token(light, "panel"))).toBeGreaterThanOrEqual(4.5)
+    expect(css).toMatch(/\.button \{[^}]*font-size: 14px; font-weight: 650;/)
+    expect(css).toContain(".shortcut-remove { min-height: 32px; padding: 4px 8px; }")
   })
 })

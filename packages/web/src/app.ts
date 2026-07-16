@@ -6,7 +6,7 @@ import "./app.css"
 import { FUZZY_FIELD_WEIGHT, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { createWebActionRegistry, createWebShortcutDispatcher, loadAuthoritativeWebActionSettings, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { createWebActionRegistry, createWebShortcutDispatcher, loadAuthoritativeWebActionSettings, overlayAwareActionAvailability, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -409,14 +409,10 @@ function registerOverlayShortcutAction(actionId: "workspace.switch" | "commands.
 }
 
 function shortcutAvailability(actionId: WebShortcutActionId): WebActionAvailability {
-  const activeSurface = overlayController?.activeSurface()
-  if (activeSurface && activeSurface !== actionId) {
-    return { available: false, disabledReason: "Another dialog is active." }
-  }
-  if ((actionId === "workspace.switch" || actionId === "commands.open") && !overlayShortcutActions.has(actionId)) {
-    return { available: false, disabledReason: "This navigation surface is not available yet." }
-  }
-  return { available: true }
+  return overlayAwareActionAvailability(actionId, {
+    exclusive: overlayController?.isExclusive() ?? false,
+    navigationRegistered: overlayShortcutActions.has(actionId),
+  })
 }
 
 function moveVisibleTerminal(direction: -1 | 1): void {
@@ -497,7 +493,7 @@ registerOverlayShortcutAction("workspace.switch", (invocation) => {
   showWorkspaceSwitcher()
 })
 
-app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button" id="archived" type="button">Archived</button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
+app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
 const nav = document.querySelector<HTMLUListElement>("#nav")!
 const scope = document.querySelector<HTMLElement>("#scope")!
@@ -1269,7 +1265,7 @@ function showLauncher(): void {
       secondary: `${preferences.recent.includes(command.id) ? "Recent · " : ""}${workspace.name} / ${command.scope === "repository" ? repository.name : "workspace"}`,
     }),
     select: (command) => {
-      void createTerminal(command.id).then((created) => {
+      return createTerminal(command.id).then((created) => {
         if (!created) return
         preferences.recent = [command.id, ...preferences.recent.filter((id) => id !== command.id)]
         savePreferences()
@@ -1292,6 +1288,7 @@ async function loadShortcutSettings(reportFailure = true): Promise<WebShortcutSe
 }
 
 function showKeyboardHelp(): void {
+  const hasInvoker = document.activeElement !== document.body
   const opened = overlayController.open({
     id: "shortcut-help",
     title: "Keyboard shortcuts",
@@ -1308,7 +1305,7 @@ function showKeyboardHelp(): void {
     retry.focus()
     return
   }
-  mountShortcutHelp(opened.view, shortcutSettings, showShortcutSettings)
+  mountShortcutHelp(opened.view, shortcutSettings, showShortcutSettings, { hasInvoker })
 }
 
 function showShortcutSettings(): void {

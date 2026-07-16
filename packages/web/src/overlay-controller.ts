@@ -33,6 +33,7 @@ export type OverlayView = {
   body: HTMLElement
   close(restoreFocus?: boolean): void
   setPrimaryFocus(focus: () => void): void
+  setExclusive(exclusive: boolean): void
 }
 
 export type OverlayOpenResult =
@@ -142,6 +143,9 @@ export function createSingletonOverlayController(document: Document, options: Ov
       setPrimaryFocus(focus) {
         if (active?.close === close) active.primaryFocus = focus
       },
+      setExclusive(exclusive) {
+        if (active?.close === close) active.exclusive = exclusive
+      },
     }
     active = {
       id: request.id,
@@ -181,7 +185,7 @@ export type FuzzyOverlayOptions<T> = {
   recency?(item: T): number | string
   defaultOrder?(left: T, right: T): number
   render(item: T): { primary: string; secondary?: string }
-  select(item: T): void
+  select(item: T): void | Promise<void>
 }
 
 export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOptions<T>) {
@@ -201,6 +205,32 @@ export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOpt
   live.setAttribute("aria-live", "polite")
   let ranked: T[] = []
   let activeIndex = -1
+  let selecting = false
+  let pendingSelection: Promise<void> = Promise.resolve()
+
+  const setSelecting = (next: boolean) => {
+    selecting = next
+    results.setAttribute("aria-busy", String(next))
+    for (const row of results.querySelectorAll<HTMLButtonElement>("[role='option']")) {
+      row.disabled = next
+      row.setAttribute("aria-disabled", String(next))
+    }
+  }
+
+  const select = (item: T) => {
+    if (selecting) return
+    setSelecting(true)
+    let selection: void | Promise<void>
+    try {
+      selection = options.select(item)
+    } catch {
+      setSelecting(false)
+      return
+    }
+    pendingSelection = Promise.resolve(selection)
+      .catch(() => undefined)
+      .finally(() => setSelecting(false))
+  }
 
   const optionId = (item: T) => `${listId}-${options.stableId(item).replaceAll(/[^a-z0-9_-]/gi, "-")}`
   const setActive = (next: number) => {
@@ -241,6 +271,9 @@ export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOpt
         const row = control(document, "", "overlay-result")
         row.id = optionId(item)
         row.setAttribute("role", "option")
+        row.setAttribute("tabindex", "-1")
+        row.disabled = selecting
+        row.setAttribute("aria-disabled", String(selecting))
         row.setAttribute("aria-selected", String(index === activeIndex))
         row.title = [presentation.primary, presentation.secondary].filter(Boolean).join(" — ")
         const identity = node(document, "span", "overlay-result-identity")
@@ -248,7 +281,7 @@ export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOpt
         if (presentation.secondary) identity.append(node(document, "span", "overlay-result-secondary", presentation.secondary))
         row.append(identity)
         row.addEventListener("pointermove", () => setActive(index))
-        row.addEventListener("click", () => options.select(item))
+        row.addEventListener("click", () => select(item))
         results.append(row)
       })
       setActive(activeIndex)
@@ -265,7 +298,7 @@ export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOpt
     else if (event.key === "End") activeIndex = moveFuzzyActiveIndex(activeIndex, ranked.length, "end")
     else if (event.key === "Enter") {
       const item = ranked[activeIndex]
-      if (item) options.select(item)
+      if (item && !event.repeat) select(item)
     } else handled = false
     if (!handled) return
     if (event.key !== "Enter") setActive(activeIndex)
@@ -276,7 +309,7 @@ export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOpt
   view.body.append(input, results, live)
   render()
   input.focus()
-  return { input, results, live, render }
+  return { input, results, live, render, idle: () => pendingSelection }
 }
 
 const actionGroups: ReadonlyArray<{ label: string; actions: readonly WebShortcutActionId[] }> = [
@@ -333,7 +366,12 @@ function appendShortcutRows(container: HTMLElement, settings: WebShortcutSetting
   }
 }
 
-export function mountShortcutHelp(view: OverlayView, settings: WebShortcutSettings, customize: () => void): void {
+export function mountShortcutHelp(
+  view: OverlayView,
+  settings: WebShortcutSettings,
+  customize: () => void,
+  options: { hasInvoker?: boolean } = {},
+): void {
   const document = view.body.ownerDocument
   appendShortcutRows(view.body, settings)
   const actions = node(document, "div", "modal-actions")
@@ -343,8 +381,9 @@ export function mountShortcutHelp(view: OverlayView, settings: WebShortcutSettin
   settingsButton.addEventListener("click", customize)
   actions.append(close, settingsButton)
   view.body.append(actions)
-  view.setPrimaryFocus(() => settingsButton.focus())
-  settingsButton.focus()
+  const primary = options.hasInvoker === false ? close : settingsButton
+  view.setPrimaryFocus(() => primary.focus())
+  primary.focus()
 }
 
 type ShortcutSettingsOptions = {
@@ -398,6 +437,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
       options.accept(next)
       options.announce(`${actionLabel(mutation.action_id)} shortcut updated.`)
       capture = undefined
+      view.setExclusive(false)
     }).catch(() => {
       current = previous
       retryMutation = mutation
@@ -414,6 +454,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
     if (event.key === "Escape") {
       const actionId = capture.actionId
       capture = undefined
+      view.setExclusive(false)
       render()
       view.body.querySelector<HTMLElement>(`[data-shortcut-primary='${actionId}']`)?.focus()
       return
@@ -466,6 +507,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
   const startCapture = (actionId: WebShortcutActionId, target: "primary" | "alias") => {
     if (busyAction) return
     capture = { actionId, target }
+    view.setExclusive(true)
     retryMutation = undefined
     render()
     view.body.querySelector<HTMLElement>(`[data-capture='${actionId}']`)?.focus()

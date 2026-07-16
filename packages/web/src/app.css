@@ -7,16 +7,16 @@
   --line: #303238;
   --text: #f0f0f1;
   --muted: #92969e;
-  --accent: #3584e4;
-  --accent-text: #fff;
+  --accent: #1c71d8;
+  --accent-text: #ffffff;
   --success: #57c78b;
   --danger: #ff747f;
   --warning: #ffad45;
   --focus: #78aeed;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-:root[data-theme="light"] { color-scheme: light; --bg: #fafafa; --panel: #f2f2f4; --panel-2: #fff; --panel-hover: #e7e8eb; --line: #d3d4d8; --text: #242529; --muted: #696d75; --accent: #3584e4; --accent-text: #fff; --success: #228b54; --danger: #c83d4d; --warning: #a95d00; --focus: #1c71d8; }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { color-scheme: light; --bg: #fafafa; --panel: #f2f2f4; --panel-2: #fff; --panel-hover: #e7e8eb; --line: #d3d4d8; --text: #242529; --muted: #696d75; --accent: #3584e4; --accent-text: #fff; --success: #228b54; --danger: #c83d4d; --warning: #a95d00; --focus: #1c71d8; } }
+:root[data-theme="light"] { color-scheme: light; --bg: #fafafa; --panel: #f2f2f4; --panel-2: #fff; --panel-hover: #e7e8eb; --line: #d3d4d8; --text: #242529; --muted: #696d75; --accent: #1c71d8; --accent-text: #ffffff; --success: #228b54; --danger: #c83d4d; --warning: #995400; --focus: #1c71d8; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { color-scheme: light; --bg: #fafafa; --panel: #f2f2f4; --panel-2: #fff; --panel-hover: #e7e8eb; --line: #d3d4d8; --text: #242529; --muted: #696d75; --accent: #1c71d8; --accent-text: #ffffff; --success: #228b54; --danger: #c83d4d; --warning: #995400; --focus: #1c71d8; } }
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
 button, input, select { font: inherit; }
@@ -28,7 +28,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .brand-mark { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--line)); border-radius: 7px; color: var(--accent); font: 700 11px ui-monospace, monospace; }
 .top-status { min-width: 0; flex: 1; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 .toolbar { display: flex; align-items: center; gap: 6px; }
-.button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); cursor: pointer; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font-size: 14px; font-weight: 650; line-height: 1.3; cursor: pointer; }
 .button:hover { background: var(--panel-hover); border-color: color-mix(in srgb, var(--accent) 46%, var(--line)); }
 .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
@@ -193,7 +193,7 @@ kbd { min-width: 22px; padding: 3px 5px; border: 1px solid var(--line); border-b
 .shortcut-unbound { color: var(--muted); font-size: 13px; }
 .shortcut-binding-button { min-height: 32px; display: inline-flex; align-items: center; padding: 4px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); cursor: pointer; }
 .shortcut-alias { display: inline-flex; align-items: center; gap: 4px; }
-.shortcut-remove { min-height: 28px; padding: 3px 6px; font-size: 11px; }
+.shortcut-remove { min-height: 32px; padding: 4px 8px; }
 .shortcut-settings-row { grid-template-columns: minmax(120px, .55fr) minmax(0, 1.45fr); }
 .shortcut-settings-row > :nth-child(n+3) { grid-column: 1 / -1; }
 .shortcut-capture { justify-self: start; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--panel-2)); }
@@ -215,4 +215,5 @@ kbd { min-width: 22px; padding: 3px 5px; border: 1px solid var(--line); border-b
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 900px) { .workspace-grid { grid-template-columns: 250px minmax(0, 1fr); } .brand { min-width: auto; } .top-status { display: none; } .signal-popover { left: 10px; } .workspace-secondary { display: none; } .workspace-row { min-height: 36px; } .git-additions, .git-removals { display: none; } }
 @media (max-width: 640px) { .workspace-grid { grid-template-columns: 205px minmax(0, 1fr); } .sidebar { padding-inline: 5px; } .sidebar-tools { margin-inline: -5px; padding-inline: 5px; } .organization-switch { grid-template-columns: 1fr; } .header-signal #signal-label, .button .wide { display: none; } .header-signal { margin-left: auto; } .toolbar-discovery { width: 32px; min-width: 32px; padding: 0; } .workspace-status .provider-chip ~ .provider-chip { display: none; } .scope-title span { display: none; } .shortcut-row, .shortcut-settings-row { grid-template-columns: minmax(0, 1fr); gap: 8px; } .shortcut-bindings, .shortcut-row-controls { justify-content: start; } }
+@media (max-width: 400px) { .topbar { gap: 6px; padding-inline: 6px; } .brand { min-width: 25px; gap: 0; } .brand > :not(.brand-mark) { display: none; } .header-signal { position: relative; width: 32px; min-width: 32px; margin-left: 0; padding: 0; justify-content: center; } .header-badge { position: absolute; top: 0; right: -3px; } .toolbar { min-width: 0; margin-left: auto; gap: 4px; } .toolbar .button { width: 32px; min-width: 32px; padding-inline: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } .activity-marker::after { opacity: 1; transform: none; } }
