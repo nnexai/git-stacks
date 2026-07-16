@@ -4,9 +4,9 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
 import { FUZZY_FIELD_WEIGHT, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
-import { WEB_SHORTCUT_ACTION_IDS, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -18,7 +18,7 @@ type Pair = { workspaceId: string; repositoryId: string }
 type Organization = "label" | "repository"
 
 class ApiRequestError extends Error {
-  constructor(readonly code: string, message: string, readonly status: number) { super(message) }
+  constructor(readonly code: string, message: string, readonly status: number, readonly details?: unknown) { super(message) }
 }
 
 const app = document.querySelector<HTMLDivElement>("#app")!
@@ -49,7 +49,9 @@ if (preferences.theme !== "system") document.documentElement.dataset.theme = pre
 async function api<T>(method: string, body?: unknown, options: { scope?: SecureScope; idempotencyKey?: string } = {}): Promise<T> {
   try { return await secureApi<T>(method, body, options) } catch (error) {
     const code = String((error as { code?: unknown }).code ?? "request_failed")
-    throw new ApiRequestError(code, error instanceof Error ? error.message : String(error), code === "conflict" ? 409 : 500)
+    const details = (error as { details?: unknown }).details
+    const status = code === "conflict" || code === WEB_SHORTCUT_STALE_REVISION_ERROR_CODE || code === WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE ? 409 : 500
+    throw new ApiRequestError(code, error instanceof Error ? error.message : String(error), status, details)
   }
 }
 
@@ -471,7 +473,7 @@ const webActionRegistry = createWebActionRegistry(actionRegistrations)
 const shortcutSettingsCoordinator = createWebShortcutSettingsCoordinator(webActionRegistry, {
   load: () => api<WebShortcutSettings>("shortcuts.get", { platform: shortcutPlatform }, { scope: "snapshot.read" }),
   mutate: (mutation) => api<WebShortcutSettings>("shortcuts.set", mutation, { scope: "operation.write" }),
-  isConflict: (error) => error instanceof ApiRequestError && error.code === "conflict",
+  classifyConflict: classifyWebShortcutMutationConflict,
   onChange: (settings) => { shortcutSettings = settings },
 })
 const shortcutDispatcher = createWebShortcutDispatcher(webActionRegistry)

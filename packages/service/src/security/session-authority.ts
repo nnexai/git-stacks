@@ -7,6 +7,7 @@ import {
   SecureFrameQueue,
   SecureRequestSchema,
   SecureResponseSchema,
+  WebShortcutErrorDetailsSchema,
   decodeCanonical,
   encodeCanonical,
   type SecureClientHello,
@@ -366,7 +367,8 @@ export class SecureSessionServer {
     try {
       response = { id: request.id, ok: true, body: await this.options.handler.request(context, request) }
     } catch (error) {
-      const candidate = error as { code?: unknown; retryable?: unknown }
+      const candidate = error as { code?: unknown; retryable?: unknown; details?: unknown }
+      const shortcutDetails = WebShortcutErrorDetailsSchema.safeParse(candidate.details)
       response = {
         id: request.id,
         ok: false,
@@ -374,6 +376,7 @@ export class SecureSessionServer {
           code: boundedErrorField(candidate.code ?? "internal_error", "internal_error", SECURE_LIMITS.responseErrorCodeLength),
           message: boundedErrorField(error instanceof Error ? error.message : "Secure request failed", "Secure request failed", SECURE_LIMITS.responseErrorMessageLength),
           ...(candidate.retryable === true ? { retryable: true } : {}),
+          ...(shortcutDetails.success ? { details: shortcutDetails.data } : {}),
         },
       }
     }

@@ -333,7 +333,10 @@ export class SecureRpcClient {
     if (!pending) return
     this.pending.delete(response.id)
     if (response.ok) pending.resolve(response.body)
-    else pending.reject(Object.assign(new Error(response.error?.message ?? "Secure request failed"), { code: response.error?.code }))
+    else pending.reject(Object.assign(new Error(response.error?.message ?? "Secure request failed"), {
+      code: response.error?.code,
+      details: response.error?.details,
+    }))
   }
 }
 

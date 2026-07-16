@@ -4,8 +4,14 @@ import {
   WEB_SHORTCUT_ACTION_METADATA,
   defaultShortcutSettings,
 } from "../../packages/client/src/index"
-import { WEB_SHORTCUT_ACTION_IDS, type WebShortcutActionId } from "../../packages/protocol/src/web"
 import {
+  WEB_SHORTCUT_ACTION_IDS,
+  WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+  WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+  type WebShortcutActionId,
+} from "../../packages/protocol/src/web"
+import {
+  classifyWebShortcutMutationConflict,
   createWebActionRegistry,
   createWebShortcutDispatcher,
   createWebShortcutSettingsCoordinator,
@@ -13,6 +19,7 @@ import {
   terminalTraversalTarget,
   WebShortcutConflictRecoveryError,
   WebShortcutConflictRefreshError,
+  WebShortcutOwnerConflictError,
   type WebActionInvocation,
   type WebActionRegistration,
 } from "../../packages/web/src/navigation"
@@ -233,7 +240,7 @@ describe("web keyboard navigation boundary", () => {
     const coordinator = createWebShortcutSettingsCoordinator(registry, {
       load: () => responses.shift()!.promise,
       mutate: async () => { throw new Error("unused") },
-      isConflict: () => false,
+      classifyConflict: () => undefined,
       onChange: (settings) => accepted.push(settings?.revision),
     })
 
@@ -261,7 +268,7 @@ describe("web keyboard navigation boundary", () => {
     const coordinator = createWebShortcutSettingsCoordinator(registry, {
       load: () => loadResponse.promise,
       mutate: () => mutationResponse.promise,
-      isConflict: () => false,
+      classifyConflict: () => undefined,
       onChange: (settings) => accepted.push(settings?.revision),
     })
     const mutation = coordinator.mutate({
@@ -284,10 +291,15 @@ describe("web keyboard navigation boundary", () => {
       load: async () => defaultShortcutSettings("linux", String(++loadCount === 1 ? 7 : 8)),
       mutate: async (mutation) => {
         attemptedRevisions.push(mutation.expected_revision)
-        if (mutation.expected_revision === "7") throw new Error("conflict")
+        if (mutation.expected_revision === "7") {
+          throw Object.assign(new Error("stale"), {
+            code: WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+            details: { kind: "stale_revision" },
+          })
+        }
         return defaultShortcutSettings("linux", "9")
       },
-      isConflict: (error) => error instanceof Error && error.message === "conflict",
+      classifyConflict: classifyWebShortcutMutationConflict,
     })
     await coordinator.load()
     const staleMutation = {
@@ -308,12 +320,61 @@ describe("web keyboard navigation boundary", () => {
     expect(attemptedRevisions).toEqual(["7", "8"])
   })
 
+  test("keeps owner collisions distinct from stale revisions without reloading authoritative settings", async () => {
+    const { registry } = harness()
+    let loads = 0
+    const coordinator = createWebShortcutSettingsCoordinator(registry, {
+      load: async () => { loads += 1; return defaultShortcutSettings("linux", "7") },
+      mutate: async () => {
+        throw Object.assign(new Error("friendly transport text may change"), {
+          code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+          details: { kind: "binding_owner_conflict", owner_action_id: "commands.open" },
+        })
+      },
+      classifyConflict: classifyWebShortcutMutationConflict,
+    })
+    await coordinator.load()
+
+    await expect(coordinator.mutate({
+      platform: "linux", action_id: "workspace.switch", expected_revision: "7", intent: "unbind",
+    })).rejects.toMatchObject({
+      name: "WebShortcutOwnerConflictError",
+      ownerActionId: "commands.open",
+    } satisfies Partial<WebShortcutOwnerConflictError>)
+    expect(loads).toBe(1)
+    expect(coordinator.current()?.revision).toBe("7")
+  })
+
+  test("validates typed shortcut conflict details and fails closed for malformed or mismatched owners", () => {
+    expect(classifyWebShortcutMutationConflict({
+      code: WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+      details: { kind: "stale_revision" },
+    })).toEqual({ kind: "stale_revision" })
+    expect(classifyWebShortcutMutationConflict({
+      code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+      details: { kind: "binding_owner_conflict", owner_action_id: "terminal.next" },
+    })).toEqual({ kind: "binding_owner_conflict", ownerActionId: "terminal.next" })
+
+    for (const malformed of [
+      { code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, details: { kind: "binding_owner_conflict", owner_action_id: "not.an.action" } },
+      { code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, details: { kind: "binding_owner_conflict" } },
+      { code: WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, details: { kind: "binding_owner_conflict", owner_action_id: "commands.open" } },
+      { code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, details: { kind: "stale_revision" } },
+      { code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, details: undefined },
+    ]) expect(classifyWebShortcutMutationConflict(malformed)).toBeUndefined()
+  })
+
   test("fails closed without exposing a stale retry when conflict refresh is unavailable", async () => {
     const { registry } = harness()
     const coordinator = createWebShortcutSettingsCoordinator(registry, {
       load: async () => { throw new Error("offline") },
-      mutate: async () => { throw new Error("conflict") },
-      isConflict: (error) => error instanceof Error && error.message === "conflict",
+      mutate: async () => {
+        throw Object.assign(new Error("stale"), {
+          code: WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+          details: { kind: "stale_revision" },
+        })
+      },
+      classifyConflict: classifyWebShortcutMutationConflict,
     })
     await expect(coordinator.mutate({
       platform: "linux", action_id: "terminal.new", expected_revision: "7", intent: "unbind",

@@ -8,7 +8,7 @@ import {
   mountShortcutHelp,
   mountShortcutSettings,
 } from "../../packages/web/src/overlay-controller"
-import { overlayAwareActionAvailability, WebShortcutConflictRecoveryError } from "../../packages/web/src/navigation"
+import { overlayAwareActionAvailability, WebShortcutConflictRecoveryError, WebShortcutOwnerConflictError } from "../../packages/web/src/navigation"
 
 type Listener = (event: FakeEvent) => void
 
@@ -468,6 +468,39 @@ describe("web authoritative shortcut overlays", () => {
     await settings.idle()
     expect(attemptedRevisions).toEqual(["10", "11"])
     expect(accepted).toEqual(["10", "11", "12"])
+  })
+
+  test("keeps capture and authoritative bindings on an actual owner collision without offering stale retry", async () => {
+    const { controller } = harness()
+    const authoritative = defaultShortcutSettings("linux", "10")
+    const accepted: string[] = []
+    let mutations = 0
+    const opened = controller.open({ id: "settings", title: "Customize shortcuts", closeLabel: "Close shortcut settings", returnTarget: "term" })
+    const settings = mountShortcutSettings(opened.view!, {
+      platform: "linux",
+      load: async () => authoritative,
+      mutate: async () => {
+        mutations += 1
+        throw new WebShortcutOwnerConflictError("commands.open")
+      },
+      accept: (next) => accepted.push(next.revision),
+      announce: () => undefined,
+    })
+    await settings.ready
+
+    opened.view?.body.querySelectorAll("BUTTON")
+      .find((node) => node.getAttribute("data-shortcut-primary") === "workspace.switch")?.dispatch("click")
+    opened.view?.body.querySelectorAll("BUTTON")
+      .find((node) => node.getAttribute("data-capture") === "workspace.switch")
+      ?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, shiftKey: true })
+    await settings.idle()
+
+    expect(mutations).toBe(1)
+    expect(accepted).toEqual(["10"])
+    expect(opened.view?.body.textContent).toContain("Already assigned to Configured commands.")
+    expect(opened.view?.body.textContent).not.toContain("Retry saving shortcut")
+    expect(opened.view?.body.querySelectorAll("BUTTON").some((node) => node.getAttribute("data-capture") === "workspace.switch")).toBe(true)
+    expect(controller.isExclusive()).toBe(true)
   })
 
   test("ignores pure modifiers, composition, and AltGraph during capture", async () => {

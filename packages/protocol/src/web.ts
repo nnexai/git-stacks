@@ -33,6 +33,16 @@ export const WebShortcutPlatformSchema = z.enum(["macos", "linux"])
 export type WebShortcutPlatform = z.infer<typeof WebShortcutPlatformSchema>
 export const WebShortcutActionIdSchema = z.enum(WEB_SHORTCUT_ACTION_IDS)
 export type WebShortcutActionId = z.infer<typeof WebShortcutActionIdSchema>
+export const WEB_SHORTCUT_STALE_REVISION_ERROR_CODE = "shortcut_revision_conflict" as const
+export const WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE = "shortcut_binding_conflict" as const
+export const WebShortcutErrorDetailsSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("stale_revision") }),
+  z.strictObject({
+    kind: z.literal("binding_owner_conflict"),
+    owner_action_id: WebShortcutActionIdSchema,
+  }),
+])
+export type WebShortcutErrorDetails = z.infer<typeof WebShortcutErrorDetailsSchema>
 export const WebShortcutBindingSchema = z.strictObject({
   code: z.string().regex(/^Key[A-Z]$/),
   ctrl: z.boolean(),

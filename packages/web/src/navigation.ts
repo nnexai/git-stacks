@@ -5,11 +5,14 @@ import {
   type ShortcutCategory,
   type ShortcutKeyEvent,
 } from "@git-stacks/client"
-import type {
-  WebShortcutActionId,
-  WebShortcutEffectiveBinding,
-  WebShortcutMutation,
-  WebShortcutSettings,
+import {
+  WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+  WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+  WebShortcutErrorDetailsSchema,
+  type WebShortcutActionId,
+  type WebShortcutEffectiveBinding,
+  type WebShortcutMutation,
+  type WebShortcutSettings,
 } from "@git-stacks/protocol"
 
 export type WebActionSource = "document" | "xterm"
@@ -156,6 +159,31 @@ export class WebShortcutConflictRefreshError extends Error {
   }
 }
 
+export class WebShortcutOwnerConflictError extends Error {
+  constructor(readonly ownerActionId: WebShortcutActionId, options?: ErrorOptions) {
+    super(`Shortcut is already assigned to ${ownerActionId}`, options)
+    this.name = "WebShortcutOwnerConflictError"
+  }
+}
+
+export type WebShortcutMutationConflict =
+  | { kind: "stale_revision" }
+  | { kind: "binding_owner_conflict"; ownerActionId: WebShortcutActionId }
+
+export function classifyWebShortcutMutationConflict(error: unknown): WebShortcutMutationConflict | undefined {
+  if (!error || typeof error !== "object") return undefined
+  const candidate = error as { code?: unknown; details?: unknown }
+  const details = WebShortcutErrorDetailsSchema.safeParse(candidate.details)
+  if (!details.success) return undefined
+  if (candidate.code === WEB_SHORTCUT_STALE_REVISION_ERROR_CODE && details.data.kind === "stale_revision") {
+    return { kind: "stale_revision" }
+  }
+  if (candidate.code === WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE && details.data.kind === "binding_owner_conflict") {
+    return { kind: "binding_owner_conflict", ownerActionId: details.data.owner_action_id }
+  }
+  return undefined
+}
+
 export type WebShortcutSettingsCoordinator = {
   current(): WebShortcutSettings | undefined
   load(): Promise<WebShortcutSettings>
@@ -165,7 +193,7 @@ export type WebShortcutSettingsCoordinator = {
 type WebShortcutSettingsCoordinatorOptions = {
   load(): Promise<WebShortcutSettings>
   mutate(mutation: WebShortcutMutation): Promise<WebShortcutSettings>
-  isConflict(error: unknown): boolean
+  classifyConflict(error: unknown): WebShortcutMutationConflict | undefined
   onChange?(settings: WebShortcutSettings | undefined): void
 }
 
@@ -227,7 +255,11 @@ export function createWebShortcutSettingsCoordinator(
         return settings
       } catch (error) {
         if (!isCurrent(operationGeneration)) return superseded(identity)
-        if (!options.isConflict(error)) throw error
+        const conflict = options.classifyConflict(error)
+        if (!conflict) throw error
+        if (conflict.kind === "binding_owner_conflict") {
+          throw new WebShortcutOwnerConflictError(conflict.ownerActionId, { cause: error })
+        }
 
         let settings: WebShortcutSettings
         try {
@@ -255,7 +287,7 @@ export async function loadAuthoritativeWebActionSettings(
   return createWebShortcutSettingsCoordinator(registry, {
     load,
     mutate: async () => { throw new Error("Shortcut mutation is unavailable") },
-    isConflict: () => false,
+    classifyConflict: () => undefined,
   }).load()
 }
 

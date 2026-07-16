@@ -7,7 +7,13 @@ import {
   type WebShortcutMutationIntent,
   type WebShortcutSettings as CoreWebShortcutSettings,
 } from "../../packages/core/src/web-shortcuts"
-import { WEB_SHORTCUT_ACTION_IDS, WebShortcutSettingsSchema } from "../../packages/protocol/src/web"
+import {
+  WEB_SHORTCUT_ACTION_IDS,
+  WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+  WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+  WebShortcutSettingsSchema,
+} from "../../packages/protocol/src/web"
+import { SecureResponseSchema } from "../../packages/protocol/src/secure"
 import { createWebShortcutRuntimeComposition } from "../../packages/service/src/main"
 import { SecureServiceRouter } from "../../packages/service/src/secure/router"
 import type { SnapshotAdapter } from "../../packages/service/src/snapshot-adapter"
@@ -50,6 +56,30 @@ function request(method: string, body: unknown) {
 }
 
 describe("secure web shortcut authority", () => {
+  test("allows only bounded typed shortcut conflict details on the secure transport", () => {
+    const base = {
+      id: "00000000-0000-4000-8000-000000000000",
+      ok: false,
+      error: { code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, message: "Shortcut conflict" },
+    }
+    expect(SecureResponseSchema.safeParse({
+      ...base,
+      error: { ...base.error, details: { kind: "binding_owner_conflict", owner_action_id: "commands.open" } },
+    }).success).toBe(true)
+    expect(SecureResponseSchema.safeParse({
+      ...base,
+      error: { ...base.error, details: { kind: "binding_owner_conflict", owner_action_id: "unknown.action" } },
+    }).success).toBe(false)
+    expect(SecureResponseSchema.safeParse({
+      ...base,
+      error: { ...base.error, details: { kind: "binding_owner_conflict", owner_action_id: "commands.open", secret: "/private/path" } },
+    }).success).toBe(false)
+    expect(SecureResponseSchema.safeParse({
+      ...base,
+      error: { ...base.error, details: { path: "/private/path" } },
+    }).success).toBe(false)
+  })
+
   test("reads a complete projected registry under snapshot scope without disclosing core state", async () => {
     const calls: string[] = []
     const router = new SecureServiceRouter({
@@ -107,13 +137,13 @@ describe("secure web shortcut authority", () => {
   })
 
   test("maps stale, conflict, and validation failures without leaking arbitrary errors", async () => {
-    const cases: Array<[Error, string]> = [
-      [new WebShortcutStaleRevisionError(), "conflict"],
-      [new WebShortcutConflictError("commands.open", "workspace.switch"), "conflict"],
+    const cases: Array<[Error, string, unknown?]> = [
+      [new WebShortcutStaleRevisionError(), WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, { kind: "stale_revision" }],
+      [new WebShortcutConflictError("commands.open", "workspace.switch"), WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, { kind: "binding_owner_conflict", owner_action_id: "workspace.switch" }],
       [new WebShortcutValidationError("invalid /secret/path TOKEN=value"), "invalid_request"],
       [new Error("raw config /secret/path TOKEN=value"), "internal_error"],
     ]
-    for (const [failure, code] of cases) {
+    for (const [failure, code, details] of cases) {
       const router = new SecureServiceRouter({
         snapshot: snapshot(),
         updateWebShortcutSettings: () => { throw failure },
@@ -122,6 +152,7 @@ describe("secure web shortcut authority", () => {
         platform: "linux", action_id: "commands.open", expected_revision: "7", intent: "unbind",
       }))
       await expect(result).rejects.toMatchObject({ code })
+      if (details) await expect(result).rejects.toMatchObject({ details })
       await expect(result).rejects.not.toMatchObject({ message: expect.stringContaining("/secret/path") })
       await expect(result).rejects.not.toMatchObject({ message: expect.stringContaining("TOKEN=value") })
     }
@@ -138,7 +169,11 @@ describe("secure web shortcut authority", () => {
       })
       await expect(router.request(context(["operation.write"]), request("shortcuts.set", {
         platform: "linux", action_id: edited, expected_revision: "7", intent: "unbind",
-      }))).rejects.toMatchObject({ code: "conflict", message: `Shortcut conflicts with ${owner}` })
+      }))).rejects.toMatchObject({
+        code: WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+        message: `Shortcut conflicts with ${owner}`,
+        details: { kind: "binding_owner_conflict", owner_action_id: owner },
+      })
     }
   })
 

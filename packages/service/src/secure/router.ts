@@ -1,5 +1,7 @@
 import {
   DynamicEnvironmentRefreshSchema,
+  WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
+  WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
   SignalDismissalSchema,
   SignalSchema,
   WebShortcutGetRequestSchema,
@@ -92,7 +94,9 @@ type SessionResources = {
   sockets: Map<number, TerminalAttachment>
 }
 
-function coded(message: string, code: string): Error { return Object.assign(new Error(message), { code }) }
+function coded(message: string, code: string, details?: unknown): Error {
+  return Object.assign(new Error(message), { code, ...(details === undefined ? {} : { details }) })
+}
 
 const methodScopes: Record<string, SecureScope> = {
   "service.discovery": "snapshot.read",
@@ -612,10 +616,15 @@ function projectShortcutSettings(settings: CoreWebShortcutSettings): unknown {
 
 function mapShortcutError(error: unknown): Error {
   if (error instanceof WebShortcutStaleRevisionError) {
-    return coded("Shortcut settings changed since they were loaded", "conflict")
+    return coded("Shortcut settings changed since they were loaded", WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, {
+      kind: "stale_revision",
+    })
   }
   if (error instanceof WebShortcutConflictError) {
-    return coded(`Shortcut conflicts with ${error.conflictActionId}`, "conflict")
+    return coded(`Shortcut conflicts with ${error.conflictActionId}`, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, {
+      kind: "binding_owner_conflict",
+      owner_action_id: error.conflictActionId,
+    })
   }
   if (error instanceof WebShortcutValidationError) {
     return coded("Invalid shortcut settings", "invalid_request")
