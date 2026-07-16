@@ -131,6 +131,6 @@ describe("service launch context projection", () => {
     if (!resolution.resolved) return
     const typedSteps = (resolution.launch as unknown as { steps?: Array<Record<string, unknown>> }).steps
     expect(typedSteps, "PHASE124_RED terminal steps SSH rotation contract").toEqual(command.steps)
-    expect(resolution.launch.argv).not.toEqual(expect.arrayContaining([expect.stringContaining("prepare")]))
+    expect(resolution.launch).not.toHaveProperty("argv")
   })
 })

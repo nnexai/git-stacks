@@ -149,7 +149,7 @@ describe("service v1 contract", () => {
   test("validates fresh terminal launch requests and forbids secret-bearing resolutions", () => {
     const request = { workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", command_id: "cmd_0123456789abcdef", expected_revision: "7" }
     expect(TerminalLaunchResolutionRequestSchema.parse(request)).toEqual(request)
-    const resolution = { resolved: true, revision: "7", launch: { argv: ["bun", "test"], cwd: "/work", environment: { NODE_ENV: "test" }, ports: {}, configuration: { command_id: request.command_id, shell: false }, redacted: ["TOKEN"] } } as const
+    const resolution = { resolved: true, revision: "7", launch: { steps: [{ bucket: "main", scope: "workspace", command: "bun test", cwd: "/work", environment: { NODE_ENV: "test" } }], ports: {}, configuration: { command_id: request.command_id, shell: false }, redacted: ["TOKEN"] } } as const
     expect(TerminalLaunchResolutionSchema.parse(resolution)).toEqual(JSON.parse(JSON.stringify(resolution)))
     expect(() => TerminalLaunchResolutionSchema.parse({ ...resolution, launch: { ...resolution.launch, references: { TOKEN: "secret://token" } } })).toThrow()
   })

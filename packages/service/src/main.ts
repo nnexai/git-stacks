@@ -378,10 +378,13 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     if (existing && await descriptorUsable(existing, serviceRoot)) return { descriptor: existing, existing: true, async stop() {} }
     if (existing) unlinkSync(serviceDescriptorPath(serviceRoot))
 
-    const snapshot = options.snapshot ?? createSnapshotBuilder()
     const dynamicEnvironment = options.dynamicEnvironment ?? createDynamicEnvironmentStore({
       ...(process.env.PATH !== undefined ? { PATH: process.env.PATH } : {}),
       ...(process.env.SSH_AUTH_SOCK !== undefined ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {}),
+    })
+    const snapshot = options.snapshot ?? createSnapshotBuilder(undefined, {
+      dynamicEnvironment: dynamicEnvironment.snapshot,
+      shellEnvironment: () => process.env,
     })
     const journal = new EventJournal({ root: serviceRoot, snapshotRevision: () => snapshot.currentRevision() })
     const broker = new EventBroker(journal)

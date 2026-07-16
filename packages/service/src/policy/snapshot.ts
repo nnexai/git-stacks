@@ -30,6 +30,7 @@ import { getWorkspaceFileStatusView, type WorkspaceFileStatusView } from "@git-s
 import { getWorkspaceStatus, type RepoStatus } from "@git-stacks/core/workspace-status"
 import { ensureWorkspaceIdentity } from "./identity"
 import { prepareTerminalAgentEnvironment } from "@git-stacks/core/agent-hooks/terminal-session"
+import { buildUserShellBootstrap, discoverUserShell } from "@git-stacks/core/user-shell"
 import {
   TerminalLaunchResolutionSchema,
   type TerminalLaunchResolution,
@@ -215,22 +216,19 @@ function repositoryPath(repo: Workspace["repos"][number]): string {
   return getRepoPath(repo)
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\"'\"'`)}'`
-}
-
-function commandSequence(steps: Array<{ command: string; cwd: string; environment: Record<string, string> }>): string {
-  return ["set -e", ...steps.map((step) => {
-    const environment = Object.entries(step.environment).map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")
-    return `(cd ${shellQuote(step.cwd)} && env ${environment} /bin/sh -lc ${shellQuote(step.command)})`
-  })].join("\n")
+export interface SnapshotLaunchAuthorities {
+  dynamicEnvironment?: () => Readonly<{ PATH?: string; SSH_AUTH_SOCK?: string }>
+  shellEnvironment?: () => NodeJS.ProcessEnv
 }
 
 function workspaceDefinitionExists(name: string): boolean {
   try { return existsSync(workspaceFilePath(name)) } catch { return false }
 }
 
-export function createSnapshotBuilder(dependencies: SnapshotDependencies = defaultDependencies()) {
+export function createSnapshotBuilder(
+  dependencies: SnapshotDependencies = defaultDependencies(),
+  launchAuthorities: SnapshotLaunchAuthorities = {},
+) {
   let aggregateRevision = "0"
   let latestAggregate: WorkspaceSnapshotResponse[] | undefined
   let latestCatalog: WorkspaceCatalog | undefined
@@ -428,11 +426,22 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     const repository = snapshot.workspace.repositories.find((entry) => entry.id === request.repository_id)
     if (!repository) return fail("not_found", "Repository not found in workspace")
     const base = snapshot.workspace.launch
+    const currentWorkspace = dependencies.ensureWorkspaceIdentity(snapshot.workspace.name)
+    const currentEnvironment = await dependencies.buildWorkspaceEnv(currentWorkspace, {
+      triggeredBy: "service:terminal",
+      config: loadConfig(),
+      skipSecrets: false,
+    })
+    const dynamicEnvironment = launchAuthorities.dynamicEnvironment?.() ?? {
+      ...(process.env.PATH !== undefined ? { PATH: process.env.PATH } : {}),
+      ...(process.env.SSH_AUTH_SOCK !== undefined ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {}),
+    }
+    const effectiveEnvironment = { ...dynamicEnvironment, ...currentEnvironment }
     let agentEnvironment: Record<string, string> = {}
     try {
       signal?.throwIfAborted()
       dependencies.ensureAgentSignals?.(repository.path, snapshot.workspace.name)
-      agentEnvironment = dependencies.prepareAgentSignals?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
+      agentEnvironment = dependencies.prepareAgentSignals?.(repository.path, snapshot.workspace.name, effectiveEnvironment) ?? {}
     } catch (error) {
       // Agent integrations are optional launch enrichment. A malformed,
       // unowned, or unwritable user-level provider config must never make the
@@ -444,25 +453,34 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       }
     }
     signal?.throwIfAborted()
-    const shellEnvironment = { ...base.environment, ...agentEnvironment }
+    const shellEnvironment = { ...effectiveEnvironment, ...agentEnvironment }
     if (!request.command_id) {
-      const shell = process.env.SHELL || "/bin/sh"
+      let plan
+      try {
+        const shell = discoverUserShell(launchAuthorities.shellEnvironment?.() ?? process.env, "pty")
+        plan = buildUserShellBootstrap(shell, { mode: "pty" })
+      } catch (error) {
+        return fail("operation_failed", error instanceof Error ? error.message : String(error))
+      }
       return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
-        argv: [shell], cwd: repository.path, environment: shellEnvironment, ports: base.ports ?? {},
+        argv: [...plan.argv], cwd: repository.path, environment: shellEnvironment, ports: base.ports ?? {},
         configuration: { shell: true }, redacted: base.redacted,
       } })
     }
     const command = base.named?.find((entry) => entry.id === request.command_id)
     if (!command || (command.scope === "repository" && command.repository_id !== repository.id)) return fail("not_found", "Command not found in repository scope")
     if (command.steps.length === 0) return fail("operation_failed", "Configured command has no executable steps")
-    const step = command.steps[0]!
-    const multiple = command.steps.length > 1
     return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
-      // Configured commands use the same POSIX-shell contract as the existing
-      // CLI/TUI command runner. They must not be reparsed by the user's login
-      // shell (Fish, Nushell, etc.).
-      argv: ["/bin/sh", "-lc", multiple ? commandSequence(command.steps) : step.command], cwd: step.cwd,
-      environment: multiple ? shellEnvironment : { ...step.environment, ...agentEnvironment }, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
+      steps: command.steps.map((step) => ({
+        ...step,
+        environment: {
+          ...dynamicEnvironment,
+          ...currentEnvironment,
+          ...Object.fromEntries(Object.entries(step.environment).filter(([key]) => key.startsWith("GS_REPO_"))),
+          ...agentEnvironment,
+        },
+      })),
+      ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
     } })
   }
 

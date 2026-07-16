@@ -277,7 +277,7 @@ describe("authoritative service snapshots", () => {
     expect(second.revision).not.toBe(first.revision)
   })
 
-  test("resolves configured commands through the POSIX shell contract", async () => {
+  test("resolves configured commands as separate typed user-shell steps", async () => {
     const installs: Array<[string, string]> = []
     const builder = createSnapshotBuilder(dependencies({
       planManualCommand: () => [{ bucket: "main", scope: "workspace", shell: "for i in 1 2; do echo $i; done", cwd: "/tasks/alpha", environment: {} }],
@@ -292,7 +292,14 @@ describe("authoritative service snapshots", () => {
       expected_revision: snapshot.revision,
     })
     expect(resolution.resolved).toBe(true)
-    if (resolution.resolved) expect(resolution.launch.argv).toEqual(["/bin/sh", "-lc", "for i in 1 2; do echo $i; done"])
+    if (resolution.resolved) {
+      expect(resolution.launch.configuration.shell).toBe(false)
+      if (!resolution.launch.configuration.shell) {
+        expect(resolution.launch.steps).toEqual([expect.objectContaining({
+          bucket: "main", scope: "workspace", command: "for i in 1 2; do echo $i; done", cwd: "/tasks/alpha",
+        })])
+      }
+    }
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
   })
 

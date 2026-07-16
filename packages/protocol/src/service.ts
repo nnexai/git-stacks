@@ -139,14 +139,18 @@ export const RepositorySnapshotSchema = z.strictObject({
   id: EntityIdSchema, name: z.string().min(1), mode: z.enum(["worktree", "trunk", "dir"]), path: z.string().min(1),
 })
 export type RepositorySnapshot = z.infer<typeof RepositorySnapshotSchema>
+const LaunchEnvironmentSchema = z.record(
+  z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+  utf8BoundedString(CLIENT_MODEL_LIMITS.string_bytes.launch_environment_value),
+).refine((environment) => Object.keys(environment).length <= 128, { message: "Launch environment exceeds 128 entries" })
 export const LaunchStepSchema = z.strictObject({
   bucket: z.enum(["pre", "main", "post"]),
   scope: z.enum(["workspace", "repo"]),
-  command: z.string().min(1),
-  cwd: z.string().min(1),
+  command: utf8BoundedString(64 * 1024, 1),
+  cwd: utf8BoundedString(4096, 1),
   repository_id: EntityIdSchema.optional(),
-  repository_name: z.string().min(1).optional(),
-  environment: z.record(z.string(), z.string()),
+  repository_name: utf8BoundedString(CLIENT_MODEL_LIMITS.string_bytes.repository_name, 1).optional(),
+  environment: LaunchEnvironmentSchema,
 }).refine((step) => step.scope === "repo" ? Boolean(step.repository_id && step.repository_name) : !step.repository_id && !step.repository_name, {
   message: "repository identity is required only for repository-scoped steps",
 })
@@ -155,7 +159,7 @@ export const NamedLaunchSpecificationSchema = z.strictObject({
   name: z.string().min(1),
   scope: z.enum(["workspace", "repository"]),
   repository_id: EntityIdSchema.optional(),
-  steps: z.array(LaunchStepSchema),
+  steps: z.array(LaunchStepSchema).max(64),
 }).refine((command) => command.scope === "repository" ? Boolean(command.repository_id) : command.repository_id === undefined, {
   message: "repository identity is required only for repository-scoped commands",
 })
@@ -262,14 +266,26 @@ export const TerminalLaunchResolutionRequestSchema = z.strictObject({
   expected_revision: RevisionSchema,
 })
 export type TerminalLaunchResolutionRequest = z.infer<typeof TerminalLaunchResolutionRequestSchema>
-export const TerminalLaunchSpecificationSchema = z.strictObject({
-  argv: z.array(z.string()).min(1),
-  cwd: z.string().min(1),
-  environment: z.record(z.string(), z.string()),
+const TerminalLaunchCommon = {
   ports: z.record(z.string(), z.number().int()),
-  configuration: z.strictObject({ command_id: CommandIdSchema.optional(), shell: z.boolean() }),
   redacted: z.array(z.string()),
+}
+export const TerminalInteractiveLaunchSpecificationSchema = z.strictObject({
+  argv: z.array(utf8BoundedString(64 * 1024, 1)).min(1).max(32),
+  cwd: utf8BoundedString(4096, 1),
+  environment: LaunchEnvironmentSchema,
+  ...TerminalLaunchCommon,
+  configuration: z.strictObject({ shell: z.literal(true) }),
 })
+export const TerminalCommandLaunchSpecificationSchema = z.strictObject({
+  steps: z.array(LaunchStepSchema).min(1).max(64),
+  ...TerminalLaunchCommon,
+  configuration: z.strictObject({ command_id: CommandIdSchema, shell: z.literal(false) }),
+})
+export const TerminalLaunchSpecificationSchema = z.union([
+  TerminalInteractiveLaunchSpecificationSchema,
+  TerminalCommandLaunchSpecificationSchema,
+])
 export const TerminalLaunchResolutionSchema = z.discriminatedUnion("resolved", [
   z.strictObject({ resolved: z.literal(true), revision: RevisionSchema, launch: TerminalLaunchSpecificationSchema }),
   z.strictObject({ resolved: z.literal(false), error: ApiErrorSchema }),
