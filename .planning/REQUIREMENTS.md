@@ -22,13 +22,13 @@
 
 ## User Shell and Dynamic Environment
 
-- [ ] **SHELL-01:** Configured commands and lifecycle hooks execute through the user's actual configured shell rather than hard-coded `/bin/sh`, with a documented per-shell invocation strategy.
-- [ ] **SHELL-02:** Supported shells load the initialization needed for the user's interactive/login environment so runtime managers, shell functions, aliases, and dynamically constructed `PATH` values are available.
-- [ ] **SHELL-03:** The command is passed as one command argument to the shell rather than interpolated into a generated wrapper, preserving the existing command text and avoiding an additional quoting layer.
-- [ ] **SHELL-04:** Global, workspace, repository, port, and `GS_*` environment overlays are applied after shell initialization so authoritative git-stacks values win over profile defaults.
-- [ ] **SHELL-05:** Trusted local launchers can refresh an explicit allowlist of dynamic values, initially `PATH` and `SSH_AUTH_SOCK`, into the long-lived helper/service; raw host environment values are never projected to browser code.
-- [ ] **SHELL-06:** Interactive PTYs and non-PTY command execution can use the refreshed SSH agent socket, and integration coverage proves `ssh-add`/agent discovery and an nvm-style profile-installed runtime work without restarting the service.
-- [ ] **SHELL-07:** Missing, unsupported, or failing shell initialization produces a diagnostic naming the shell, invocation mode, failed initialization stage, and safe recovery path without silently falling back to different semantics.
+- [x] **SHELL-01:** Configured commands and lifecycle hooks execute through the user's actual configured shell rather than hard-coded `/bin/sh`, with a documented per-shell invocation strategy.
+- [x] **SHELL-02:** Supported shells load the initialization needed for the user's interactive/login environment so runtime managers, shell functions, aliases, and dynamically constructed `PATH` values are available.
+- [x] **SHELL-03:** The command is passed as one command argument to the shell rather than interpolated into a generated wrapper, preserving the existing command text and avoiding an additional quoting layer.
+- [x] **SHELL-04:** Global, workspace, repository, port, and `GS_*` environment overlays are applied after shell initialization so authoritative git-stacks values win over profile defaults.
+- [x] **SHELL-05:** Trusted local launchers can refresh an explicit allowlist of dynamic values, initially `PATH` and `SSH_AUTH_SOCK`, into the long-lived helper/service; raw host environment values are never projected to browser code.
+- [x] **SHELL-06:** Interactive PTYs and non-PTY command execution can use the refreshed SSH agent socket, and integration coverage proves `ssh-add`/agent discovery and an nvm-style profile-installed runtime work without restarting the service.
+- [x] **SHELL-07:** Missing, unsupported, or failing shell initialization produces a diagnostic naming the shell, invocation mode, failed initialization stage, and safe recovery path without silently falling back to different semantics.
 
 ## Keyboard-First Web Navigation
 
@@ -99,7 +99,7 @@
 | Requirement group | Phase | Status |
 |---|---:|---|
 | ARCH-01..06, REMOVE-01..05 | 123 | Complete |
-| SHELL-01..07 | 124 | Pending |
+| SHELL-01..07 | 124 | Complete |
 | KEY-01..10, ATTN-01..03 | 125 | Pending |
 | PARITY-01..05, SOURCE-01..04 | 126 | Pending |
 | STALE-01..05, REL-01..02 | 127 | Pending |

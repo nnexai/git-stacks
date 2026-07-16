@@ -17,7 +17,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 ```
 
 - [x] **Phase 123: Archived Workspaces and Safe Removal** — Add the persisted archive state and terminal-aware destructive removal contract across core, service, web, and TUI. (completed 2026-07-16)
-- [ ] **Phase 124: User Shell and Environment Authority** — Run user-authored commands through supported configured shells and refresh allowlisted dynamic environment values safely.
+- [x] **Phase 124: User Shell and Environment Authority** — Run user-authored commands through supported configured shells and refresh allowlisted dynamic environment values safely. (completed 2026-07-16)
 - [ ] **Phase 125: Terminal-Safe Keyboard Navigation** — Deliver configurable collision-aware shortcuts, singleton fuzzy overlays, terminal switching, and next-attention navigation.
 - [ ] **Phase 126: Web Workflow and Forge-Source Parity** — Bring high-value lifecycle/Git/notes/status actions to web and create normal workspaces from PR/MR URLs.
 - [ ] **Phase 127: Stale Workspace Intelligence and RC Closure** — Add explainable, non-destructive cleanup candidates and prepare the `v0.22.0-rc.1` release candidate.
@@ -128,7 +128,7 @@ Plans:
 | Phase | Name | Requirements | Status |
 |---:|---|---:|---|
 | 123 | Archived Workspaces and Safe Removal | 11 | Complete    |
-| 124 | User Shell and Environment Authority | 7 | Not started |
+| 124 | User Shell and Environment Authority | 7 | Complete    |
 | 125 | Terminal-Safe Keyboard Navigation | 13 | Not started |
 | 126 | Web Workflow and Forge-Source Parity | 9 | Not started |
 | 127 | Stale Workspace Intelligence and RC Closure | 7 | Not started |
