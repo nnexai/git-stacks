@@ -73,6 +73,8 @@ export function createSingletonOverlayController(document: Document, options: Ov
   const containedKeydown = (event: KeyboardEvent) => {
     if (!active) return
     if (event.key === "Escape") {
+      if (typeof (event.target as { hasAttribute?: unknown } | null)?.hasAttribute === "function"
+        && (event.target as HTMLElement).hasAttribute("data-capture")) return
       active.close()
       event.preventDefault()
       event.stopPropagation()

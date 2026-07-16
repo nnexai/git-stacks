@@ -360,7 +360,7 @@ describe("web authoritative shortcut overlays", () => {
   })
 
   test("ignores pure modifiers, composition, and AltGraph during capture", async () => {
-    const { controller } = harness()
+    const { controller, document } = harness()
     const opened = controller.open({ id: "settings", title: "Customize shortcuts", closeLabel: "Close shortcut settings", returnTarget: "term" })
     let mutations = 0
     const settings = mountShortcutSettings(opened.view!, {
@@ -374,6 +374,8 @@ describe("web authoritative shortcut overlays", () => {
     const primary = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-shortcut-primary") === "workspace.switch")
     primary?.dispatch("click")
     const capture = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-capture") === "workspace.switch")
+    document.dispatch(new FakeEvent("keydown", capture!, { key: "Escape" }))
+    expect(controller.activeSurface()).toBe("settings")
     capture?.dispatch("keydown", { code: "ControlLeft", key: "Control", ctrlKey: true })
     capture?.dispatch("keydown", { code: "KeyZ", key: "Process", isComposing: true, ctrlKey: true })
     capture?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, altGraph: true } as Partial<FakeEvent>)
@@ -432,6 +434,7 @@ describe("web authoritative shortcut overlays", () => {
     expect(source).toContain("mountFuzzyOverlay")
     expect(source).toContain("mountShortcutHelp")
     expect(source).toContain("mountShortcutSettings")
+    expect(source).toContain("invokeRegisteredAction")
     expect(source).toContain('"shortcuts.set"')
     expect(source).toContain('id="next-attention"')
     expect(source).toContain('id="keyboard-shortcuts"')

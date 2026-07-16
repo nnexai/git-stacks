@@ -473,6 +473,15 @@ const actionRegistrations = Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((acti
 } satisfies WebActionRegistration])) as Record<WebShortcutActionId, WebActionRegistration>
 const webActionRegistry = createWebActionRegistry(actionRegistrations)
 const shortcutDispatcher = createWebShortcutDispatcher(webActionRegistry)
+function invokeRegisteredAction(actionId: WebShortcutActionId): void {
+  const action = webActionRegistry.entry(actionId)
+  if (!action) return
+  if (!action.availability.available) {
+    toast(action.availability.disabledReason, true)
+    return
+  }
+  action.callback({ actionId, kind: "execute", source: "document" })
+}
 registerOverlayShortcutAction("commands.open", (invocation) => {
   if (invocation.kind === "refocus") {
     if (overlayController.activeSurface() === "commands.open") overlayController.focusPrimary()
@@ -934,6 +943,13 @@ function connectionSummary(): string { return `${snapshot.workspaces.length} wor
 function renderAll(): void {
   renderNav(); renderScope(); renderSignals(); statusNode.textContent = connectionSummary()
   document.querySelector("#next-attention")?.classList.toggle("attention", hasResolvableAttention())
+  for (const [selector, actionId] of [["#next-attention", "attention.next"], ["#launcher", "commands.open"], ["#create", "workspace.new"]] as const) {
+    const control = document.querySelector<HTMLButtonElement>(selector)
+    const availability = webActionRegistry.entry(actionId)?.availability
+    if (!control || !availability) continue
+    control.disabled = !availability.available
+    control.title = availability.available ? control.getAttribute("aria-label") ?? "" : availability.disabledReason
+  }
 }
 
 async function createTerminal(commandId?: string): Promise<boolean> {
@@ -1461,10 +1477,10 @@ function showStartupFailure(title: string, error: unknown, hint: string): void {
   app.append(empty)
 }
 
-document.querySelector("#launcher")!.addEventListener("click", showLauncher)
-document.querySelector("#next-attention")!.addEventListener("click", () => webActionRegistry.entry("attention.next")?.callback({ actionId: "attention.next", kind: "execute", source: "document" }))
+document.querySelector("#launcher")!.addEventListener("click", () => invokeRegisteredAction("commands.open"))
+document.querySelector("#next-attention")!.addEventListener("click", () => invokeRegisteredAction("attention.next"))
 document.querySelector("#keyboard-shortcuts")!.addEventListener("click", showKeyboardHelp)
-document.querySelector("#create")!.addEventListener("click", () => void showCreation())
+document.querySelector("#create")!.addEventListener("click", () => invokeRegisteredAction("workspace.new"))
 document.querySelector("#archived")!.addEventListener("click", showArchivedWorkspaces)
 for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) control.addEventListener("click", () => {
   preferences.organization = control.dataset.organization as Organization
