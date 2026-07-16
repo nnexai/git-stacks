@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v0.22.0
 milestone_name: Workspace Productivity
-status: planning
-last_updated: "2026-07-16T07:48:42+02:00"
+current_phase: 123
+current_phase_name: Archived Workspaces and Safe Removal
+status: executing
+stopped_at: Completed 123-01-PLAN.md
+last_updated: "2026-07-16T06:05:35.227Z"
 last_activity: 2026-07-16
-last_activity_desc: Phase 123 planning complete — 8 plans ready in 7 waves
+last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
-current_phase: 123
-current_phase_name: Archived Workspaces and Safe Removal
-stopped_at: Phase 123 planned and verified; ready to execute 8 plans in 7 waves
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 123 of 127 (Archived Workspaces and Safe Removal)
-Plan: 0 of 8
+Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-07-16 — Phase 123 planning complete and independently verified
+Last activity: 2026-07-16 — Phase 123 execution started
 
 ## Decisions
 
@@ -51,6 +51,9 @@ Last activity: 2026-07-16 — Phase 123 planning complete and independently veri
 - Remote carriers are isolated per authenticated local principal. This intentionally avoids sharing one helper-authenticated carrier across principals without a separate delegated-session protocol.
 - Carrier loss fails the affected authenticated session closed. A fresh launch reconnects with bounded retry and reattaches service-owned terminals; non-idempotent work is never silently replayed.
 - Migration phases cut callers over and delete old implementations; temporary shims may forward but never own behavior.
+- [Phase 123]: Archive state is canonical only when archived true and archived_at are both present; active state omits both fields.
+- [Phase 123]: Removal inspection always performs the dirty check and returns an opaque resolved plan; allow_dirty bypasses only blockers captured by that inspection.
+- [Phase 123]: Workspace definition updates and deletion resolve the authoritative backing YAML path so filename drift cannot redirect or strand lifecycle mutation.
 
 ## Validated Inputs
 
@@ -110,3 +113,15 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 - Execute Phase 123 plans 01–08 in wave order, then verify the phase before advancing to Phase 124.
 - Preserve the Milestone-End Manual Verification checklist for Phase 127; do not tag, push, publish, or release before the user completes it.
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 123 P01 | 11 min | 2 tasks | 10 files |
+
+## Session
+
+**Last session:** 2026-07-16T06:05:35.219Z
+**Stopped at:** Completed 123-01-PLAN.md
+**Resume file:** None

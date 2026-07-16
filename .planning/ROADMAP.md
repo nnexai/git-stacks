@@ -27,12 +27,12 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 **Goal:** Make active-workspace cleanup reversible by default and destructive removal explicit, terminal-aware, and consistent across clients.
 **Depends on:** Nothing
 **Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, REMOVE-01, REMOVE-02, REMOVE-03, REMOVE-04, REMOVE-05
-**Plans:** 8 plans
+**Plans:** 1/8 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 123-01-PLAN.md — Core archive persistence and typed staged removal authority
+- [x] 123-01-PLAN.md — Core archive persistence and typed staged removal authority
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -127,7 +127,7 @@ Plans:
 
 | Phase | Name | Requirements | Status |
 |---:|---|---:|---|
-| 123 | Archived Workspaces and Safe Removal | 11 | Not started |
+| 123 | Archived Workspaces and Safe Removal | 11 | In Progress|
 | 124 | User Shell and Environment Authority | 7 | Not started |
 | 125 | Terminal-Safe Keyboard Navigation | 13 | Not started |
 | 126 | Web Workflow and Forge-Source Parity | 9 | Not started |
