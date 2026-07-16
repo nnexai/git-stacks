@@ -15,6 +15,43 @@ export type BuildWorkspaceEnvOptions = {
   onWarn?: (message: string) => void
 }
 
+type EnvironmentLayer = Record<string, string | number | null | undefined>
+
+export type WorkspaceEnvironmentLayers = {
+  inherited?: EnvironmentLayer
+  initialized?: EnvironmentLayer
+  global?: EnvironmentLayer
+  workspace?: EnvironmentLayer
+  repository?: EnvironmentLayer
+  ports?: EnvironmentLayer
+  secrets?: EnvironmentLayer
+  reserved?: EnvironmentLayer
+}
+
+function applyEnvironmentLayer(
+  target: Record<string, string>,
+  layer: EnvironmentLayer | undefined,
+  allowReserved: boolean,
+): void {
+  for (const [key, value] of Object.entries(layer ?? {})) {
+    if (value === undefined || value === null || (!allowReserved && key.startsWith("GS_"))) continue
+    target[key] = String(value)
+  }
+}
+
+export function composeWorkspaceEnvironment(layers: WorkspaceEnvironmentLayers): Record<string, string> {
+  const environment: Record<string, string> = {}
+  applyEnvironmentLayer(environment, layers.inherited, false)
+  applyEnvironmentLayer(environment, layers.initialized, false)
+  applyEnvironmentLayer(environment, layers.global, false)
+  applyEnvironmentLayer(environment, layers.workspace, false)
+  applyEnvironmentLayer(environment, layers.repository, false)
+  applyEnvironmentLayer(environment, layers.ports, false)
+  applyEnvironmentLayer(environment, layers.secrets, false)
+  applyEnvironmentLayer(environment, layers.reserved, true)
+  return environment
+}
+
 export function mergeEnv(workspace: Workspace): Record<string, string> {
   const merged: Record<string, string> = {}
   if (workspace.env) Object.assign(merged, workspace.env)
@@ -34,25 +71,34 @@ export function buildBaseEnv(
   tasksDir: string,
   triggeredBy: string
 ): Record<string, string> {
-  return {
-    GS_WORKSPACE_NAME: workspace.name,
-    GS_WORKSPACE_BRANCH: workspace.branch,
-    GS_WORKSPACE_PATH: tasksDir,
-    GS_TRIGGERED_BY: triggeredBy,
-    ...mergeEnv(workspace),
-  }
+  return composeWorkspaceEnvironment({
+    workspace: workspace.env,
+    ports: workspace.ports,
+    reserved: {
+      GS_WORKSPACE_NAME: workspace.name,
+      GS_WORKSPACE_BRANCH: workspace.branch,
+      GS_WORKSPACE_PATH: tasksDir,
+      GS_TRIGGERED_BY: triggeredBy,
+    },
+  })
 }
 
 export function buildRepoEnv(
   baseEnv: Record<string, string>,
   repo: WorkspaceRepo
 ): Record<string, string> {
-  return {
-    ...baseEnv,
-    GS_REPO_NAME: repo.name,
-    GS_REPO_PATH: getRepoPath(repo),
-    GS_REPO_CLONE_PATH: repo.main_path,
-  }
+  const inheritedReserved = Object.fromEntries(
+    Object.entries(baseEnv).filter(([key]) => key.startsWith("GS_")),
+  )
+  return composeWorkspaceEnvironment({
+    workspace: baseEnv,
+    reserved: {
+      ...inheritedReserved,
+      GS_REPO_NAME: repo.name,
+      GS_REPO_PATH: getRepoPath(repo),
+      GS_REPO_CLONE_PATH: repo.main_path,
+    },
+  })
 }
 
 async function resolveWorkspaceEnvVars(
@@ -92,10 +138,15 @@ export async function buildWorkspaceEnv(
       "buildWorkspaceEnv.resolveSecrets",
       () => resolveWorkspaceEnvVars(workspace, config, opts)
     )
-    return {
-      ...buildBaseEnv(workspace, tasksDir, opts.triggeredBy),
-      ...resolvedEnvVars,
-    }
+    return composeWorkspaceEnvironment({
+      workspace: resolvedEnvVars,
+      reserved: {
+        GS_WORKSPACE_NAME: workspace.name,
+        GS_WORKSPACE_BRANCH: workspace.branch,
+        GS_WORKSPACE_PATH: tasksDir,
+        GS_TRIGGERED_BY: opts.triggeredBy,
+      },
+    })
   })
 }
 

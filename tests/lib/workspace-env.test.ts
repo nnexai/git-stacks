@@ -32,6 +32,7 @@ const {
   buildBaseEnv,
   buildRepoEnv,
   buildWorkspaceEnv,
+  composeWorkspaceEnvironment,
   mergeEnv,
   writeEnvFiles,
 } = await import("../../packages/core/src/workspace-env")
@@ -65,6 +66,29 @@ function makeWorktreeRepo(taskPath: string, overrides: Partial<WorkspaceRepo> = 
 }
 
 describe("workspace-env", () => {
+  test("composes launch layers in deterministic authority order with reserved GS values last", () => {
+    expect(composeWorkspaceEnvironment({
+      inherited: { PATH: "/inherited", VALUE: "inherited", GS_WORKSPACE_NAME: "inherited-spoof" },
+      initialized: { PATH: "/profile", VALUE: "profile", GS_WORKSPACE_NAME: "profile-spoof" },
+      global: { VALUE: "global", GLOBAL_ONLY: "global" },
+      workspace: { VALUE: "workspace", WORKSPACE_ONLY: "workspace", GS_WORKSPACE_NAME: "workspace-spoof" },
+      repository: { VALUE: "repository", REPOSITORY_ONLY: "repository" },
+      ports: { VALUE: 4100, WEB_PORT: 3000, GS_WORKSPACE_NAME: 9999 },
+      secrets: { VALUE: "secret", SECRET_ONLY: "secret" },
+      reserved: { GS_WORKSPACE_NAME: "authoritative", GS_TRIGGERED_BY: "command:test" },
+    })).toEqual({
+      PATH: "/profile",
+      VALUE: "secret",
+      GLOBAL_ONLY: "global",
+      WORKSPACE_ONLY: "workspace",
+      REPOSITORY_ONLY: "repository",
+      WEB_PORT: "3000",
+      SECRET_ONLY: "secret",
+      GS_WORKSPACE_NAME: "authoritative",
+      GS_TRIGGERED_BY: "command:test",
+    })
+  })
+
   test("mergeEnv flattens env and numeric ports into strings", () => {
     const workspace = makeWorkspace({
       env: { API_URL: "https://example.test", FEATURE_FLAG: "on" },
