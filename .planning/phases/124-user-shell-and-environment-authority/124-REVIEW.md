@@ -1,6 +1,6 @@
 ---
 phase: 124-user-shell-and-environment-authority
-reviewed: 2026-07-16T13:49:45Z
+reviewed: 2026-07-16T14:02:30Z
 depth: standard
 files_reviewed: 41
 files_reviewed_list:
@@ -55,22 +55,22 @@ status: passed
 
 # Phase 124: Code Review Report
 
-**Reviewed:** 2026-07-16T13:49:45Z  
-**Depth:** standard  
-**Files Reviewed:** 41  
+**Reviewed:** 2026-07-16T14:02:30Z
+**Depth:** standard
+**Files Reviewed:** 41
 **Status:** passed
 
 ## Summary
 
-The final independent review found no remaining blocker or high-severity defect. Earlier adversarial passes found and closed invalid Bash invocation, post-profile environment authority loss, PTY input/resize loss, incomplete process-group cleanup, split UTF-8 decoding, shadowable shell dispatch, false logical completion after failed cleanup, traced-value disclosure, and private-value residue after PTY allocation failure. The complete repair history and focused evidence are recorded in `124-EARLY-REVIEW-FIX.md`.
+The final independent review found no remaining blocker or high-severity defect. Earlier adversarial and goal-verification passes found and closed invalid Bash invocation, post-profile environment authority loss, PTY input/resize loss, incomplete process-group cleanup, split UTF-8 decoding, shadowable shell dispatch, false logical completion after failed cleanup, traced-value disclosure, private-value residue after PTY allocation failure, and inherited Bash-function interception of non-PTY bootstrap dispatch. The complete repair history and focused evidence are recorded in `124-EARLY-REVIEW-FIX.md`.
 
 The final implementation applies the authoritative overlay only after the selected interactive-login shell initializes, avoids profile-overridable command dispatch, keeps injected values out of traced output, preserves command input/resize and exact status, and removes private initialization assets even when allocation fails. Failed TERM/KILL confirmation still retains the active process honestly and reports retryable cleanup failure rather than fabricating an ended terminal.
 
 ## Final Review Evidence
 
 - Final read-only adversarial review: PASS; no blocker or high-severity finding.
-- Focused Phase 124 integration: 41 passed, one explicit local zsh capability skip.
-- Full Vitest suite: 139 files, 1,845 passed, one skipped.
+- Focused Phase 124 integration: 43 passed, one explicit local zsh capability skip.
+- Full Vitest suite: 139 files, 1,847 passed, one skipped.
 - Node suite: 45 passed.
 - Full TUI suite: passed.
 - Seven workspace typechecks: passed.
@@ -79,6 +79,6 @@ The final implementation applies the authoritative overlay only after the select
 
 ---
 
-_Reviewed: 2026-07-16T13:49:45Z_  
-_Reviewer: independent GSD code review_  
+_Reviewed: 2026-07-16T14:02:30Z_
+_Reviewer: independent GSD code review_
 _Depth: standard_
