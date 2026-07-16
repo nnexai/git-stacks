@@ -529,7 +529,7 @@ registerOverlayShortcutAction("workspace.switch", (invocation) => {
   showWorkspaceSwitcher()
 })
 
-app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="operation-region" id="operations" aria-live="polite"></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
+app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="feedback-region"><div class="operation-region" id="operations" aria-live="polite"></div><div class="toast-region" id="toasts" aria-live="polite"></div></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
 const nav = document.querySelector<HTMLUListElement>("#nav")!
 const scope = document.querySelector<HTMLElement>("#scope")!
@@ -703,6 +703,11 @@ async function observeTrackedOperation(operationId: string): Promise<void> {
   const context = operationContexts.get(operationId)
   if (!context) return
   const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+  const workspace = snapshot.workspaces.find(({ id }) => id === context.workspaceId)
+  if (workspace) {
+    workspaceActionInventoryKey = ""
+    await loadWorkspaceActions(workspace)
+  }
   await operationTracker.observe(summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" }))
   renderOperationCards()
   renderAll()
@@ -1142,6 +1147,16 @@ function renderScope(): void {
       menu.append(control)
     }
     if (!rows.length) menu.append(element("div", "scope-menu-empty", "Workspace actions are loading…"))
+    menu.addEventListener("keydown", (event) => {
+      const controls = [...menu.querySelectorAll<HTMLButtonElement>("[role='menuitem']")]
+      const current = controls.indexOf(document.activeElement as HTMLButtonElement)
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        const direction = event.key === "ArrowDown" ? 1 : -1
+        controls[(Math.max(0, current) + direction + controls.length) % controls.length]?.focus()
+        event.preventDefault()
+      } else if (event.key === "Home") { controls[0]?.focus(); event.preventDefault() }
+      else if (event.key === "End") { controls.at(-1)?.focus(); event.preventDefault() }
+    })
     toggle.addEventListener("click", () => {
       menu.hidden = !menu.hidden
       toggle.setAttribute("aria-expanded", String(!menu.hidden))
@@ -1969,11 +1984,15 @@ function showForgeCreation(view: OverlayView): void {
       input.type = "url"
       input.value = state.url
       input.placeholder = "https://github.com/org/repo/pull/123"
-      input.addEventListener("input", () => coordinator.setUrl(input.value))
       const error = element("div", "forge-error", localError ?? forgeFailureText(state))
       error.setAttribute("aria-live", "polite")
       const resolve = button(state.resolving ? "Resolving change source…" : "Resolve URL", "button primary")
       resolve.disabled = state.resolving || !state.url.trim()
+      input.addEventListener("input", () => {
+        coordinator.setUrl(input.value)
+        resolve.disabled = !input.value.trim()
+        error.textContent = ""
+      })
       const runResolve = async () => {
         if (coordinator.state().phase !== "resolve") return
         const request = coordinator.enter()
@@ -1986,7 +2005,9 @@ function showForgeCreation(view: OverlayView): void {
         if (event.key !== "Enter") return
         event.preventDefault()
         event.stopPropagation()
-        void coordinator.enter().then(() => render(), () => render())
+        const request = coordinator.enter()
+        render()
+        void request.then(() => render(), () => render())
       })
       shell.append(labelled("GitHub pull request or GitLab merge request URL", input), element("div", "detail-hint", "Paste a full supported web URL. Resolving does not create a workspace."), error)
       const footer = element("div", "forge-review-footer")
@@ -2027,7 +2048,7 @@ function showForgeCreation(view: OverlayView): void {
 
     const name = element("input")
     name.value = state.draft.workspace_name
-    name.addEventListener("input", () => { coordinator.edit({ kind: "workspace_name", value: name.value }); render() })
+    const nameError = fieldError(state, "workspace_name") ?? element("div", "field-error")
     const template = element("select")
     for (const candidate of state.anchor.candidates.templates) {
       const option = element("option", "", candidate.name)
@@ -2047,7 +2068,7 @@ function showForgeCreation(view: OverlayView): void {
 
     const form = element("section", "forge-review-form")
     form.append(
-      labelled("Workspace name", name, fieldError(state, "workspace_name")),
+      labelled("Workspace name", name, nameError),
       labelled("Template", template, fieldError(state, "template_name")),
       labelled("Matched source repository", sourceRepository, fieldError(state, "matched_source_repository_id")),
     )
@@ -2092,6 +2113,13 @@ function showForgeCreation(view: OverlayView): void {
     create.disabled = state.phase === "creating" || !state.validation.valid
     change.disabled = state.phase === "creating"
     close.disabled = state.phase === "creating"
+    name.addEventListener("input", () => {
+      coordinator.edit({ kind: "workspace_name", value: name.value })
+      const current = coordinator.state()
+      if (current.phase !== "review") return
+      nameError.textContent = current.validation.fields.workspace_name ?? ""
+      create.disabled = !current.validation.valid
+    })
     change.addEventListener("click", () => { coordinator.setUrl(state.url); render() })
     close.addEventListener("click", () => view.close())
     create.addEventListener("click", async () => {
