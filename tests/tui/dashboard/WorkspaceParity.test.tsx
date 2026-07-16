@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import { testRender } from "@opentui/solid"
 import type { WebOperationSummary, WebWorkspaceAction } from "@git-stacks/protocol"
 
@@ -34,6 +35,54 @@ function descriptor(
 }
 
 describe("OpenTUI workspace parity", () => {
+  test("App routes canonical invocations through the shared action registry policy", () => {
+    const appSource = readFileSync(new URL("../../../packages/tui/src/App.tsx", import.meta.url), "utf8")
+    expect(appSource).toContain("createWorkspaceActionRegistry")
+    expect(appSource).toContain("registry.invoke(actionId, \"menu\")")
+  })
+
+  test("fails closed while canonical inventory is loading or unavailable", async () => {
+    let legacyDispatches = 0
+    const loading = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="parity-ws"
+          inventoryState="loading"
+          onAction={() => { legacyDispatches += 1 }}
+          onInvoke={() => { legacyDispatches += 1 }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOptions,
+    )
+    await loading.renderOnce()
+    expect(loading.captureCharFrame()).toContain("Loading authoritative workspace actions")
+    expect(loading.captureCharFrame()).not.toContain("[o] Open")
+    loading.mockInput.pressKey("o")
+    await loading.renderOnce()
+    expect(legacyDispatches).toBe(0)
+
+    const failed = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="parity-ws"
+          inventoryState="error"
+          inventoryError="Workspace actions could not be loaded."
+          onAction={() => { legacyDispatches += 1 }}
+          onInvoke={() => { legacyDispatches += 1 }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOptions,
+    )
+    await failed.renderOnce()
+    expect(failed.captureCharFrame()).toContain("Workspace actions could not be loaded")
+    expect(failed.captureCharFrame()).not.toContain("[o] Open")
+    failed.mockInput.pressKey("o")
+    await failed.renderOnce()
+    expect(legacyDispatches).toBe(0)
+  })
+
   test("renders canonical grouped actions including Pull and Pin while retaining unavailable reasons", async () => {
     const actions = [
       descriptor("workspace.open"),
@@ -74,6 +123,39 @@ describe("OpenTUI workspace parity", () => {
     mockInput.pressKey("x")
     await renderOnce()
     expect(invoked).toEqual(["workspace.pull"])
+  })
+
+  test("canonical rendering retains adapted legacy-only actions with unique shortcuts", async () => {
+    const legacy: string[] = []
+    let runs = 0
+    const { renderOnce, captureCharFrame, mockInput } = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="parity-ws"
+          inventoryState="ready"
+          descriptors={[descriptor("workspace.pin"), descriptor("workspace.unpin", false, "Workspace is not pinned.")]}
+          onInvoke={() => {}}
+          onAction={(action) => { legacy.push(action) }}
+          onRun={() => { runs += 1 }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOptions,
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Edit ($EDITOR)")
+    expect(frame).toContain("Clean")
+    expect(frame).toContain("Run")
+    expect(frame).toContain("Issue...")
+    expect(frame).toContain("Commands...")
+    expect(frame.match(/\[v\]/g)?.length).toBe(1)
+
+    mockInput.pressKey("e")
+    mockInput.pressKey("u")
+    await renderOnce()
+    expect(legacy).toEqual(["edit"])
+    expect(runs).toBe(1)
   })
 
   test("letter and Enter activation share one callback and rapid keys submit once", async () => {
@@ -178,6 +260,29 @@ describe("OpenTUI workspace parity", () => {
     await renderOnce()
     expect(reconnects).toBe(1)
   })
+
+  test("submit-unknown advertises and accepts Back recovery without replay", async () => {
+    let backs = 0
+    const { renderOnce, captureCharFrame, mockInput } = await testRender(
+      () => (
+        <WorkspaceOperationView
+          state={{ phase: "submit-unknown", error: new Error("response lost") }}
+          operations={[]}
+          onCancel={() => {}}
+          onReconnect={() => {}}
+          onRetryRefresh={() => {}}
+          onBack={() => { backs += 1 }}
+        />
+      ),
+      renderOptions,
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("submission outcome is unknown")
+    expect(captureCharFrame()).toContain("[Enter/Esc] Back")
+    mockInput.pressEscape()
+    await renderOnce()
+    expect(backs).toBe(1)
+  })
 })
 
 describe("OpenTUI authoritative workspace details", () => {
@@ -203,6 +308,38 @@ describe("OpenTUI authoritative workspace details", () => {
     await renderOnce()
     expect(captureCharFrame()).toContain("Workspace notes cannot be blank")
     expect(adds).toBe(0)
+  })
+
+  test("note add and clear rejections remain handled and recoverable", async () => {
+    const response = {
+      workspace_id: workspaceId,
+      revision: "7",
+      notes_revision: "notes-7",
+      count: 1,
+      records: [{ text: "Existing context", created_at: "2026-07-16T12:00:00.000Z" }],
+    }
+    let addAttempts = 0
+    const add = await testRender(
+      () => <WorkspaceNotesDialog workspaceName="parity-ws" response={response} onAdd={async () => { addAttempts += 1; throw new Error("add failed") }} onClear={async () => { throw new Error("clear failed") }} onRetry={() => {}} onBack={() => {}} />,
+      renderOptions,
+    )
+    await add.renderOnce()
+    add.mockInput.pressKey("a")
+    await add.renderOnce()
+    await add.mockInput.typeText("operator note")
+    add.mockInput.pressEnter()
+    await Bun.sleep(1)
+    await add.renderOnce()
+    expect(addAttempts).toBe(1)
+    expect(add.captureCharFrame()).toContain("New workspace note")
+
+    add.mockInput.pressEscape()
+    add.mockInput.pressKey("x")
+    await add.renderOnce()
+    add.mockInput.pressKey("y")
+    await Bun.sleep(1)
+    await add.renderOnce()
+    expect(add.captureCharFrame()).toContain("Clear all workspace notes")
   })
 
   test("notes show authoritative newest-first count and confirm clear safely", async () => {

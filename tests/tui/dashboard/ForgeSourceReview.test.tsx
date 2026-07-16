@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { describe, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import { testRender } from "@opentui/solid"
 import { createForgeReviewCoordinator } from "@git-stacks/client"
 import type { WebForgeResolveResponse } from "@git-stacks/protocol"
@@ -78,6 +79,38 @@ describe("ForgeSourceReviewDialog", () => {
     accept({ operationId: "op_1234567890abcdef" })
     await Bun.sleep(1)
     expect(accepted).toEqual(["op_1234567890abcdef"])
+  })
+
+  test("reviewed creation observation delegates terminal failures to the shared coordinator", () => {
+    const appSource = readFileSync(new URL("../../../packages/tui/src/App.tsx", import.meta.url), "utf8")
+    expect(appSource).toContain("forgeReview.observeOperation(operation)")
+  })
+
+  test("failed and cancelled reviewed operations restore editable Review when recoverable", async () => {
+    for (const state of ["failed", "cancelled"] as const) {
+      const coordinator = createForgeReviewCoordinator({
+        resolve: mock(async () => resolution),
+        create: mock(async () => ({ operationId: `op_${state}1234567890` })),
+      })
+      coordinator.setUrl(url)
+      await coordinator.resolve()
+      const accepted = await coordinator.create()
+      expect(accepted.status).toBe("accepted")
+      const operationId = accepted.status === "accepted" ? accepted.operationId : ""
+      coordinator.observeOperation({
+        operation_id: operationId,
+        state,
+        accepted_at: "2026-07-16T12:00:00.000Z",
+        finished_at: "2026-07-16T12:00:01.000Z",
+        completed_steps: [],
+        error: {
+          code: "reviewed_create_failed",
+          message: "Correct the workspace name and retry.",
+          forge: { kind: "forge_failure", reason: "branch_conflict", recovery: "change_branch" },
+        },
+      })
+      expect(coordinator.state()).toMatchObject({ phase: "review", draft: { workspace_name: "review-42" } })
+    }
   })
 
   test("narrow review stacks safely and too-small terminals allow Back only", async () => {
