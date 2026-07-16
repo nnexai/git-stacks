@@ -5,6 +5,32 @@ import { ensureManagedServiceProcess } from "../../packages/service/src/main"
 const descriptor = { service_id: "test-service" } as ServiceDescriptor
 
 describe("managed service process bootstrap", () => {
+  test("preserves launcher PATH and SSH socket while stripping workspace authority from daemon bootstrap", async () => {
+    const previous = {
+      PATH: process.env.PATH,
+      SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK,
+      GS_WORKSPACE_NAME: process.env.GS_WORKSPACE_NAME,
+    }
+    process.env.PATH = "/phase124/runtime/bin:/usr/bin"
+    process.env.SSH_AUTH_SOCK = "/tmp/phase124-agent.sock"
+    process.env.GS_WORKSPACE_NAME = "must-be-stripped"
+    let environment: Record<string, string | undefined> | undefined
+    try {
+      await ensureManagedServiceProcess({
+        executable: "node-test",
+        readUsable: (() => { let reads = 0; return async () => reads++ === 0 ? null : descriptor })(),
+        spawn: (_command, options) => {
+          environment = options.env
+          return { exited: new Promise<number>(() => {}), unref() {} }
+        },
+      })
+    } finally {
+      for (const [key, value] of Object.entries(previous)) value === undefined ? delete process.env[key] : process.env[key] = value
+    }
+    expect(environment).toMatchObject({ PATH: "/phase124/runtime/bin:/usr/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent.sock" })
+    expect(environment).not.toHaveProperty("GS_WORKSPACE_NAME")
+  })
+
   test("launches the dedicated Node daemon instead of recursively invoking the client entrypoint", async () => {
     let reads = 0
     let spawned: string[] | undefined

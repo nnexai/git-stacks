@@ -85,6 +85,34 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<voi
 }
 
 describe("service-owned web terminal", () => {
+  test("passes resolved PTY argv, cwd, and environment without reparsing", async () => {
+    const launches: Array<{ argv: string[]; cwd: string; env: Record<string, string | undefined> }> = []
+    const ptys = createPtyFactory(["term"])
+    const spawn: PtyFactory = (argv, options) => {
+      launches.push({ argv: [...argv], cwd: options.cwd, env: { ...options.env } })
+      return ptys.spawn(argv, options)
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/phase124/bash", "-lic", "fixed-bootstrap", "phase124-original-command"],
+        cwd: "/phase124/repository",
+        environment: { PATH: "/phase124/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent.sock" },
+        ports: {}, configuration: { shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 10)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    expect(launches).toHaveLength(1)
+    expect(launches[0]).toMatchObject({
+      argv: ["/phase124/bash", "-lic", "fixed-bootstrap", "phase124-original-command"],
+      cwd: "/phase124/repository",
+      env: { PATH: "/phase124/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent.sock" },
+    })
+    await manager.close("browser-1", terminal.id)
+  })
+
   test("PHASE123_RED terminal barrier contract", async () => {
     const admission = createWorkspaceLifecycleAdmission()
     const ptys = createPtyFactory(["term", "term"])

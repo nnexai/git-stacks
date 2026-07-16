@@ -93,7 +93,7 @@ describe("service launch context projection", () => {
     expect(response.workspace.launch.named?.map((entry) => entry.name)).toEqual(["dev"])
   })
 
-  test("resolves the complete pre/main/post command plan for browser terminals", async () => {
+  test("PHASE124_RED terminal steps SSH rotation contract", async () => {
     const instance = builder()
     const snapshot = await instance.buildWorkspace("alpha", "req_0123456789abcdef")
     const command = snapshot.workspace.launch.named?.[0]
@@ -106,11 +106,8 @@ describe("service launch context projection", () => {
     })
     expect(resolution.resolved).toBe(true)
     if (!resolution.resolved) return
-    expect(resolution.launch.argv.slice(0, 2)).toEqual(["/bin/sh", "-lc"])
-    expect(resolution.launch.argv[2]).toContain("prepare")
-    expect(resolution.launch.argv[2]).toContain("bun dev")
-    expect(resolution.launch.argv[2]).toContain("bun test --watch")
-    expect(resolution.launch.argv[2]).toContain("cleanup")
-    expect(resolution.launch.argv[2]).toContain("/tasks/alpha/git-stacks")
+    const typedSteps = (resolution.launch as unknown as { steps?: Array<Record<string, unknown>> }).steps
+    expect(typedSteps, "PHASE124_RED terminal steps SSH rotation contract").toEqual(command.steps)
+    expect(resolution.launch.argv).not.toEqual(expect.arrayContaining([expect.stringContaining("prepare")]))
   })
 })
