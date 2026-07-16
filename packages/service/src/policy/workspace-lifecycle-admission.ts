@@ -9,14 +9,21 @@ export interface WorkspaceTerminalAdmission {
 }
 
 export interface WorkspaceLifecycleAdmission {
-  acquire(workspaceId: string): Promise<WorkspaceLifecycleLease>
+  acquire(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceLifecycleLease>
   admitTerminal(workspaceId: string): WorkspaceTerminalAdmission
+}
+
+type LifecycleWaiter = {
+  resolve(lease: WorkspaceLifecycleLease): void
+  reject(reason: unknown): void
+  signal?: AbortSignal
+  onAbort?: () => void
 }
 
 type TargetState = {
   held: boolean
   terminalCreates: number
-  waiters: Array<(lease: WorkspaceLifecycleLease) => void>
+  waiters: LifecycleWaiter[]
 }
 
 function blocked(): Error & { status: number; code: string } {
@@ -37,7 +44,8 @@ export function createWorkspaceLifecycleAdmission(): WorkspaceLifecycleAdmission
       return
     }
     state.held = true
-    next(grant(workspaceId, state))
+    if (next.signal && next.onAbort) next.signal.removeEventListener("abort", next.onAbort)
+    next.resolve(grant(workspaceId, state))
   }
 
   const grant = (workspaceId: string, state: TargetState): WorkspaceLifecycleLease => {
@@ -54,7 +62,8 @@ export function createWorkspaceLifecycleAdmission(): WorkspaceLifecycleAdmission
   }
 
   return {
-    acquire(workspaceId) {
+    acquire(workspaceId, signal) {
+      if (signal?.aborted) return Promise.reject(signal.reason)
       let state = targets.get(workspaceId)
       if (!state) {
         state = { held: false, terminalCreates: 0, waiters: [] }
@@ -64,7 +73,20 @@ export function createWorkspaceLifecycleAdmission(): WorkspaceLifecycleAdmission
         state.held = true
         return Promise.resolve(grant(workspaceId, state))
       }
-      return new Promise((resolve) => state!.waiters.push(resolve))
+      return new Promise((resolve, reject) => {
+        const waiter: LifecycleWaiter = { resolve, reject, signal }
+        if (signal) {
+          waiter.onAbort = () => {
+            const index = state!.waiters.indexOf(waiter)
+            if (index === -1) return
+            state!.waiters.splice(index, 1)
+            signal.removeEventListener("abort", waiter.onAbort!)
+            reject(signal.reason)
+          }
+          signal.addEventListener("abort", waiter.onAbort, { once: true })
+        }
+        state!.waiters.push(waiter)
+      })
     },
     admitTerminal(workspaceId) {
       let state = targets.get(workspaceId)

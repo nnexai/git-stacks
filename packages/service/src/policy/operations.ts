@@ -45,8 +45,17 @@ export interface OperationStep {
   name: string
   stage: "preparing" | "executing"
   message: string
-  run: (report: (progress: OperationProgressInput) => void | Promise<void>) => Promise<void>
+  run: (
+    report: (progress: OperationProgressInput) => void | Promise<void>,
+    cancellation?: OperationCancellation,
+  ) => Promise<void>
   rollback?: () => Promise<void>
+}
+
+export interface OperationCancellation {
+  readonly signal: AbortSignal
+  throwIfCancelled(): void
+  commit(): void
 }
 
 export type OperationProgressInput = Omit<OperationProgress, "stage"> & { stage?: OperationProgress["stage"] }
@@ -114,6 +123,7 @@ export class OperationRegistry {
   private readonly visibleOperations = new Map<string, Operation>()
   private readonly executions = new Map<string, Promise<void>>()
   private readonly cancellations = new Set<string>()
+  private readonly activeCancellations = new Map<string, OperationCancellationState>()
 
   constructor(private readonly options: OperationRegistryOptions) {
     this.path = join(options.root, "operations.json")
@@ -292,7 +302,10 @@ export class OperationRegistry {
     await this.initialize()
     const operation = this.get(id)
     if (!operation) throw new Error(`unknown operation: ${id}`)
-    if (operation.state === "accepted" || operation.state === "running") this.cancellations.add(id)
+    if (operation.state === "accepted" || operation.state === "running") {
+      const active = this.activeCancellations.get(id)
+      if (!active || active.cancel()) this.cancellations.add(id)
+    }
     return operation
   }
 
@@ -316,6 +329,9 @@ export class OperationRegistry {
     const startedAt = this.timestamp()
     const completed: OperationStep[] = []
     const rollbackErrors: ApiError[] = []
+    const cancellation = new OperationCancellationState()
+    this.activeCancellations.set(accepted.operation_id, cancellation)
+    if (this.cancellations.has(accepted.operation_id)) cancellation.cancel()
     let current: Operation = OperationSchema.parse({
       operation_id: accepted.operation_id, state: "running", accepted_at: accepted.accepted_at,
       started_at: startedAt, progress: { stage: "preparing", message: "Preparing operation" },
@@ -339,7 +355,7 @@ export class OperationRegistry {
             progress: { ...reported, stage: reported.stage ?? step.stage },
           })
           await this.visible(current)
-        })
+        }, cancellation)
         completed.push(step)
       }
       if (this.cancellations.has(accepted.operation_id)) {
@@ -351,6 +367,10 @@ export class OperationRegistry {
         started_at: startedAt, finished_at: this.timestamp(), completed_steps: completed.map((step) => step.name), result: execution.result,
       }))
     } catch (caught) {
+      if (cancellation.signal.aborted && !cancellation.committed) {
+        await this.finishCancelled(accepted, startedAt, completed, rollbackErrors)
+        return
+      }
       const message = caught instanceof Error ? caught.message : String(caught)
       const candidate = caught && typeof caught === "object" ? caught as {
         code?: unknown
@@ -371,7 +391,10 @@ export class OperationRegistry {
           rollback_errors: rollbackErrors,
         }))
       }
-    } finally { this.cancellations.delete(accepted.operation_id) }
+    } finally {
+      this.activeCancellations.delete(accepted.operation_id)
+      this.cancellations.delete(accepted.operation_id)
+    }
   }
 
   private async rollback(accepted: Operation, startedAt: string, completed: OperationStep[], rollbackErrors: ApiError[]): Promise<void> {
@@ -398,6 +421,29 @@ export class OperationRegistry {
       rollback_succeeded: rollbackErrors.length === 0,
       rollback_errors: rollbackErrors,
     }))
+  }
+}
+
+class OperationCancellationState implements OperationCancellation {
+  private readonly controller = new AbortController()
+  private sealed = false
+
+  get signal(): AbortSignal { return this.controller.signal }
+  get committed(): boolean { return this.sealed }
+
+  cancel(): boolean {
+    if (this.sealed) return false
+    this.controller.abort(new DOMException("Operation cancelled", "AbortError"))
+    return true
+  }
+
+  throwIfCancelled(): void {
+    this.signal.throwIfAborted()
+  }
+
+  commit(): void {
+    this.throwIfCancelled()
+    this.sealed = true
   }
 }
 

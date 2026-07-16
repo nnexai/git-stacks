@@ -98,10 +98,11 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
           name: "workspace.lifecycle",
           stage: "executing",
           message: "Updating workspace lifecycle",
-          run: async (report) => {
-            const lease = await options.admission.acquire(mutation.workspace_id)
+          run: async (report, cancellation) => {
+            const lease = await options.admission.acquire(mutation.workspace_id, cancellation?.signal)
             let terminalsStopped = mutation.kind === "workspace.unarchive"
             try {
+              cancellation?.throwIfCancelled()
               const before = await options.snapshot.buildCatalog()
               const target = targetFromCatalog(before, mutation.workspace_id)
               if (!target) throw failure("not_found", "Workspace not found", "not_found", false)
@@ -127,6 +128,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
 
               if (mutation.kind !== "workspace.unarchive") {
                 await progress(report, "stopping_terminals")
+                cancellation?.commit()
                 const closed = await options.terminals.closeWorkspace(target.id)
                 if (!closed.ok) {
                   throw failure("operation_failed", "Workspace terminals did not stop", "terminal_cleanup_failed", false)
@@ -145,8 +147,10 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
               }
 
               if (mutation.kind === "workspace.archive") {
+                cancellation?.commit()
                 options.archiveWorkspace(target.name, { clock: options.clock, expectedId: target.id })
               } else if (mutation.kind === "workspace.unarchive") {
+                cancellation?.commit()
                 options.unarchiveWorkspace(target.name, { expectedId: target.id })
               } else {
                 await progress(report, "checking_worktrees")
@@ -162,6 +166,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
                       inspected.code === "workspace_dirty",
                     )
                   }
+                  cancellation?.commit()
                   const committed = await options.commitWorkspaceRemoval(inspected.plan, {
                     onPhase: (phase) => progress(report, phase),
                   })
@@ -185,6 +190,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
                   if (mutation.confirmation_name !== target.name) {
                     throw failure("conflict", "Workspace name confirmation does not match", "confirmation_mismatch", terminalsStopped)
                   }
+                  cancellation?.commit()
                   const committed = await options.commitWorkspaceRemoval(inspected.plan, {
                     allow_dirty: true,
                     onPhase: (phase) => progress(report, phase),

@@ -354,6 +354,41 @@ describe("service workspace lifecycle coordinator", () => {
     expect(calls.indexOf("archive:beta")).toBeLessThan(calls.indexOf("archive:alpha"))
   })
 
+  test("cancels a queued removal before terminal or filesystem mutation and removes its waiter", async () => {
+    const dir = await operationRoot()
+    const admission = createWorkspaceLifecycleAdmission()
+    const blocker = await admission.acquire(WORKSPACE_A)
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_cancelqueued1234",
+      publishOperationEvent: async () => ({} as never),
+    })
+    const state = harness({ admission, operations: registry })
+    const accepted = await state.coordinator.submit({
+      clientId: "client-a",
+      idempotencyKey: "cancel-queued",
+      mutation: mutation("workspace.remove"),
+    })
+
+    for (let attempt = 0; attempt < 100 && registry.get(accepted.operation_id)?.state !== "running"; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 1))
+    }
+    await registry.cancel(accepted.operation_id)
+    const nextLease = admission.acquire(WORKSPACE_A)
+    blocker.release()
+    const granted = await nextLease
+    granted.release()
+    await registry.wait(accepted.operation_id)
+
+    expect(registry.get(accepted.operation_id)).toMatchObject({
+      state: "cancelled",
+      completed_steps: [],
+      error: { details: { reason: "cancelled" } },
+    })
+    expect(state.calls).toEqual([])
+    expect(state.targets.map((target) => target.id)).toContain(WORKSPACE_A)
+  })
+
   test("preserves durable idempotency and a new key cannot target deleted or recreated state", async () => {
     const dir = await operationRoot()
     let id = 0
