@@ -2,6 +2,7 @@ import { describe, expect, test } from "@test/api"
 import { createWorkspaceActionRegistry } from "../../packages/client/src/workspace-actions"
 import {
   WEB_WORKSPACE_ACTION_GROUPS,
+  validateWorkspaceNoteDraft,
   workspaceActionMenuRows,
 } from "../../packages/web/src/navigation"
 import type {
@@ -91,5 +92,48 @@ describe("web canonical workspace action surface", () => {
       "aria-disabled",
     ]) expect(appSource).toContain(seam)
     expect(appSource).not.toMatch(/workspace\.pull[\s\S]{0,120}(?:child_process|spawn|exec)/)
+  })
+})
+
+describe("web authoritative notes and path-free file details", () => {
+  test("rejects blank and over-limit notes before transport with UTF-8 byte accounting", () => {
+    expect(validateWorkspaceNoteDraft("   ")).toEqual({ valid: false, message: "Enter a workspace note." })
+    expect(validateWorkspaceNoteDraft("é".repeat(2_048))).toEqual({ valid: true, text: "é".repeat(2_048) })
+    expect(validateWorkspaceNoteDraft("é".repeat(2_049))).toEqual({ valid: false, message: "Workspace notes must be 4096 bytes or fewer." })
+  })
+
+  test("wires append-only list add clear and keeps failures authoritative", () => {
+    for (const seam of [
+      "Workspace notes —",
+      "workspace.notes.list",
+      "workspace.notes.add",
+      "workspace.notes.clear",
+      "expected_notes_revision",
+      "New workspace note",
+      "Add note",
+      "Keep notes",
+      "Clear workspace notes",
+      "The note was not added",
+      "Workspace notes were not cleared",
+    ]) expect(appSource).toContain(seam)
+    expect(appSource).not.toMatch(/(?:localStorage|sessionStorage)[\s\S]{0,100}note/i)
+  })
+
+  test("renders lazy grouped file status from safe DTO fields only", () => {
+    for (const seam of [
+      "Workspace file status —",
+      "workspace.files.inspect",
+      "Loading workspace file status…",
+      "aria-expanded",
+      "file-status-entry",
+      "entry.target",
+      "entry.type",
+      "entry.state",
+      "entry.severity",
+      "entry.message",
+      "Retry the service check",
+    ]) expect(appSource).toContain(seam)
+    expect(appSource).not.toMatch(/entry\.(?:path|source_path|target_path|main_path|task_path|root|raw_error)/)
+    expect(appSource).not.toContain("innerHTML = entry")
   })
 })
