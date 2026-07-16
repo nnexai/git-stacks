@@ -24,12 +24,16 @@ describe("service v1 contract", () => {
     const schema = (serviceProtocol as Record<string, unknown>).DynamicEnvironmentRefreshSchema as
       | { safeParse(value: unknown): { success: boolean; data?: unknown } }
       | undefined
+    const resultSchema = (serviceProtocol as Record<string, unknown>).DynamicEnvironmentRefreshResultSchema as
+      | { safeParse(value: unknown): { success: boolean; data?: unknown } }
+      | undefined
     const parse = (value: unknown) => schema?.safeParse(value)
     const pathAtLimit = "/opt/runtime/bin:".repeat(1_024).slice(0, 16_384)
     const socketAtLimit = `/tmp/${"s".repeat(4_091)}`
 
     const observations = {
       schema_exists: schema !== undefined,
+      result_schema_exists: resultSchema !== undefined,
       replaces_allowlist: parse({ PATH: "/phase124/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent.sock" })?.success === true,
       omission_means_clear: parse({})?.success === true,
       exact_path_bound: parse({ PATH: pathAtLimit })?.success === true
@@ -38,16 +42,20 @@ describe("service v1 contract", () => {
         && parse({ SSH_AUTH_SOCK: `${socketAtLimit}x` })?.success === false,
       rejects_unknown_keys: parse({ PATH: "/bin", TOKEN: "must-not-cross" })?.success === false,
       rejects_control_bytes: parse({ PATH: "/bin\0/hidden" })?.success === false,
+      metadata_only_result: resultSchema?.safeParse({ updated: ["PATH"], cleared: ["SSH_AUTH_SOCK"] }).success === true
+        && resultSchema.safeParse({ updated: ["PATH"], cleared: [], PATH: "/must/not/echo" }).success === false,
     }
 
     expect(observations, "PHASE124_RED refresh authorization TUI ordering contract").toEqual({
       schema_exists: true,
+      result_schema_exists: true,
       replaces_allowlist: true,
       omission_means_clear: true,
       exact_path_bound: true,
       exact_socket_bound: true,
       rejects_unknown_keys: true,
       rejects_control_bytes: true,
+      metadata_only_result: true,
     })
   })
 

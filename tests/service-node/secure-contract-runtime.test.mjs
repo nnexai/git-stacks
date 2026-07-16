@@ -109,6 +109,8 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
     assert.equal(refreshTranscript.includes(refresh.SSH_AUTH_SOCK), false)
     assert.equal(refreshTranscript.includes("never-parse-this"), false)
     if (!("error" in browserRefresh)) assert.fail("browser environment refresh must never be accepted")
+    assert.deepEqual(tuiRefresh, { updated: ["PATH", "SSH_AUTH_SOCK"], cleared: [] }, "PHASE124_RED refresh authorization TUI ordering contract")
+    assert.deepEqual(browserRefresh, { error: "unauthorized" })
     await assert.rejects(tui.rpc.request("operation.get", { operation_id: first.operation_id }), (error) => error.code === "not_found")
     await tui.rpc.close("ownership verified")
     await browser.rpc.close("contract verified")
