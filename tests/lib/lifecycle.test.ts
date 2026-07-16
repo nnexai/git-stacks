@@ -275,7 +275,10 @@ describe("Phase 124 lifecycle adapter delegation contract", () => {
       join(import.meta.dirname, "../../packages/core/src/lifecycle.ts"),
       "utf8",
     )
-    expect(lifecycleSource).toContain("executeUserShellCommand")
+    expect(
+      lifecycleSource,
+      "PHASE124_RED migrated shell consumers: lifecycle still owns a legacy shell path",
+    ).toContain("executeUserShellCommand")
     expect(lifecycleSource).not.toMatch(/\[\s*["']\/bin\/sh["']\s*,\s*["']-c["']/)
   })
 })

@@ -184,7 +184,10 @@ describe("run --parallel", () => {
       join(PROJECT_ROOT, "packages/cli/src/commands/workspace.ts"),
       "utf8",
     )
-    expect(workspaceCommandSource).toContain("executeUserShellCommand")
+    expect(
+      workspaceCommandSource,
+      "PHASE124_RED migrated shell consumers: CLI run still owns a legacy shell path",
+    ).toContain("executeUserShellCommand")
     expect(workspaceCommandSource).not.toMatch(/spawn\(\[\s*["']sh["']\s*,\s*["']-c["']/)
     expect(workspaceCommandSource).not.toMatch(/process\.env\.SHELL\s*\|\|\s*["']sh["']/)
   })
