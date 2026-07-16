@@ -58,3 +58,19 @@ Local host notes:
 
 - The complete `web-terminal.test.ts` run passed 21 tests; its two already-documented late real-PTY streaming cases timed out after the preceding PTY cases and each passed when rerun independently.
 - The host fixture's direct node-pty helper returned empty PTY output for local Bash/fish/SSH PTY assertions, while its non-PTY shell and real process-tree cancellation assertions passed. The isolated Bash case reproduces unchanged on the pre-repair `main` worktree, so this is not introduced by either repair. Local zsh remains capability-skipped.
+
+## Fourth adversarial repair pass
+
+The final POSIX dot-dispatch finding supersedes the third-pass source boundary:
+
+- Bash and zsh PTY initialization no longer invoke `.` or any other post-profile command dispatcher. Random per-launch shadow environment names carry authoritative values without placing raw values in the echoed bootstrap; grammar-level assignments and `case` checks create readiness only after the effective overlay matches.
+- Command steps are delivered directly inside one parser-complete brace/begin batch. This preserves initialized aliases and functions while ensuring interactive commands such as `read` cannot consume a separately queued status command. A grammar-level private status-file sentinel records ordinary completion; the service then performs its existing TERM/KILL process-group cleanup. Commands that exit the shell directly retain their actual PTY exit code.
+- The hostile fixtures now poison `.`, `builtin`, `source`, `printf`, and `export`. They prove the command still runs, readiness reflects the resulting authoritative value, and the echoed bootstrap contains no raw overlay sentinel. The readonly-overlay fixture still proves readiness cannot be faked.
+- The full web-terminal suite revalidates the permanent-group case: failure to prove descendant cleanup retains the active process and never fabricates terminal completion; explicit close remains retryable and honest.
+
+Fourth-pass focused verification:
+
+- `npx vitest run tests/service/web-terminal.test.ts tests/lib/user-shell-adapter.test.ts tests/commands/user-shell-host-fixture.test.ts` — 38 passed, 1 explicit local zsh capability skip.
+- `npm run typecheck -w @git-stacks/service` — pass.
+- `npm run test:deps` — package architecture pass.
+- `git diff --check` — pass.
