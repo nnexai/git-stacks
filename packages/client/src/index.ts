@@ -9,6 +9,7 @@ export interface EventTransport {
 export * from "./presentation.js"
 export * from "./shortcuts.js"
 export * from "./fuzzy.js"
+export * from "./attention.js"
 export * from "./reducer.js"
 export * from "./signal-state.js"
 export * from "./secure-session.js"
