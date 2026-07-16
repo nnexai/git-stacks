@@ -17,6 +17,68 @@ import {
 export const WEB_PROTOCOL = "web-v1" as const
 export const WEB_COOKIE = "git_stacks_web"
 
+export const WEB_SHORTCUT_ACTION_IDS = [
+  "workspace.switch",
+  "commands.open",
+  "workspace.new",
+  "terminal.new",
+  "terminal.close",
+  "terminal.previous",
+  "terminal.next",
+  "attention.next",
+] as const
+export const WEB_SHORTCUT_MAX_ALIASES = 4
+
+export const WebShortcutPlatformSchema = z.enum(["macos", "linux"])
+export type WebShortcutPlatform = z.infer<typeof WebShortcutPlatformSchema>
+export const WebShortcutActionIdSchema = z.enum(WEB_SHORTCUT_ACTION_IDS)
+export type WebShortcutActionId = z.infer<typeof WebShortcutActionIdSchema>
+export const WebShortcutBindingSchema = z.strictObject({
+  code: z.string().regex(/^Key[A-Z]$/),
+  ctrl: z.boolean(),
+  alt: z.boolean(),
+  shift: z.boolean(),
+  meta: z.boolean(),
+})
+export type WebShortcutBinding = z.infer<typeof WebShortcutBindingSchema>
+
+const webShortcutBindingKey = (binding: WebShortcutBinding) =>
+  `${binding.code}:${Number(binding.ctrl)}${Number(binding.alt)}${Number(binding.shift)}${Number(binding.meta)}`
+const WebShortcutAliasesSchema = z.array(WebShortcutBindingSchema)
+  .max(WEB_SHORTCUT_MAX_ALIASES)
+  .refine((aliases) => new Set(aliases.map(webShortcutBindingKey)).size === aliases.length, {
+    message: "Shortcut aliases must be unique",
+  })
+
+export const WebShortcutEffectiveBindingSchema = z.strictObject({
+  action_id: WebShortcutActionIdSchema,
+  primary: WebShortcutBindingSchema.nullable(),
+  aliases: WebShortcutAliasesSchema,
+}).superRefine(({ primary, aliases }, context) => {
+  if (primary && aliases.some((alias) => webShortcutBindingKey(alias) === webShortcutBindingKey(primary))) {
+    context.addIssue({ code: "custom", path: ["aliases"], message: "Primary binding cannot also be an alias" })
+  }
+})
+export type WebShortcutEffectiveBinding = z.infer<typeof WebShortcutEffectiveBindingSchema>
+
+export const WebShortcutSettingsSchema = z.strictObject({
+  platform: WebShortcutPlatformSchema,
+  revision: RevisionSchema,
+  bindings: z.array(WebShortcutEffectiveBindingSchema).length(WEB_SHORTCUT_ACTION_IDS.length),
+}).superRefine(({ bindings }, context) => {
+  const seen = new Set<WebShortcutActionId>()
+  for (const [index, binding] of bindings.entries()) {
+    if (seen.has(binding.action_id)) {
+      context.addIssue({ code: "custom", path: ["bindings", index, "action_id"], message: "Shortcut actions must be unique" })
+    }
+    seen.add(binding.action_id)
+  }
+})
+export type WebShortcutSettings = z.infer<typeof WebShortcutSettingsSchema>
+
+export const WebShortcutGetRequestSchema = z.strictObject({ platform: WebShortcutPlatformSchema })
+export type WebShortcutGetRequest = z.infer<typeof WebShortcutGetRequestSchema>
+
 export const WebPairingExchangeSchema = z.strictObject({ code: z.string().min(32).max(128) })
 export const WebTerminalCreateSchema = z.strictObject({
   workspace_id: EntityIdSchema,
