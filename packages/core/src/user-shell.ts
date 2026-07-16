@@ -91,12 +91,22 @@ export type UserShellExecutionDependencies = {
   spawn: (argv: readonly string[], options?: SpawnOptions) => SpawnedProcess
   now: () => number
   wait: (milliseconds: number) => Promise<void>
+  processGroupExists: (pid: number) => boolean
 }
 
 const DEFAULT_EXECUTION_DEPENDENCIES: UserShellExecutionDependencies = {
   spawn,
   now: Date.now,
   wait: sleep,
+  processGroupExists: (pid) => {
+    if (process.platform === "win32") return false
+    try {
+      process.kill(-pid, 0)
+      return true
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "EPERM"
+    }
+  },
 }
 
 const POSIX_BOOTSTRAP = [
@@ -242,7 +252,11 @@ export function buildUserShellBootstrap(
   } as const
 
   if (options.mode === "pty") {
-    const flags = shell.family === "zsh" ? ["-l", "-i"] : ["--login", "--interactive"]
+    const flags = shell.family === "bash"
+      ? ["--login", "-i"]
+      : shell.family === "zsh"
+        ? ["-l", "-i"]
+        : ["--login", "--interactive"]
     return { shell, mode: "pty", argv: [shell.executable, ...flags], initialization }
   }
 
@@ -255,7 +269,7 @@ export function buildUserShellBootstrap(
     paths.command,
   ]
   const argv = shell.family === "bash"
-    ? [shell.executable, "--login", "--interactive", "-c", bootstrap, "git-stacks-user-shell", ...commonArguments]
+    ? [shell.executable, "--login", "-i", "-c", bootstrap, "git-stacks-user-shell", ...commonArguments]
     : shell.family === "zsh"
       ? [shell.executable, "-l", "-i", "-c", bootstrap, "git-stacks-user-shell", ...commonArguments]
       : [shell.executable, "--login", "--interactive", "--command", bootstrap, ...commonArguments]
@@ -320,9 +334,12 @@ async function terminateProcessGroup(
   dependencies: UserShellExecutionDependencies,
 ): Promise<void> {
   processHandle.killGroup("SIGTERM")
-  if (await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)) return
+  const leaderExitedAfterTerm = await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
+  if (leaderExitedAfterTerm && !dependencies.processGroupExists(processHandle.pid)) return
   processHandle.killGroup("SIGKILL")
-  if (await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)) return
+  const leaderExitedAfterKill = leaderExitedAfterTerm
+    || await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
+  if (leaderExitedAfterKill && !dependencies.processGroupExists(processHandle.pid)) return
   fail(
     "cleanup",
     shell.executable,

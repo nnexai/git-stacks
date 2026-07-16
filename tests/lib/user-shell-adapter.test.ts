@@ -135,7 +135,7 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     if (!existsSync(ADAPTER_PATH)) return
     const { buildUserShellBootstrap, discoverUserShell } = await import("../../packages/core/src/user-shell")
     const expected = {
-      bash: ["--login", "--interactive"],
+      bash: ["--login", "-i"],
       zsh: ["-l", "-i"],
       fish: ["--login", "--interactive"],
     }
@@ -164,6 +164,7 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     }, {
       now: () => now,
       wait: async (milliseconds) => { now += milliseconds },
+      processGroupExists: () => false,
       spawn: () => ({
         pid: 4242,
         exited,
@@ -188,6 +189,43 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     })
     expect(now).toBeGreaterThanOrEqual(10_000)
     expect(signals).toEqual(["SIGTERM"])
+  })
+
+  test("SIGKILLs a surviving process group after the shell leader exits on SIGTERM", async () => {
+    if (!existsSync(ADAPTER_PATH)) return
+    const { executeUserShellCommand } = await import("../../packages/core/src/user-shell")
+    let groupExists = true
+    let now = 0
+    let resolveExit!: (exitCode: number) => void
+    const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+    const signals: Array<NodeJS.Signals | number> = []
+
+    const execution = executeUserShellCommand({
+      command: hostileCommand,
+      cwd: fixtureRoot,
+      shellEnvironment: { SHELL: shellFixtures[0].executable },
+    }, {
+      now: () => now,
+      wait: async (milliseconds) => { now += milliseconds },
+      processGroupExists: () => groupExists,
+      spawn: () => ({
+        pid: 4244,
+        exited,
+        stdout: null,
+        stderr: null,
+        kill: () => true,
+        killGroup: (signal) => {
+          signals.push(signal ?? "SIGTERM")
+          if (signal === "SIGTERM") resolveExit(143)
+          if (signal === "SIGKILL") groupExists = false
+          return true
+        },
+        unref: () => undefined,
+      }),
+    })
+
+    await expect(execution).rejects.toMatchObject({ diagnostic: { category: "initialization" } })
+    expect(signals).toEqual(["SIGTERM", "SIGKILL"])
   })
 
   test("does not apply the initialization timeout after the readiness handshake", async () => {
