@@ -257,10 +257,11 @@ describe("service-owned web terminal", () => {
       writeFileSync(profilePath, fixture.profile)
       const sentinel = `phase-124-trace-secret-${fixture.family}`
       const marker = `command-output-${fixture.family}`
+      const stderrMarker = `command-stderr-${fixture.family}`
       const initialization = createPtyInitialization(fixture.family, { AUTHORITATIVE_OVERLAY: sentinel })
       try {
         expect(initialization.bootstrap).not.toContain(sentinel)
-        const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; /usr/bin/printf '%s' '${marker}'`), {
+        const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; /usr/bin/printf '%s' '${marker}'; /usr/bin/printf '%s' '${stderrMarker}' >&2`), {
           encoding: "utf8",
           env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...initialization.environment, ...fixture.environment(root) },
           timeout: 3_000,
@@ -268,6 +269,7 @@ describe("service-owned web terminal", () => {
         const capturedOutput = `${result.stdout}${result.stderr}`
         expect(result.status, `${fixture.family}: ${capturedOutput}`).toBe(0)
         expect(result.stdout).toContain(marker)
+        expect(result.stderr).toContain(stderrMarker)
         expect(capturedOutput).not.toContain(sentinel)
         expect(existsSync(initialization.readyPath)).toBe(true)
       } finally {

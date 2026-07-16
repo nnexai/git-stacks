@@ -112,9 +112,8 @@ export function createPtyInitialization(
           `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
         ].join("; ")
         if (shell === "zsh") return `{ ${body}; } > /dev/null 2>&1`
-        const traceFd = `__GS_PTY_TRACE_FD_${randomBytes(12).toString("hex")}`
-        const silentBody = `{ ${body}; BASH_XTRACEFD=\"$${traceFd}\"; } > /dev/null 2>&1`
-        return `${traceFd}=\"\${BASH_XTRACEFD-2}\"; BASH_XTRACEFD=2; case \"\${BASH_XTRACEFD-}\" in 2) ${silentBody} ;; esac`
+        const silentBody = `{ ${body}; } > /dev/null 2>&1`
+        return `BASH_XTRACEFD=2; case \"\${BASH_XTRACEFD-}\" in 2) ${silentBody} ;; esac`
       })()
   return { root, readyPath, statusPathPrefix, bootstrap, environment: shell === "fish" ? {} : overlay.environment, ...(command === undefined ? {} : { command }) }
 }
