@@ -421,6 +421,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
     if (!(event.ctrlKey || event.altKey || event.metaKey)) {
       capture.error = "Add Ctrl, Alt, or Command so terminal typing stays available."
       render()
+      view.body.querySelector<HTMLElement>(`[data-capture='${capture.actionId}']`)?.focus()
       return
     }
     const candidate: WebShortcutBinding = {
@@ -440,6 +441,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
     if (conflict) {
       capture.error = `Already assigned to ${conflict.ownerLabel}. Choose another shortcut or unbind that action first.`
       render()
+      view.body.querySelector<HTMLElement>(`[data-capture='${capture.actionId}']`)?.focus()
       return
     }
     const candidateSettings = replaceAction(current, capture.actionId, (binding) => capture?.target === "primary"
@@ -451,6 +453,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
         ? `Already assigned to ${validation.conflict.ownerLabel}. Choose another shortcut or unbind that action first.`
         : "Add Ctrl, Alt, or Command so terminal typing stays available."
       render()
+      view.body.querySelector<HTMLElement>(`[data-capture='${capture.actionId}']`)?.focus()
       return
     }
     runMutation(capture.target === "primary"

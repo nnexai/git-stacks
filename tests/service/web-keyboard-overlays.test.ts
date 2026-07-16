@@ -1,6 +1,7 @@
 import { describe, expect, test } from "@test/api"
 import { defaultShortcutSettings } from "../../packages/client/src/index"
 import type { WebShortcutMutation } from "../../packages/protocol/src/web"
+import { readFile } from "node:fs/promises"
 import {
   createSingletonOverlayController,
   mountFuzzyOverlay,
@@ -358,5 +359,61 @@ describe("web authoritative shortcut overlays", () => {
     capture?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, altGraph: true } as Partial<FakeEvent>)
     expect(mutations).toBe(0)
     expect(opened.view?.body.textContent).toContain("Press shortcut…")
+  })
+
+  test("retries authoritative loading and uses set-aliases for add and remove", async () => {
+    const { controller } = harness()
+    let loads = 0
+    let authoritative = defaultShortcutSettings("linux", "20")
+    const mutations: WebShortcutMutation[] = []
+    const opened = controller.open({ id: "settings", title: "Customize shortcuts", closeLabel: "Close shortcut settings", returnTarget: "term" })
+    const settings = mountShortcutSettings(opened.view!, {
+      platform: "linux",
+      load: async () => {
+        loads += 1
+        if (loads === 1) throw new Error("offline")
+        return authoritative
+      },
+      mutate: async (mutation) => {
+        mutations.push(mutation)
+        if (mutation.intent !== "set-aliases") throw new Error("unexpected mutation")
+        authoritative = {
+          ...authoritative,
+          revision: String(Number(authoritative.revision) + 1),
+          bindings: authoritative.bindings.map((binding) => binding.action_id === mutation.action_id ? { ...binding, aliases: mutation.aliases } : binding),
+        }
+        return authoritative
+      },
+      accept: () => undefined,
+      announce: () => undefined,
+    })
+    await settings.ready
+    expect(opened.view?.body.textContent).toContain("Shortcuts could not be loaded. Retry to edit the authoritative settings.")
+    opened.view?.body.querySelectorAll("BUTTON").find((candidate) => candidate.textContent === "Retry loading shortcuts")?.dispatch("click")
+    await Promise.resolve()
+    expect(loads).toBe(2)
+
+    const firstRow = opened.view?.body.querySelectorAll(".shortcut-row")[0]
+    firstRow?.querySelectorAll("BUTTON").find((candidate) => candidate.textContent === "Add shortcut alias")?.dispatch("click")
+    opened.view?.body.querySelectorAll("BUTTON").find((candidate) => candidate.getAttribute("data-capture") === "workspace.switch")
+      ?.dispatch("keydown", { code: "KeyQ", key: "q", ctrlKey: true, altKey: true, shiftKey: true })
+    await settings.idle()
+    expect(mutations[0]).toMatchObject({ intent: "set-aliases", expected_revision: "20", aliases: [{ code: "KeyQ" }] })
+
+    opened.view?.body.querySelectorAll("BUTTON").find((candidate) => candidate.textContent === "Remove shortcut alias")?.dispatch("click")
+    await settings.idle()
+    expect(mutations[1]).toMatchObject({ intent: "set-aliases", expected_revision: "21", aliases: [] })
+  })
+
+  test("wires the executable overlay implementation to service authority without browser persistence", async () => {
+    const source = await readFile(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
+    expect(source).toContain("createSingletonOverlayController")
+    expect(source).toContain("mountFuzzyOverlay")
+    expect(source).toContain("mountShortcutHelp")
+    expect(source).toContain("mountShortcutSettings")
+    expect(source).toContain('"shortcuts.set"')
+    expect(source).toContain('id="next-attention"')
+    expect(source).toContain('id="keyboard-shortcuts"')
+    expect(source).not.toContain("localStorage")
   })
 })

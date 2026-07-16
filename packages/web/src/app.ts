@@ -1498,7 +1498,7 @@ void (async () => {
     showStartupFailure("Pairing required", error, "Run git-stacks web to open a fresh one-use link.")
     return
   }
-  await loadShortcutSettings()
+  await loadShortcutSettings().catch(() => undefined)
   try {
     await refreshSnapshot()
   } catch (error) {
