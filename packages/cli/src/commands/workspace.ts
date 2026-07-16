@@ -1,6 +1,12 @@
 import { Command, Option } from "commander"
 
 import { spawn } from "@git-stacks/core/node-runtime"
+import {
+  UserShellError,
+  buildUserShellBootstrap,
+  discoverUserShell,
+  executeUserShellCommand,
+} from "@git-stacks/core/user-shell"
 import { existsSync } from "fs"
 import { prompts as p } from "../prompts"
 import { join } from "path"
@@ -57,6 +63,49 @@ function reportStashPopFailures(
   if (!failures) return
   for (const failure of failures) {
     console.error(`${prefix}⚠ stash pop conflict in ${failure.repo} — stash preserved. Run: git -C ${failure.repoPath} stash pop`)
+  }
+}
+
+function formatUserShellError(error: unknown): string {
+  if (!(error instanceof UserShellError)) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  const { diagnostic } = error
+  return [
+    diagnostic.message,
+    `shell: ${diagnostic.shell}`,
+    `mode: ${diagnostic.mode}`,
+    `stage: ${diagnostic.stage}`,
+    `recovery: ${diagnostic.recovery}`,
+  ].join("\n")
+}
+
+async function executeCliUserCommand(
+  command: string,
+  cwd: string,
+  overlay: Record<string, string>,
+  capture: boolean,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  try {
+    const result = await executeUserShellCommand({
+      command,
+      cwd,
+      inheritedEnvironment: process.env,
+      overlay,
+      onOutput: capture ? undefined : ({ stream, chunk }) => {
+        if (stream === "stdout") process.stdout.write(chunk)
+        else process.stderr.write(chunk)
+      },
+    })
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout.toString("utf8"),
+      stderr: result.stderr.toString("utf8"),
+    }
+  } catch (error) {
+    const stderr = `${formatUserShellError(error)}\n`
+    if (!capture) process.stderr.write(stderr)
+    return { exitCode: 1, stdout: "", stderr }
   }
 }
 
@@ -720,6 +769,17 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
+      let baseEnv: Record<string, string>
+      try {
+        baseEnv = await buildWorkspaceEnv(ws, { triggeredBy: "run" })
+      } catch (error) {
+        console.error(formatError(
+          `Launch environment resolution failed: ${error instanceof Error ? error.message : String(error)}`,
+          "fix the workspace environment or secret source and retry",
+        ))
+        process.exit(1)
+      }
+
       if (opts.parallel) {
         if (!shellCmd) {
           console.error(formatError("Cannot open interactive shell with --parallel", "provide a command after --"))
@@ -735,16 +795,13 @@ export function registerWorkspaceCommands(program: Command) {
         // --json mode: suppress all spinners, run silently, emit JSON at end
         if (opts.json) {
           const results = await Promise.all(worktreeRepos.map(async (r) => {
-            const proc = spawn(["sh", "-c", shellCmd], {
-              cwd: r.task_path,
-              stdio: ["inherit", "pipe", "pipe"],
-            })
-            const [exitCode, stdout, stderr] = await Promise.all([
-              proc.exited,
-              new Response(proc.stdout).text(),
-              new Response(proc.stderr).text(),
-            ])
-            return { repo: r.name, exit_code: exitCode, stdout, stderr }
+            const result = await executeCliUserCommand(
+              shellCmd,
+              r.task_path,
+              buildRepoEnv(baseEnv, r),
+              true,
+            )
+            return { repo: r.name, exit_code: result.exitCode, stdout: result.stdout, stderr: result.stderr }
           }))
           console.log(JSON.stringify(results, null, 2))
           process.exit(results.some(r => r.exit_code !== 0) ? 1 : 0)
@@ -755,16 +812,13 @@ export function registerWorkspaceCommands(program: Command) {
         spinner.start(`Running in ${worktreeRepos.length} repos...`)
 
         const results = await Promise.all(worktreeRepos.map(async (r) => {
-          const proc = spawn(["sh", "-c", shellCmd], {
-            cwd: r.task_path,
-            stdio: ["inherit", "pipe", "pipe"],
-          })
-          const [exitCode, stdout, stderr] = await Promise.all([
-            proc.exited,
-            new Response(proc.stdout).text(),
-            new Response(proc.stderr).text(),
-          ])
-          return { repo: r.name, exitCode, stdout, stderr }
+          const result = await executeCliUserCommand(
+            shellCmd,
+            r.task_path,
+            buildRepoEnv(baseEnv, r),
+            true,
+          )
+          return { repo: r.name, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr }
         }))
 
         const failed = results.filter(r => r.exitCode !== 0)
@@ -804,13 +858,14 @@ export function registerWorkspaceCommands(program: Command) {
 
         for (const r of worktreeRepos) {
           console.log(`\n==> ${r.name}`)
-          const proc = spawn(["sh", "-c", shellCmd], {
-            cwd: r.task_path,
-            stdio: ["inherit", "inherit", "inherit"],
-          })
-          const exitCode = await proc.exited
-          if (exitCode !== 0) {
-            process.exit(exitCode)
+          const result = await executeCliUserCommand(
+            shellCmd,
+            r.task_path,
+            buildRepoEnv(baseEnv, r),
+            false,
+          )
+          if (result.exitCode !== 0) {
+            process.exit(result.exitCode)
           }
         }
         return
@@ -830,21 +885,28 @@ export function registerWorkspaceCommands(program: Command) {
       }
 
       if (!shellCmd) {
-        // Open interactive shell
-        const shell = process.env.SHELL || "sh"
-        const proc = spawn([shell], {
-          cwd,
-          stdio: ["inherit", "inherit", "inherit"],
-        })
-        const exitCode = await proc.exited
-        process.exit(exitCode)
+        try {
+          const shell = discoverUserShell(process.env, "pty")
+          const launch = buildUserShellBootstrap(shell, { mode: "pty" })
+          const proc = spawn(launch.argv, {
+            cwd,
+            env: { ...process.env, ...baseEnv },
+            stdio: ["inherit", "inherit", "inherit"],
+          })
+          process.exit(await proc.exited)
+        } catch (error) {
+          console.error(formatError(formatUserShellError(error)))
+          process.exit(1)
+        }
       } else {
-        const proc = spawn(["sh", "-c", shellCmd], {
+        const targetRepo = repo ? ws.repos.find((candidate) => candidate.name === repo) : undefined
+        const result = await executeCliUserCommand(
+          shellCmd,
           cwd,
-          stdio: ["inherit", "inherit", "inherit"],
-        })
-        const exitCode = await proc.exited
-        process.exit(exitCode)
+          targetRepo ? buildRepoEnv(baseEnv, targetRepo) : baseEnv,
+          false,
+        )
+        process.exit(result.exitCode)
       }
     })
 

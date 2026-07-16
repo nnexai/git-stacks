@@ -67,14 +67,15 @@ function runParallel(
   cfgDir: string,
   wsName: string,
   extraArgs: string[],
-  cmd: string[]
+  cmd: string[],
+  envOverrides: Record<string, string> = {},
 ): { stdout: string; stderr: string; exitCode: number } {
   // IMPORTANT: Due to passThroughOptions(), flags must come BEFORE the positional <name> arg.
   // Otherwise commander treats "--parallel" as the optional [repo] argument.
   const result = runProcessSync(
     ["node", "packages/cli/dist/index.js", "run", "--parallel", ...extraArgs, wsName, "--", ...cmd],
     {
-      env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir, ...envOverrides },
       cwd: PROJECT_ROOT,
       stdio: ["pipe", "pipe", "pipe"],
     }
@@ -174,6 +175,30 @@ describe("run --parallel", () => {
     const apiEntry = parsed.find((e: { repo: string }) => e.repo === "api")
     expect(apiEntry?.stdout.trim()).toBe("hello")
     expect(apiEntry?.exit_code).toBe(0)
+  })
+
+  test("invalid SHELL reports actionable non-disclosing diagnostics and executes no command", () => {
+    const marker = join(tmpDir, "must-not-exist")
+    const { stdout, exitCode } = runParallel(
+      cfgDir,
+      "my-ws",
+      ["--json"],
+      ["touch", marker],
+      { SHELL: "relative-shell" },
+    )
+
+    expect(exitCode).toBe(1)
+    expect(existsSync(marker)).toBe(false)
+    const parsed = JSON.parse(stdout.trim())
+    for (const entry of parsed) {
+      expect(entry.exit_code).toBe(1)
+      expect(entry.stdout).toBe("")
+      expect(entry.stderr).toContain("shell: relative-shell")
+      expect(entry.stderr).toContain("mode: command")
+      expect(entry.stderr).toContain("stage: shell-path")
+      expect(entry.stderr).toContain("recovery:")
+      expect(entry.stderr).not.toContain("GIT_STACKS_CONFIG_DIR")
+    }
   })
 
   test("delegates user-authored parallel commands after the shared adapter exists", () => {
