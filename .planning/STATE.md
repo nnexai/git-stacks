@@ -5,15 +5,15 @@ milestone_name: Workspace Productivity
 current_phase: 123
 current_phase_name: Archived Workspaces and Safe Removal
 status: executing
-stopped_at: Completed 123-01-PLAN.md
-last_updated: "2026-07-16T06:05:35.227Z"
+stopped_at: Completed 123-02-PLAN.md
+last_updated: "2026-07-16T06:19:57.855Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-07-16 — Phase 123 execution started
 
@@ -54,6 +54,9 @@ Last activity: 2026-07-16 — Phase 123 execution started
 - [Phase 123]: Archive state is canonical only when archived true and archived_at are both present; active state omits both fields.
 - [Phase 123]: Removal inspection always performs the dirty check and returns an opaque resolved plan; allow_dirty bypasses only blockers captured by that inspection.
 - [Phase 123]: Workspace definition updates and deletion resolve the authoritative backing YAML path so filename drift cannot redirect or strand lifecycle mutation.
+- [Phase 123]: Catalog revision digests both active projections and minimal archived summaries, including all-archived state.
+- [Phase 123]: Force eligibility is schema-valid only for workspace_dirty after terminals are confirmed stopped; confirmation_name exists only on workspace.force-remove.
+- [Phase 123]: workspacePriorityOrder delegates to workspaceSuccessorOrder with neutral activity and ID defaults instead of retaining a divergent algorithm.
 
 ## Validated Inputs
 
@@ -119,9 +122,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 123 P01 | 11 min | 2 tasks | 10 files |
+| Phase 123 P02 | 10 min | 2 tasks | 12 files |
 
 ## Session
 
-**Last session:** 2026-07-16T06:05:35.219Z
-**Stopped at:** Completed 123-01-PLAN.md
+**Last session:** 2026-07-16T06:19:57.847Z
+**Stopped at:** Completed 123-02-PLAN.md
 **Resume file:** None
