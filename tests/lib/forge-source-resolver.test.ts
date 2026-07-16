@@ -1,10 +1,13 @@
 import { describe, expect, test } from "@test/api"
 
 import {
+  matchForgeSourceRepository,
   resolveForgeChangeSource,
+  suggestForgeWorkspaceName,
   type ForgeCommandRequest,
   type ForgeCommandRunner,
 } from "@/lib/integrations/forge-source-resolver"
+import type { RepoRegistryEntry, Template } from "@/lib/config"
 
 const SHA = "a".repeat(40)
 const BASE_SHA = "b".repeat(40)
@@ -169,5 +172,119 @@ describe("provider-backed forge resolver", () => {
     const scripted = runner(() => ({ exit_code: 0, stdout }))
     const result = await resolveForgeChangeSource({ url: "https://github.com/acme/api/pull/7", runner: scripted.run })
     expect(result).toMatchObject({ ok: false, error: expected })
+  })
+})
+
+describe("authoritative source repository matching", () => {
+  const change = {
+    provider: "gitlab" as const,
+    change_kind: "merge_request" as const,
+    change_number: 42,
+    canonical_url: "https://gitlab.example.com/group/api/-/merge_requests/42",
+    host: "gitlab.example.com",
+    source: {
+      repository: { host: "gitlab.example.com", path: "fork/api", web_url: "https://gitlab.example.com/fork/api" },
+      fetch: { https: "https://gitlab.example.com/fork/api.git" },
+      branch: "Feature/Useful Change",
+      ref: "refs/heads/Feature/Useful Change",
+      sha: SHA,
+    },
+    target: {
+      repository: { host: "gitlab.example.com", path: "group/api", web_url: "https://gitlab.example.com/group/api" },
+      branch: "main",
+      sha: BASE_SHA,
+    },
+    cross_repository: true,
+  }
+  const explicit: RepoRegistryEntry = {
+    name: "api",
+    schema_version: "1",
+    local_path: "/private/main/api",
+    default_branch: "main",
+    type: "typescript",
+    is_dir: false,
+    forge: "gitlab",
+    forge_metadata: { forge: "gitlab", base_url: "https://gitlab.example.com", repo_path: "group/api" },
+  }
+  const template: Template = {
+    name: "review",
+    schema_version: "1",
+    repos: [{ repo: "api", mode: "worktree" }],
+  }
+
+  test("explicit repo metadata wins over integration and remote inference", () => {
+    const result = matchForgeSourceRepository(change, {
+      registry: [
+        explicit,
+        { ...explicit, name: "remote-only", forge_metadata: undefined },
+      ],
+      templates: [template],
+      config: { integrations: { gitlab: { enabled: true, base_url: "https://other.example.com" } } } as any,
+      remote_urls: { "remote-only": ["https://gitlab.example.com/group/api.git"] },
+      template_name: "review",
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.match.registry_name).toBe("api")
+    expect(result.match.template_name).toBe("review")
+    expect(result.match.confidence).toBe("explicit-metadata")
+    expect(result.match.mode).toBe("worktree")
+    expect(result.candidates).toHaveLength(1)
+  })
+
+  test("integration base URL matches forge/path metadata without a repo base override", () => {
+    const registry = [{ ...explicit, forge_metadata: { forge: "gitlab" as const, repo_path: "group/api" } }]
+    const result = matchForgeSourceRepository(change, {
+      registry,
+      templates: [template],
+      config: { integrations: { gitlab: { enabled: true, base_url: "https://gitlab.example.com" } } } as any,
+      template_name: "review",
+    })
+    expect(result).toMatchObject({ ok: true, match: { confidence: "integration-base-url" } })
+  })
+
+  test("uses unique bounded remote inference only as final fallback", () => {
+    const inferred = { ...explicit, forge_metadata: undefined }
+    const result = matchForgeSourceRepository(change, {
+      registry: [inferred],
+      templates: [template],
+      config: { integrations: { gitlab: { enabled: true, base_url: "https://gitlab.example.com" } } } as any,
+      remote_urls: { api: ["git@gitlab.example.com:group/api.git", "https://mirror.example.com/group/api.git"] },
+      template_name: "review",
+    })
+    expect(result).toMatchObject({ ok: true, match: { confidence: "remote-inference" } })
+  })
+
+  test("fails typed for ambiguous same-precedence matches", () => {
+    const result = matchForgeSourceRepository(change, {
+      registry: [explicit, { ...explicit, name: "api-copy", local_path: "/private/main/api-copy" }],
+      templates: [{ ...template, repos: [{ repo: "api" }, { repo: "api-copy" }] }],
+      template_name: "review",
+    })
+    expect(result).toEqual({ ok: false, error: "ambiguous_repo" })
+  })
+
+  test.each([
+    ["missing selected template", [], "review", "template_repo_missing"],
+    ["source repo absent from template", [{ ...template, repos: [{ repo: "other" }] }], "review", "template_repo_missing"],
+    ["trunk", [{ ...template, repos: [{ repo: "api", mode: "trunk" as const }] }], "review", "not_worktree_mode"],
+    ["dir", [{ ...template, repos: [{ repo: "api", mode: "dir" as const }] }], "review", "not_worktree_mode"],
+  ])("rejects %s authoritatively", async (_label, templates, template_name, error) => {
+    const result = matchForgeSourceRepository(change, { registry: [explicit], templates, template_name })
+    expect(result).toEqual({ ok: false, error })
+  })
+
+  test("never matches the fork identity in place of the target repository", () => {
+    const forkEntry = { ...explicit, forge_metadata: { ...explicit.forge_metadata!, repo_path: "fork/api" } }
+    const result = matchForgeSourceRepository(change, {
+      registry: [forkEntry], templates: [{ ...template, repos: [{ repo: "api" }] }], template_name: "review",
+    })
+    expect(result).toEqual({ ok: false, error: "repo_not_matched" })
+  })
+
+  test("suggests normalized conflict-safe names without becoming final authority", () => {
+    const proposed = suggestForgeWorkspaceName(change, ["api-mr-42-feature-useful-change"])
+    expect(proposed).toBe("api-mr-42-feature-useful-change-2")
+    expect(proposed).toMatch(/^[A-Za-z0-9._-]+$/)
   })
 })
