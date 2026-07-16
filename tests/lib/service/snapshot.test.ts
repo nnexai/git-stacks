@@ -120,6 +120,52 @@ describe("authoritative service snapshots", () => {
     expect(BigInt(archiveOnlyChange.revision)).toBeGreaterThan(BigInt(archived.revision))
   })
 
+  test("normalizes supported date-only created activity for catalog and core state", async () => {
+    const store = new MemoryStore()
+    let active = {
+      ...workspace("active"),
+      id: "018f47f4-5ab1-7c2d-8e90-123456789abe",
+      created: "2026-07-14",
+    }
+    const olderArchived = {
+      ...workspace("older-archived"),
+      id: "018f47f4-5ab1-7c2d-8e90-123456789abf",
+      created: "2026-07-01",
+      archived: true as const,
+      archived_at: "2026-07-12T10:00:00.000Z",
+    }
+    const newerArchived = {
+      ...workspace("newer-archived"),
+      id: "018f47f4-5ab1-7c2d-8e90-123456789ac0",
+      created: "2026-07-15",
+      archived: true as const,
+      archived_at: "2026-07-13T10:00:00.000Z",
+    }
+    const builder = createSnapshotBuilder(dependencies({
+      revisionStore: store,
+      listWorkspaceNames: () => ["older-archived", "active", "newer-archived"],
+      ensureWorkspaceIdentity: (name: string) => name === "active"
+        ? active
+        : name === "newer-archived" ? newerArchived : olderArchived,
+    })) as ReturnType<typeof createSnapshotBuilder> & { buildCatalog(): Promise<{ revision: string; workspaces: Array<{ workspace: unknown }>; archived_workspaces: Array<{ name: string; activity_at: string }> }> }
+
+    const first = await builder.buildCatalog()
+    expect(first.workspaces[0]?.workspace).toEqual(expect.objectContaining({
+      name: "active",
+      activity_at: "2026-07-14T00:00:00.000Z",
+    }))
+    expect(CoreWorkspaceSchema.parse({ definition: active, projection: first.workspaces[0]!.workspace }).projection.activity_at)
+      .toBe("2026-07-14T00:00:00.000Z")
+    expect(first.archived_workspaces).toEqual([
+      { id: newerArchived.id, name: newerArchived.name, activity_at: "2026-07-15T00:00:00.000Z" },
+      { id: olderArchived.id, name: olderArchived.name, activity_at: olderArchived.archived_at },
+    ])
+
+    expect((await builder.buildCatalog()).revision).toBe(first.revision)
+    active = { ...active, created: "2026-07-16" }
+    expect(BigInt((await builder.buildCatalog()).revision)).toBeGreaterThan(BigInt(first.revision))
+  })
+
   test("retries a raced generation and never returns mixed inputs", async () => {
     const fingerprints = ["a", "b", "c", "c"]
     let statusReads = 0

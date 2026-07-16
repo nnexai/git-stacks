@@ -16,7 +16,7 @@ import {
   type EditTarget,
   type EditTargetRequest,
 } from "./core-contract"
-import { SnapshotBusyError } from "./snapshot"
+import { SnapshotBusyError, workspaceActivityAt } from "./snapshot"
 import { listWorkspaceNotes, type WorkspaceNoteRecord } from "@git-stacks/core/notes"
 import type { ArchivedWorkspaceSummary, WorkspaceCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
 
@@ -56,9 +56,9 @@ export function createCoreStateProvider(snapshot: CoreSnapshotSource): CoreState
           .map((workspace) => ({
             id: workspace.id,
             name: workspace.name,
-            activity_at: Date.parse(workspace.archived_at) >= Date.parse(workspace.last_opened ?? workspace.created)
+            activity_at: Date.parse(workspace.archived_at) >= Date.parse(workspaceActivityAt(workspace))
               ? workspace.archived_at
-              : workspace.last_opened ?? workspace.created,
+              : workspaceActivityAt(workspace),
           }))
           .sort((left, right) => Date.parse(right.activity_at) - Date.parse(left.activity_at) || left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
         const revision = catalog?.revision ?? projections[0]?.revision ?? await snapshot.currentRevision?.() ?? "0"

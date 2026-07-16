@@ -140,6 +140,20 @@ function digest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(stable(value))).digest("hex")
 }
 
+const DATE_ONLY_WORKSPACE_ACTIVITY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Workspace creation persists the calendar date used by the CLI, while the
+ * service contract requires an absolute timestamp. Interpret that supported
+ * date-only fallback as midnight UTC without rewriting the authoritative YAML.
+ */
+export function workspaceActivityAt(workspace: Pick<Workspace, "created" | "last_opened">): string {
+  if (workspace.last_opened !== undefined) return workspace.last_opened
+  return DATE_ONLY_WORKSPACE_ACTIVITY.test(workspace.created)
+    ? `${workspace.created}T00:00:00.000Z`
+    : workspace.created
+}
+
 function commandId(workspaceId: string, name: string, repositoryId?: string): string {
   return `cmd_${createHash("sha256").update(`${workspaceId}\0${repositoryId ?? "workspace"}\0${name}`).digest("base64url").slice(0, 22)}`
 }
@@ -276,7 +290,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return {
       id: workspace.id,
       name: workspace.name,
-      activity_at: workspace.last_opened ?? workspace.created,
+      activity_at: workspaceActivityAt(workspace),
       branch: workspace.branch,
       labels: workspace.labels ?? [],
       ...(workspace.pinned === true ? { pinned: true } : {}),
@@ -331,7 +345,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   }
 
   function archivedActivity(workspace: IdentityWorkspace): string {
-    const persisted = workspace.last_opened ?? workspace.created
+    const persisted = workspaceActivityAt(workspace)
     const archivedAt = workspace.archived_at!
     return Date.parse(archivedAt) >= Date.parse(persisted) ? archivedAt : persisted
   }
