@@ -464,6 +464,7 @@ export function createSnapshotBuilder(
       }
       return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
         argv: [...plan.argv], cwd: repository.path, environment: shellEnvironment, ports: base.ports ?? {},
+        initialization: { kind: "post-init-environment", shell: plan.shell.family },
         configuration: { shell: true }, redacted: base.redacted,
       } })
     }

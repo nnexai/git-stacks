@@ -374,6 +374,14 @@ describe("authoritative service snapshots", () => {
     })
 
     expect(resolved.resolved).toBe(true)
+    if (resolved.resolved && resolved.launch.configuration.shell) {
+      expect(resolved.launch.initialization).toEqual({
+        kind: "post-init-environment",
+        shell: expect.stringMatching(/^(bash|zsh|fish)$/),
+      })
+      expect(resolved.launch.argv[0]).toMatch(/\/(?:bash|zsh|fish)$/)
+      expect(resolved.launch.argv).toContain(resolved.launch.initialization?.shell === "fish" ? "--interactive" : "-i")
+    }
     expect(statusReads).toBe(1)
 
     await builder.resolveTerminalLaunch({

@@ -1,9 +1,13 @@
 import { createHash, randomBytes } from "node:crypto"
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { spawn as spawnPty } from "node-pty"
 import type { Signal, TerminalLaunchResolution, TerminalLaunchStep } from "@git-stacks/protocol"
 import {
-  executeUserShellCommand,
+  buildUserShellBootstrap,
+  discoverUserShell,
   UserShellError,
   type ExecuteUserShellCommandRequest,
   type ExecuteUserShellCommandResult,
@@ -49,6 +53,101 @@ const productionPty: PtyFactory = (argv, options) => {
   const [file, ...args] = argv
   if (!file) throw new Error("Terminal command is empty")
   return spawnPty(file, args, options)
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+function serializePtyEnvironment(environment: Record<string, string>): Buffer {
+  const entries = Object.entries(environment).sort(([left], [right]) => left.localeCompare(right))
+  for (const [key, value] of entries) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value.includes("\0")) throw new TypeError(`Invalid PTY environment entry: ${key}`)
+  }
+  return Buffer.concat(entries.map(([key, value]) => Buffer.from(`${key}=${value}\0`, "utf8")))
+}
+
+function createPtyInitialization(
+  shell: "bash" | "zsh" | "fish",
+  environment: Record<string, string>,
+  command?: string,
+): { root: string; readyPath: string; bootstrap: string; runCommand?: string } {
+  const root = mkdtempSync(join(tmpdir(), "git-stacks-pty-"))
+  chmodSync(root, 0o700)
+  const environmentPath = join(root, "environment")
+  const readyPath = join(root, "ready")
+  writeFileSync(environmentPath, serializePtyEnvironment(environment), { mode: 0o600 })
+  let runCommand: string | undefined
+  if (command !== undefined) {
+    const commandPath = join(root, shell === "fish" ? "command.fish" : "command.sh")
+    writeFileSync(commandPath, command, { mode: 0o600 })
+    runCommand = shell === "fish"
+      ? `source ${shellQuote(commandPath)}; set -l __gs_status $status; command rm -rf -- ${shellQuote(root)}; exit $__gs_status`
+      : `. ${shellQuote(commandPath)}; __gs_status=$?; command rm -rf -- ${shellQuote(root)}; exit "$__gs_status"`
+  }
+  const bootstrap = shell === "fish"
+    ? [
+        `for __gs_entry in (string split0 < ${shellQuote(environmentPath)})`,
+        "set -l __gs_pair (string split -m 1 = -- $__gs_entry)",
+        "test (count $__gs_pair) -eq 2; or exit 126",
+        "set -gx $__gs_pair[1] $__gs_pair[2]",
+        "end",
+        `command rm -f -- ${shellQuote(environmentPath)}`,
+        `command touch -- ${shellQuote(readyPath)}`,
+      ].join("; ")
+    : [
+        `while IFS= read -r -d '' __gs_entry; do export "$__gs_entry" || return 126; done < ${shellQuote(environmentPath)}`,
+        `command rm -f -- ${shellQuote(environmentPath)}`,
+        `: > ${shellQuote(readyPath)}`,
+      ].join("; ")
+  return { root, readyPath, bootstrap, ...(runCommand ? { runCommand } : {}) }
+}
+
+async function waitForPtyInitialization(
+  processHandle: PtyProcess,
+  initialization: ReturnType<typeof createPtyInitialization>,
+): Promise<void> {
+  let exited = false
+  const subscription = processHandle.onExit(() => { exited = true })
+  processHandle.write(`${initialization.bootstrap}\r`)
+  const deadline = Date.now() + 10_000
+  try {
+    while (!existsSync(initialization.readyPath)) {
+      if (exited) throw new Error("Shell exited before PTY initialization completed")
+      if (Date.now() >= deadline) throw new Error("Shell PTY initialization exceeded 10000ms")
+      await new Promise<void>((resolve) => setTimeout(resolve, 10))
+    }
+  } finally {
+    subscription.dispose()
+  }
+}
+
+function bufferPty(processHandle: PtyProcess): PtyProcess {
+  let dataListener: ((data: string) => void) | undefined
+  let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined
+  const pendingData: string[] = []
+  let pendingExit: { exitCode: number; signal?: number } | undefined
+  processHandle.onData((data) => dataListener ? dataListener(data) : pendingData.push(data))
+  processHandle.onExit((event) => {
+    pendingExit = event
+    exitListener?.(event)
+  })
+  return {
+    pid: processHandle.pid,
+    write: (data) => processHandle.write(data),
+    resize: (columns, rows) => processHandle.resize(columns, rows),
+    kill: (signal) => processHandle.kill(signal),
+    onData(listener) {
+      dataListener = listener
+      for (const data of pendingData.splice(0)) listener(data)
+      return { dispose: () => { if (dataListener === listener) dataListener = undefined } }
+    },
+    onExit(listener) {
+      exitListener = listener
+      if (pendingExit) queueMicrotask(() => listener(pendingExit!))
+      return { dispose: () => { if (exitListener === listener) exitListener = undefined } }
+    },
+  }
 }
 
 type Session = {
@@ -133,7 +232,16 @@ export class WebTerminalManager {
     private readonly workspaceLifecycleAdmission: Pick<WorkspaceLifecycleAdmission, "admitTerminal"> = createWorkspaceLifecycleAdmission(),
     private readonly closeTimeoutMs = 1_000,
     private readonly timing: WebTerminalManagerTiming = {},
-    private readonly runCommandStep: TerminalCommandStepRunner = executeUserShellCommand,
+    private readonly runCommandStep?: TerminalCommandStepRunner,
+    private readonly processGroupExists: (pid: number) => boolean = (pid) => {
+      if (process.platform === "win32" || pid <= 0) return false
+      try {
+        process.kill(-pid, 0)
+        return true
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === "EPERM"
+      }
+    },
   ) {}
 
   get activeCount(): number { return [...this.sessions.values()].filter((session) => session.state === "starting" || session.state === "running" || session.state === "closing").length }
@@ -191,8 +299,8 @@ export class WebTerminalManager {
           GIT_STACKS_SIGNAL_TRANSPORT: "osc9",
         }
         const launch = resolution.launch
-        child = "argv" in launch
-          ? this.spawn(launch.argv, {
+        if ("argv" in launch) {
+          const spawned = bufferPty(this.spawn(launch.argv, {
               cwd: launch.cwd,
               env: {
                 ...launch.environment,
@@ -203,8 +311,25 @@ export class WebTerminalManager {
               cols: input.cols,
               rows: input.rows,
               name: "xterm-256color",
+            }))
+          if (launch.initialization) {
+            const initialization = createPtyInitialization(launch.initialization.shell, {
+              ...launch.environment,
+              ...terminalEnvironment,
             })
-          : this.createCommandProcess(launch.steps, terminalEnvironment)
+            try {
+              await waitForPtyInitialization(spawned, initialization)
+            } catch (error) {
+              spawned.kill("SIGKILL")
+              throw error
+            } finally {
+              rmSync(initialization.root, { force: true, recursive: true })
+            }
+          }
+          child = spawned
+        } else {
+          child = this.createCommandProcess(launch.steps, terminalEnvironment, input.cols, input.rows)
+        }
       } catch (error) {
         throw Object.assign(new Error(`PTY allocation failed: ${(error as Error).message}`), { status: 409, code: "capability_unavailable" })
       }
@@ -258,7 +383,10 @@ export class WebTerminalManager {
   private createCommandProcess(
     steps: TerminalLaunchStep[],
     terminalEnvironment: Record<string, string>,
+    columns: number,
+    rows: number,
   ): PtyProcess {
+    if (!this.runCommandStep) return this.createCommandPtyProcess(steps, terminalEnvironment, columns, rows)
     const controller = new AbortController()
     const decoder = new TextDecoder()
     let dataListener: (data: string) => void = () => undefined
@@ -279,7 +407,7 @@ export class WebTerminalManager {
     queueMicrotask(() => void (async () => {
       try {
         for (const step of steps) {
-          const result = await this.runCommandStep({
+          const result = await this.runCommandStep!({
             command: step.command,
             cwd: step.cwd,
             shellEnvironment: process.env,
@@ -299,7 +427,9 @@ export class WebTerminalManager {
         }
         finish(0)
       } catch (error) {
-        const diagnostic = error instanceof UserShellError ? error.diagnostic : undefined
+        const diagnostic = error instanceof UserShellError
+          ? error.diagnostic
+          : (error as { diagnostic?: ExecuteUserShellCommandResult["diagnostic"] }).diagnostic
         reportDiagnostic(diagnostic)
         finish(controller.signal.aborted ? 130 : 126, controller.signal.aborted ? 15 : undefined)
       }
@@ -309,6 +439,110 @@ export class WebTerminalManager {
       write: () => undefined,
       resize: () => undefined,
       kill: () => controller.abort(new Error("terminal command cancelled")),
+      onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
+      onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
+    }
+  }
+
+  private createCommandPtyProcess(
+    steps: TerminalLaunchStep[],
+    terminalEnvironment: Record<string, string>,
+    initialColumns: number,
+    initialRows: number,
+  ): PtyProcess {
+    const shell = discoverUserShell(process.env, "pty")
+    const plan = buildUserShellBootstrap(shell, { mode: "pty" })
+    let active: PtyProcess | undefined
+    let columns = initialColumns
+    let rows = initialRows
+    let cancelled = false
+    let acceptsInput = false
+    let lastPid = 0
+    let dataListener: (data: string) => void = () => undefined
+    let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
+    let exited = false
+    const pendingInput: string[] = []
+    const finish = (exitCode: number, signal?: number) => {
+      if (exited) return
+      exited = true
+      exitListener({ exitCode, ...(signal === undefined ? {} : { signal }) })
+    }
+
+    queueMicrotask(() => void (async () => {
+      try {
+        for (const step of steps) {
+          if (cancelled) {
+            finish(130, 15)
+            return
+          }
+          const initialization = createPtyInitialization(shell.family, {
+            ...step.environment,
+            ...terminalEnvironment,
+          }, step.command)
+          const child = this.spawn([...plan.argv], {
+            cwd: step.cwd,
+            env: {
+              ...process.env,
+              TERM: process.env.TERM ?? "xterm-256color",
+              COLORTERM: process.env.COLORTERM ?? "truecolor",
+            },
+            cols: columns,
+            rows,
+            name: "xterm-256color",
+          })
+          active = child
+          lastPid = child.pid
+          acceptsInput = false
+          child.onData((data) => dataListener(data))
+          let resolveExit!: (event: { exitCode: number; signal?: number }) => void
+          const childExited = new Promise<{ exitCode: number; signal?: number }>((resolve) => { resolveExit = resolve })
+          child.onExit(resolveExit)
+          try {
+            await waitForPtyInitialization(child, initialization)
+            if (cancelled) {
+              child.kill("SIGTERM")
+            } else {
+              child.write(`${initialization.runCommand}\r`)
+              acceptsInput = true
+              for (const input of pendingInput.splice(0)) child.write(input)
+            }
+            const event = await childExited
+            acceptsInput = false
+            active = undefined
+            if (cancelled) {
+              finish(event.exitCode || 130, event.signal)
+              return
+            }
+            if (event.exitCode !== 0) {
+              finish(event.exitCode, event.signal)
+              return
+            }
+          } finally {
+            rmSync(initialization.root, { force: true, recursive: true })
+          }
+        }
+        finish(0)
+      } catch (error) {
+        dataListener(`\r\n[git-stacks shell initialization] ${(error as Error).message}\r\n`)
+        finish(cancelled ? 130 : 126, cancelled ? 15 : undefined)
+      }
+    })())
+
+    return {
+      get pid() { return active?.pid ?? lastPid },
+      write(data) {
+        if (active && acceptsInput) active.write(data)
+        else pendingInput.push(data)
+      },
+      resize(nextColumns, nextRows) {
+        columns = nextColumns
+        rows = nextRows
+        active?.resize(nextColumns, nextRows)
+      },
+      kill(signal = "SIGTERM") {
+        cancelled = true
+        active?.kill(signal)
+      },
       onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
       onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
     }
@@ -410,10 +644,11 @@ export class WebTerminalManager {
     try {
       this.killGroup(session, "SIGTERM")
       const termExited = await this.waitForExit(session)
-      if (!termExited) {
+      const termGroupGone = !this.processGroupExists(session.process.pid)
+      if (!termExited || !termGroupGone) {
         this.killGroup(session, "SIGKILL")
         const killExited = await this.waitForExit(session)
-        if (!killExited) {
+        if (!killExited || this.processGroupExists(session.process.pid)) {
           session.state = "cleanup_failed"
           this.notifyActive()
           return this.project(session)

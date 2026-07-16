@@ -288,6 +288,10 @@ export const TerminalInteractiveLaunchSpecificationSchema = z.strictObject({
   argv: z.array(utf8BoundedString(64 * 1024, 1)).min(1).max(32),
   cwd: utf8BoundedString(4096, 1),
   environment: LaunchEnvironmentSchema,
+  initialization: z.strictObject({
+    kind: z.literal("post-init-environment"),
+    shell: z.enum(["bash", "zsh", "fish"]),
+  }).optional(),
   ...TerminalLaunchCommon,
   configuration: z.strictObject({ shell: z.literal(true) }),
 })

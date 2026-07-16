@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
+import { writeFileSync } from "node:fs"
 import { UserShellError } from "../../packages/core/src/user-shell"
 import type { Signal, TerminalLaunchResolution } from "../../packages/protocol/src/service"
 import { createWorkspaceLifecycleAdmission } from "../../packages/service/src/policy/workspace-lifecycle-admission"
@@ -125,6 +126,86 @@ describe("service-owned web terminal", () => {
     expect(calls.map((call) => call.overlay?.PHASE)).toEqual(["pre", "main", "repo"])
     expect(calls.every((call) => call.overlay?.GIT_STACKS_SURFACE_ID === terminal.surface_id)).toBe(true)
     expect(manager.get("browser-1", terminal.id)).toMatchObject({ exit_code: 23, state: "ended" })
+    await manager.close("browser-1", terminal.id)
+  })
+
+  test("keeps an active real PTY for typed steps and forwards input and resize while sequencing", async () => {
+    const processes: Array<{ writes: string[]; resizes: Array<[number, number]> }> = []
+    const spawn: PtyFactory = () => {
+      const dataListeners = new Set<(data: string) => void>()
+      const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
+      const record = { writes: [] as string[], resizes: [] as Array<[number, number]> }
+      processes.push(record)
+      const finish = () => queueMicrotask(() => {
+        for (const listener of exitListeners) listener({ exitCode: 0 })
+      })
+      return {
+        pid: 910_000 + processes.length,
+        write(data) {
+          record.writes.push(data)
+          const readyPath = data.match(/(?:\: >|touch --) '([^']+\/ready)'/)?.[1]
+          if (readyPath) writeFileSync(readyPath, "ready")
+          if (data === "typed-input\r") finish()
+          if (data.includes("command.") && processes.length > 1) finish()
+        },
+        resize(columns, rows) { record.resizes.push([columns, rows]) },
+        kill: () => finish(),
+        onData(listener) { dataListeners.add(listener); return { dispose: () => { dataListeners.delete(listener) } } },
+        onExit(listener) { exitListeners.add(listener); return { dispose: () => { exitListeners.delete(listener) } } },
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [
+          { bucket: "pre", scope: "workspace", command: "read answer", cwd: process.cwd(), environment: { PHASE: "pre" } },
+          { bucket: "main", scope: "workspace", command: "printf done", cwd: process.cwd(), environment: { PHASE: "main" } },
+        ],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, command_id: "cmd_0123456789abcdef", expected_revision: "1", cols: 80, rows: 24 })
+    const { socket } = attach(manager, terminal.id)
+    await waitFor(() => processes[0]?.writes.some((write) => write.includes("command.")) === true)
+    manager.message(socket, JSON.stringify({ type: "resize", cols: 101, rows: 37 }))
+    manager.message(socket, JSON.stringify({ type: "input", data: "typed-input\r" }))
+    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+
+    expect(processes).toHaveLength(2)
+    expect(processes[0]!.writes).toContain("typed-input\r")
+    expect(processes[0]!.resizes).toContainEqual([101, 37])
+    expect(processes[1]!.writes.some((write) => write.includes("command."))).toBe(true)
+    await manager.close("browser-1", terminal.id)
+  })
+
+  test("decodes split multi-byte command output as one streaming UTF-8 sequence", async () => {
+    const bytes = Buffer.from("stream-λ\n")
+    const runner: TerminalCommandStepRunner = async (request) => {
+      request.onOutput?.({ stream: "stdout", chunk: bytes.subarray(0, 8) })
+      request.onOutput?.({ stream: "stdout", chunk: bytes.subarray(8) })
+      return {
+        exitCode: 0,
+        shell: { executable: "/bin/bash", family: "bash" },
+        stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), initializationDiagnostics: Buffer.alloc(0),
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "stream", cwd: "/workspace", environment: {} }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, undefined, undefined, 10, {}, runner)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, command_id: "cmd_0123456789abcdef", expected_revision: "1", cols: 80, rows: 24 })
+    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+    const { sent } = attach(manager, terminal.id)
+    const output = sent.filter((entry): entry is Uint8Array => entry instanceof Uint8Array)
+      .map((entry) => new TextDecoder().decode(entry.subarray(9))).join("")
+    expect(output).toBe("stream-λ\n")
     await manager.close("browser-1", terminal.id)
   })
 
@@ -364,6 +445,32 @@ describe("service-owned web terminal", () => {
     expect(ptys.processes[2]?.signals).toEqual(["SIGTERM", "SIGKILL"])
     expect(manager.get("browser-1", stuck.id)).toMatchObject({ state: "cleanup_failed" })
     await expect(manager.closeWorkspace(WORKSPACE_A)).resolves.toEqual({ ok: false, status: "cleanup_failed", requested: 1, closed: 0, failed: 1 })
+  })
+
+  test("SIGKILLs descendants when the PTY leader exits but its process group survives TERM", async () => {
+    const ptys = createPtyFactory(["term"])
+    let groupExists = true
+    const spawn: PtyFactory = (argv, options) => {
+      const child = ptys.spawn(argv, options)
+      const kill = child.kill.bind(child)
+      child.kill = (signal) => {
+        kill(signal)
+        if (signal === "SIGKILL") groupExists = false
+      }
+      return child
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 10, {}, undefined, () => groupExists)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+    expect(groupExists).toBe(false)
   })
 
   test("shares concurrent close settlement and closes a workspace across principals without metadata", async () => {
