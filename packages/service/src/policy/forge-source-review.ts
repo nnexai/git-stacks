@@ -1,6 +1,17 @@
 import { createHash, randomBytes as nodeRandomBytes } from "node:crypto"
 
 import type { GlobalConfig, RepoRegistryEntry, Template } from "@git-stacks/core/config"
+import { createWorkspace, type CreateWorkspaceInputs } from "@git-stacks/core/workspace-lifecycle"
+import {
+  planWorkspaceCreation,
+  type WorkspaceCreationRequest,
+} from "@git-stacks/core/workspace-creation"
+import { getTasksDir } from "@git-stacks/core/paths"
+import {
+  prepareReviewedWorkspaceSource,
+  type PreparedReviewedWorkspaceSource,
+  type WorkspaceSourceFailure,
+} from "@git-stacks/core/workspace-source"
 import {
   matchForgeSourceRepository,
   resolveForgeChangeSource,
@@ -17,6 +28,7 @@ import {
   type WebForgeResolveResponse,
   type WebReviewedWorkspaceDraft,
 } from "@git-stacks/protocol"
+import type { OperationExecution } from "./operations.js"
 
 export const DEFAULT_FORGE_REVIEW_TTL_MS = 10 * 60 * 1_000
 const MAX_REVIEW_TOKENS = 256
@@ -32,6 +44,10 @@ export type ForgeSourceReviewCatalog = {
 }
 
 type ReviewBinding = { idempotencyKey: string; bodyHash: string }
+
+function currentBinding(record: TrustedForgeReview): ReviewBinding | undefined {
+  return record.binding
+}
 
 export type TrustedForgeReview = {
   principalId: string
@@ -61,7 +77,21 @@ export interface ForgeSourceReviewAuthorityOptions {
   now?: () => number
   randomBytes?: (size: number) => Uint8Array
   ttlMs?: number
+  prepareSource?: (input: Parameters<typeof prepareReviewedWorkspaceSource>[0]) => Promise<
+    PreparedReviewedWorkspaceSource | (WorkspaceSourceFailure & { cleanup?: () => Promise<void> })
+  >
+  planWorkspace?: typeof planWorkspaceCreation
+  createWorkspace?: typeof createWorkspace
 }
+
+export type ReviewedCreateAdmission = {
+  execution: OperationExecution
+  cleanup: () => Promise<void>
+}
+
+export type ReviewedCreateAdmissionResult =
+  | ({ ok: true } & ReviewedCreateAdmission)
+  | { ok: false; failure: WebForgeFailure }
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
@@ -151,6 +181,7 @@ function sourceConfidence(confidence: Extract<ForgeSourceMatchResult, { ok: true
 
 export class ForgeSourceReviewAuthority {
   private readonly records = new Map<string, TrustedForgeReview>()
+  private readonly admissions = new Map<string, Promise<ReviewedCreateAdmissionResult>>()
   private readonly now: () => number
   private readonly randomBytes: (size: number) => Uint8Array
   private readonly ttlMs: number
@@ -293,20 +324,186 @@ export class ForgeSourceReviewAuthority {
   }): Promise<ForgeReviewReservationResult> {
     const record = this.inspect(input)
     if (!record) return { ok: false, failure: safeFailure("review_expired") }
-    const current = await this.options.catalog()
-    if (record.revision !== input.expectedRevision || current.revision !== record.revision) {
-      return { ok: false, failure: safeFailure("stale_revision") }
-    }
     const draft = WebReviewedWorkspaceDraftSchema.safeParse(input.draft)
     if (!draft.success || !this.draftBelongsToRecord(record, input.draft)) {
       return { ok: false, failure: safeFailure("repo_not_matched") }
     }
     const bodyHash = requestHash({ expectedRevision: input.expectedRevision, draft: input.draft })
-    if (record.binding && (record.binding.idempotencyKey !== input.idempotencyKey || record.binding.bodyHash !== bodyHash)) {
+    const competingBinding = currentBinding(record)
+    if (competingBinding && (competingBinding.idempotencyKey !== input.idempotencyKey || competingBinding.bodyHash !== bodyHash)) {
+      return { ok: false, failure: safeFailure("review_expired") }
+    }
+    if (record.binding) return { ok: true, reservation: { token: input.token, record, draft: draft.data } }
+    const current = await this.options.catalog()
+    if (this.inspect(input) !== record) return { ok: false, failure: safeFailure("review_expired") }
+    if (record.revision !== input.expectedRevision || current.revision !== record.revision) {
+      return { ok: false, failure: safeFailure("stale_revision") }
+    }
+    const bindingAfterCatalog = currentBinding(record)
+    if (bindingAfterCatalog && (bindingAfterCatalog.idempotencyKey !== input.idempotencyKey || bindingAfterCatalog.bodyHash !== bodyHash)) {
       return { ok: false, failure: safeFailure("review_expired") }
     }
     record.binding ??= { idempotencyKey: input.idempotencyKey, bodyHash }
     return { ok: true, reservation: { token: input.token, record, draft: draft.data } }
+  }
+
+  async admit(input: {
+    principalId: string
+    token: string
+    expectedRevision: string
+    draft: WebReviewedWorkspaceDraft
+    idempotencyKey: string
+  }): Promise<ReviewedCreateAdmissionResult> {
+    const record = this.inspect({ principalId: input.principalId, token: input.token })
+    if (!record) return { ok: false, failure: safeFailure("review_expired") }
+    const reserved = await this.reserve({
+      ...input,
+      canonicalUrl: record.canonicalUrl,
+    })
+    if (!reserved.ok) return reserved
+    const existing = this.admissions.get(input.token)
+    if (existing) return existing
+    const admission = this.admitReserved(reserved.reservation, input.idempotencyKey)
+    this.admissions.set(input.token, admission)
+    const result = await admission
+    if (!result.ok) this.admissions.delete(input.token)
+    return result
+  }
+
+  private async admitReserved(reservation: ForgeReviewReservation, idempotencyKey: string): Promise<ReviewedCreateAdmissionResult> {
+    const { record, draft } = reservation
+    const current = await this.options.catalog()
+    if (current.revision !== record.revision) return { ok: false, failure: safeFailure("stale_revision") }
+
+    const currentTemplate = current.templates.find(({ name }) => name === draft.template_name)
+    if (!currentTemplate) return { ok: false, failure: safeFailure("template_repo_missing") }
+    const currentMatch = matchForgeSourceRepository(record.trustedSource, {
+      registry: current.registry,
+      templates: current.templates,
+      config: current.config,
+      remote_urls: current.remote_urls,
+      template_name: draft.template_name,
+      repository_name: record.match.match.registry_name,
+      existing_workspace_names: current.existing_workspace_names,
+    })
+    if (!currentMatch.ok) return { ok: false, failure: matchFailure(currentMatch) }
+    if (!this.draftBelongsToCatalog(current, currentMatch, draft)) {
+      return { ok: false, failure: safeFailure("repo_not_matched") }
+    }
+    const matchedRepositoryId = current.repository_ids?.[currentMatch.match.registry_name]
+      ?? stableRepositoryId(currentMatch.match.registry_name)
+    const matchedDraftRepository = draft.repositories.find(({ repository_id }) => repository_id === matchedRepositoryId && draft.repositories.length > 0)
+    if (!matchedDraftRepository?.included) return { ok: false, failure: safeFailure("repo_not_matched") }
+    const included = draft.repositories.filter(({ included }) => included)
+    if (included.length === 0 || included.some(({ branch }) => branch.workspace_branch !== matchedDraftRepository.branch.workspace_branch)) {
+      return { ok: false, failure: safeFailure("branch_conflict") }
+    }
+
+    const request: WorkspaceCreationRequest = {
+      name: draft.workspace_name,
+      branch: matchedDraftRepository.branch.workspace_branch,
+      source: { kind: "template", template: draft.template_name },
+    }
+    const planned = this.options.planWorkspace
+      ? await this.options.planWorkspace(request)
+      : await planWorkspaceCreation(request, {
+          readRegistry: () => [...current.registry],
+          composeTemplates: ([name]) => {
+            const template = current.templates.find((candidate) => candidate.name === name)
+            if (!template) throw new Error("Reviewed template is no longer available")
+            return structuredClone(template)
+          },
+          workspaceExists: (name) => current.existing_workspace_names?.includes(name) ?? false,
+          getTasksDir: () => current.config?.workspace_root ? getTasksDir(current.config.workspace_root) : ".",
+        })
+    if (!planned.ok) return { ok: false, failure: safeFailure(planned.code === "invalid_branch" || planned.code === "already_exists" ? "branch_conflict" : "repo_not_matched") }
+    const draftById = new Map(draft.repositories.map((repository) => [repository.repository_id, repository]))
+    const repositoryId = (name: string) => current.repository_ids?.[name] ?? stableRepositoryId(name)
+    const plannedInputs: CreateWorkspaceInputs = {
+      ...planned.plan.inputs,
+      repos: planned.plan.inputs.repos.flatMap((repository) => {
+        const reviewed = draftById.get(repositoryId(repository.repo))
+        if (!reviewed?.included) return []
+        return [{ ...repository, base_branch: reviewed.branch.base_branch }]
+      }),
+    }
+    const matchedRepo = plannedInputs.repos.find(({ repo }) => repo === currentMatch.match.registry_name)
+    if (!matchedRepo || matchedRepo.mode !== "worktree") return { ok: false, failure: safeFailure("not_worktree_mode") }
+
+    const configuredHosts = current.registry.reduce<{ github: string[]; gitlab: string[] }>((hosts, repository) => {
+      const provider = repository.forge_metadata?.forge
+      const baseUrl = repository.forge_metadata?.base_url
+      if (baseUrl && (provider === "github" || provider === "gitlab")) hosts[provider].push(baseUrl)
+      return hosts
+    }, { github: [], gitlab: [] })
+    const rechecked = await (this.options.resolve ?? resolveForgeChangeSource)({
+      url: record.canonicalUrl,
+      configured_hosts: configuredHosts,
+    })
+    if (!rechecked.ok) return { ok: false, failure: providerFailure(rechecked) }
+    if (!sameTrustedIdentity(record.trustedSource, rechecked.change)) {
+      this.records.delete(reservation.token)
+      return { ok: false, failure: safeFailure("source_changed", record.trustedSource.provider) }
+    }
+
+    const operationIdentity = `review_${requestHash({ token: reservation.token, idempotencyKey }).slice(0, 32)}`
+    const prepared = await (this.options.prepareSource ?? prepareReviewedWorkspaceSource)({
+      trusted_source: rechecked.change,
+      matched_repo: matchedRepo,
+      workspace_name: draft.workspace_name,
+      operation_id: operationIdentity,
+      branch: matchedDraftRepository.branch.workspace_branch,
+    })
+    if (!prepared.ok) {
+      const failure = prepared as WorkspaceSourceFailure & { cleanup?: () => Promise<void> }
+      await failure.cleanup?.().catch(() => undefined)
+      if (failure.error === "source_changed") this.records.delete(reservation.token)
+      return { ok: false, failure: safeFailure(
+        failure.error === "source_changed" || failure.error === "fork_unreachable" || failure.error === "branch_conflict" || failure.error === "not_worktree_mode"
+          ? failure.error
+          : "fork_unreachable",
+        record.trustedSource.provider,
+      ) }
+    }
+
+    let cleaned = false
+    const cleanup = async () => {
+      if (cleaned) return
+      cleaned = true
+      await prepared.cleanup()
+    }
+    const result: Record<string, unknown> = { workspace_name: request.name, snapshot_changed: true }
+    const createInputs: CreateWorkspaceInputs = {
+      ...plannedInputs,
+      branch: prepared.branch,
+      source: prepared.sourceMetadata,
+      sourceStartRefs: { [prepared.matchedRepoName]: prepared.fetchedRef },
+    }
+    const execution: OperationExecution = {
+      cancellation: "none",
+      steps: [{
+        name: "workspace.create.reviewed",
+        stage: "executing",
+        message: "Creating reviewed workspace",
+        run: async (report) => {
+          try {
+            let progressQueue = Promise.resolve()
+            const created = await (this.options.createWorkspace ?? createWorkspace)(createInputs, () => {
+              progressQueue = progressQueue
+                .then(() => report({ stage: "executing", message: "Creating reviewed workspace" }))
+                .then(() => undefined)
+            })
+            await progressQueue
+            if (!created.ok) throw new Error("Reviewed workspace creation failed")
+          } finally {
+            await cleanup()
+          }
+        },
+      }],
+      result,
+      finalize: cleanup,
+    }
+    return { ok: true, execution, cleanup }
   }
 
   private draftBelongsToRecord(record: TrustedForgeReview, draft: WebReviewedWorkspaceDraft): boolean {
@@ -322,10 +519,24 @@ export class ForgeSourceReviewAuthority {
         ?? stableRepositoryId(record.match.match.registry_name))
   }
 
+  private draftBelongsToCatalog(
+    catalog: ForgeSourceReviewCatalog,
+    match: Extract<ForgeSourceMatchResult, { ok: true }>,
+    draft: WebReviewedWorkspaceDraft,
+  ): boolean {
+    const template = catalog.templates.find(({ name }) => name === draft.template_name)
+    if (!template || !match.candidates.some(({ template_name }) => template_name === template.name)) return false
+    const expected = new Set(template.repos
+      .filter(({ mode }) => (mode ?? "worktree") === "worktree")
+      .map(({ repo }) => catalog.repository_ids?.[repo] ?? stableRepositoryId(repo)))
+    const actual = new Set(draft.repositories.map(({ repository_id }) => repository_id))
+    return expected.size === actual.size && [...expected].every((id) => actual.has(id))
+  }
+
   private issueToken(): string {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const bytes = this.randomBytes(32)
-      if (bytes.byteLength < 32) throw new Error("Forge review tokens require at least 256 bits")
+      if (bytes.byteLength !== 32) throw new Error("Forge review tokens require exactly 256 bits")
       const token = `review_${Buffer.from(bytes).toString("base64url")}`
       if (!this.records.has(token)) return token
     }
@@ -334,6 +545,27 @@ export class ForgeSourceReviewAuthority {
 
   private sweep(): void {
     const now = this.now()
-    for (const [token, record] of this.records) if (record.expiresAt <= now) this.records.delete(token)
+    for (const [token, record] of this.records) {
+      if (record.expiresAt > now) continue
+      this.records.delete(token)
+      this.admissions.delete(token)
+    }
   }
+}
+
+function sameTrustedIdentity(left: TrustedForgeChange, right: TrustedForgeChange): boolean {
+  return left.provider === right.provider
+    && left.change_kind === right.change_kind
+    && left.change_number === right.change_number
+    && left.canonical_url === right.canonical_url
+    && left.host === right.host
+    && left.target.repository.host === right.target.repository.host
+    && left.target.repository.path === right.target.repository.path
+    && left.target.branch === right.target.branch
+    && left.source.repository.host === right.source.repository.host
+    && left.source.repository.path === right.source.repository.path
+    && left.source.branch === right.source.branch
+    && left.source.ref === right.source.ref
+    && left.source.sha === right.source.sha
+    && left.cross_repository === right.cross_repository
 }

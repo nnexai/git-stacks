@@ -184,4 +184,61 @@ describe("secure web workflow authority", () => {
       .rejects.toMatchObject({ code: "invalid_request" })
     expect(calls).toHaveLength(1)
   })
+
+  test("admits reviewed creation for the authenticated principal and cleans up rejected registration", async () => {
+    const token = `review_${"a".repeat(43)}`
+    const reviewed = {
+      token,
+      expected_revision: "7",
+      draft: {
+        workspace_name: "api-pr-42",
+        template_name: "review",
+        matched_source_repository_id: repositoryId,
+        repositories: [{
+          repository_id: repositoryId,
+          included: true,
+          branch: { base_branch: "main", workspace_branch: "feature-topic" },
+        }],
+      },
+    }
+    const calls: unknown[] = []
+    let cleanupCalls = 0
+    const execution = { cancellation: "none" as const, steps: [] }
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      forgeSourceReview: {
+        resolve: async () => { throw new Error("unused") },
+        admit: async (input) => {
+          calls.push(input)
+          return { ok: true as const, execution, cleanup: async () => { cleanupCalls += 1 } }
+        },
+      },
+      operations: {
+        submit: async (input: unknown) => {
+          calls.push(input)
+          throw Object.assign(new Error("duplicate"), { code: "idempotency_conflict" })
+        },
+      } as never,
+    })
+
+    await expect(router.request(context(["operation.write"]), request("operation.submit", {
+      kind: "workspace.create.reviewed",
+      request: reviewed,
+    }, "review-key"))).rejects.toMatchObject({ code: "idempotency_conflict" })
+    expect(calls[0]).toEqual({
+      principalId: "principal-a",
+      token,
+      expectedRevision: "7",
+      draft: reviewed.draft,
+      idempotencyKey: "review-key",
+    })
+    expect(calls[1]).toMatchObject({
+      clientId: "principal-a",
+      endpoint: "workspace.create.reviewed",
+      idempotencyKey: "review-key",
+      request: reviewed,
+      execution,
+    })
+    expect(cleanupCalls).toBe(1)
+  })
 })

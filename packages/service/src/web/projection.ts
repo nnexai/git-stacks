@@ -127,7 +127,7 @@ function lifecycleProgressMessage(phase: ReturnType<typeof WorkspaceLifecyclePha
   }[phase]
 }
 
-function operationProgressMessage(stage: Operation["state"] extends "running" ? never : string): string {
+function operationProgressMessage(stage: string): string {
   return {
     accepted: "Operation accepted.",
     preparing: "Preparing operation.",

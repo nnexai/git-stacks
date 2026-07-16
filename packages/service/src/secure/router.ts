@@ -87,7 +87,7 @@ export interface SecureServiceRouterOptions {
   workspaceNotes?: (workspace: string, limit: number) => WorkspaceNotesSnapshot | Promise<WorkspaceNotesSnapshot>
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
-  forgeSourceReview?: Pick<ForgeSourceReviewAuthority, "resolve">
+  forgeSourceReview?: Pick<ForgeSourceReviewAuthority, "resolve" | "admit">
   publishSignal?: (signal: Signal) => Promise<void>
   dismissSignal?: (dismissal: SignalDismissal) => Promise<void>
   signalProjection?: () => Promise<{ signals: Signal[]; dismissed: string[]; sequence: string }>
@@ -606,6 +606,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
     let mutation: string
     let parsedRequest: unknown
     let execution: OperationExecution
+    let admissionCleanup: (() => Promise<void>) | undefined
     if (web.success) {
       mutation = web.data.kind
       if (web.data.kind === "workspace.create") {
@@ -613,10 +614,32 @@ export class SecureServiceRouter implements SecureSessionHandler {
         parsedRequest = web.data.request
         execution = this.options.workspaceCreate(web.data.request)
       } else if (web.data.kind === "workspace.create.reviewed") {
-        // Plan 04 installs the token-bound reviewed-create authority. Keep the
-        // newly shared protocol discriminant explicit until that authority is
-        // available rather than treating its draft like an ID-based mutation.
-        throw coded("Reviewed workspace creation is unavailable", "capability_unavailable")
+        if (!this.options.forgeSourceReview) throw coded("Reviewed workspace creation is unavailable", "capability_unavailable")
+        const admission = await this.options.forgeSourceReview.admit({
+          principalId: context.principalId,
+          token: web.data.request.token,
+          expectedRevision: web.data.request.expected_revision,
+          draft: web.data.request.draft,
+          idempotencyKey: request.idempotency_key,
+        })
+        if (!admission.ok) {
+          const transportCode = admission.failure.code === "cli_unavailable"
+            ? "capability_unavailable"
+            : admission.failure.code === "rate_limited"
+              ? "rate_limited"
+              : admission.failure.code === "malformed_url"
+                ? "invalid_request"
+                : ["review_expired", "stale_revision", "source_changed", "branch_conflict"].includes(admission.failure.code)
+                  ? "conflict"
+                  : "operation_failed"
+          throw coded(admission.failure.message, transportCode, {
+            reason: admission.failure.code,
+            recovery: admission.failure.recovery,
+          })
+        }
+        parsedRequest = web.data.request
+        execution = admission.execution
+        admissionCleanup = admission.cleanup
       } else {
         const mutationRequest = web.data.request
         const snapshots = await this.options.snapshot.buildAll()
@@ -662,7 +685,13 @@ export class SecureServiceRouter implements SecureSessionHandler {
         execution = adapter(parsed.data)
       }
     }
-    const operation = await this.options.operations.submit({ clientId: context.principalId, endpoint: mutation, idempotencyKey: request.idempotency_key, request: parsedRequest, execution })
+    let operation
+    try {
+      operation = await this.options.operations.submit({ clientId: context.principalId, endpoint: mutation, idempotencyKey: request.idempotency_key, request: parsedRequest, execution })
+    } catch (error) {
+      await admissionCleanup?.().catch(() => undefined)
+      throw error
+    }
     return web.success || context.mode === "browser" ? projectWebOperation(operation) : operation
   }
 

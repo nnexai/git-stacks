@@ -140,6 +140,34 @@ describe("forge source review token authority", () => {
     }))).toMatchObject({ ok: false, failure: { code: "stale_revision" } })
   })
 
+  test("atomically binds one request when competing reservations cross catalog revalidation", async () => {
+    let catalogCalls = 0
+    let releaseCatalog!: () => void
+    const gate = new Promise<void>((resolve) => { releaseCatalog = resolve })
+    const authority = new ForgeSourceReviewAuthority({
+      catalog: async () => {
+        if (catalogCalls++ > 0) await gate
+        return catalog
+      },
+      resolve: async () => ({ ok: true, change: trusted }),
+    })
+    const resolved = await authority.resolve({ principalId: "principal-a", url: sourceUrl })
+    expect(resolved.resolved).toBe(true)
+    if (!resolved.resolved) return
+    const reserve = (idempotencyKey: string) => authority.reserve({
+      principalId: "principal-a", token: resolved.token, canonicalUrl: sourceUrl, expectedRevision: "7",
+      draft: resolved.draft, idempotencyKey,
+    })
+    const first = reserve("first-key")
+    const second = reserve("second-key")
+    releaseCatalog()
+    const results = await Promise.all([first, second])
+    expect(results.filter(({ ok }) => ok)).toHaveLength(1)
+    expect(results.filter(({ ok }) => !ok)).toEqual([
+      expect.objectContaining({ ok: false, failure: expect.objectContaining({ code: "review_expired" }) }),
+    ])
+  })
+
   test("maps provider and matching failures to fixed safe recovery guidance", async () => {
     const failures = [
       ["auth_required", "authenticate"],
