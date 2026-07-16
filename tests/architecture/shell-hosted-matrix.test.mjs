@@ -1,26 +1,32 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
+import { parse } from "yaml"
 
 const root = new URL("../../", import.meta.url)
 const workflow = await readFile(new URL(".github/workflows/node-runtime-matrix.yml", root), "utf8")
 const fixture = await readFile(new URL("tests/commands/user-shell-host-fixture.test.ts", root), "utf8")
+const parsedWorkflow = parse(workflow)
+const hostedDefinition = parsedWorkflow.jobs?.["shell-hosted"]
 const jobStart = workflow.indexOf("  shell-hosted:")
 const hostedJob = jobStart < 0 ? "" : workflow.slice(jobStart)
 
 test("hosted shell matrix requires Ubuntu 24.04 and macOS 15 without a soft-failure path", () => {
-  assert.ok(jobStart >= 0, "shell-hosted job must exist")
-  assert.match(hostedJob, /runner: \[ubuntu-24\.04, macos-15\]/)
-  assert.match(hostedJob, /GIT_STACKS_REQUIRE_SHELLS: bash,zsh,fish/)
-  assert.match(hostedJob, /GIT_STACKS_REQUIRE_SSH_AGENT: ["']1["']/)
-  assert.match(hostedJob, /GIT_STACKS_SHELL_RECEIPT: shell-host-receipt\.json/)
+  assert.ok(hostedDefinition, "shell-hosted job must exist")
+  assert.deepEqual(hostedDefinition.strategy?.matrix?.runner, ["ubuntu-24.04", "macos-15"])
+  assert.deepEqual(hostedDefinition.env, {
+    GIT_STACKS_REQUIRE_SHELLS: "bash,zsh,fish",
+    GIT_STACKS_REQUIRE_SSH_AGENT: "1",
+    GIT_STACKS_SHELL_RECEIPT: "shell-host-receipt.json",
+  })
+  assert.equal(hostedDefinition["continue-on-error"], undefined)
   assert.match(hostedJob, /command -v "\$capability"/)
-  assert.doesNotMatch(hostedJob, /continue-on-error:\s*true/)
+  const acceptance = hostedDefinition.steps.find((step) => step.name === "Run fail-on-skip shell and SSH acceptance")?.run ?? ""
   for (const required of [
     "tests/commands/user-shell-host-fixture.test.ts",
     "tests/service/managed-service-process.test.ts",
     "tests/service/web-terminal.test.ts",
-  ]) assert.match(hostedJob, new RegExp(required.replaceAll(".", "\\.")))
+  ]) assert.ok(acceptance.includes(required))
 })
 
 test("required capabilities cannot enter the local skip branches", () => {
@@ -41,8 +47,10 @@ test("every hosted cell always validates and uploads the complete receipt contra
     assert.match(fixture, new RegExp(`\\b${field}\\b`), `fixture receipt must define ${field}`)
     assert.match(hostedJob, new RegExp(`\\b${field}\\b`), `hosted validator must require ${field}`)
   }
-  assert.match(hostedJob, /name: Validate machine-readable zero-skip receipt\n\s+if: always\(\)/)
-  assert.match(hostedJob, /uses: actions\/upload-artifact@[0-9a-f]{40}/)
-  assert.match(hostedJob, /if-no-files-found: error/)
-  assert.match(hostedJob, /name: shell-host-receipt-\$\{\{ matrix\.runner \}\}-\$\{\{ github\.sha \}\}/)
+  const validation = hostedDefinition.steps.find((step) => step.name === "Validate machine-readable zero-skip receipt")
+  assert.equal(validation?.if, "always()")
+  const upload = hostedDefinition.steps.find((step) => /^actions\/upload-artifact@[0-9a-f]{40}$/.test(step.uses ?? ""))
+  assert.equal(upload?.if, "always()")
+  assert.equal(upload?.with?.["if-no-files-found"], "error")
+  assert.equal(upload?.with?.name, "shell-host-receipt-${{ matrix.runner }}-${{ github.sha }}")
 })
