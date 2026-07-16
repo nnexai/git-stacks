@@ -1,7 +1,18 @@
 import { type RepoRegistryEntry, type WorkspaceRepo, type WorkspaceSource } from "./config"
+import { createHash } from "node:crypto"
 
 import { checkBranchExists, deleteRef, fetchSourceRef, resolveRef } from "./git"
 import { parseForgeSourceUrl, type ForgeSourceId, type ForgeSourceResolutionError } from "./integrations/forge-source"
+import type { TrustedForgeChange } from "./integrations/forge-source-resolver"
+
+export type PrepareReviewedWorkspaceSourceInputs = {
+  trusted_source: TrustedForgeChange
+  matched_repo: WorkspaceRepo
+  workspace_name: string
+  operation_id: string
+  branch?: string
+  dry_run?: boolean
+}
 
 export type PrepareWorkspaceSourceInputs = {
   sourceUrl: string
@@ -35,7 +46,10 @@ export type PreparedWorkspaceSource = {
     targetBranch: string
     workspaceName: string
   }
+  cleanup?: () => Promise<void>
 }
+
+export type PreparedReviewedWorkspaceSource = PreparedWorkspaceSource & { cleanup: () => Promise<void> }
 
 export const _source = {
   fetchSourceRef,
@@ -48,6 +62,129 @@ function sanitizeBranch(raw: string): string | null {
   const branch = raw.trim().replace(/\s+/g, "-").replace(/[~^:?*[\]\\]+/g, "-")
   if (!branch) return null
   return branch
+}
+
+function privateSourceRef(inputs: PrepareReviewedWorkspaceSourceInputs): string {
+  const digest = createHash("sha256")
+    .update(inputs.operation_id)
+    .update("\0")
+    .update(inputs.trusted_source.canonical_url)
+    .update("\0")
+    .update(inputs.matched_repo.repo)
+    .digest("hex")
+    .slice(0, 24)
+  return `refs/git-stacks/review/${inputs.matched_repo.repo}/${digest}`
+}
+
+function trustedFetchUrl(source: TrustedForgeChange["source"]): string | null {
+  if (source.fetch.https) {
+    try {
+      const parsed = new URL(source.fetch.https)
+      if (!parsed.username && !parsed.password && (parsed.protocol === "https:" || parsed.protocol === "http:")) {
+        return source.fetch.https
+      }
+    } catch {
+      // Fall through to a separately supplied SSH coordinate.
+    }
+  }
+  return source.fetch.ssh?.trim() || null
+}
+
+export async function prepareReviewedWorkspaceSource(
+  inputs: PrepareReviewedWorkspaceSourceInputs,
+): Promise<PreparedReviewedWorkspaceSource | WorkspaceSourceFailure> {
+  if (inputs.matched_repo.mode !== "worktree") {
+    return { ok: false, error: "not_worktree_mode", message: "The selected repository must use worktree mode." }
+  }
+  const source = inputs.trusted_source
+  const targetBranchRaw = inputs.branch?.trim() || source.source.branch
+  const targetBranch = sanitizeBranch(targetBranchRaw)
+  if (!targetBranch) return { ok: false, error: "branch_conflict", message: "The reviewed branch name is invalid." }
+  const fetchedRef = privateSourceRef(inputs)
+  const fetchUrl = trustedFetchUrl(source.source)
+  if (!fetchUrl) {
+    return { ok: false, error: "fork_unreachable", message: "The source repository has no usable fetch coordinate." }
+  }
+
+  let cleaned = false
+  const cleanup = async () => {
+    if (cleaned) return
+    cleaned = true
+    await _source.deleteRef(inputs.matched_repo.main_path, fetchedRef)
+  }
+
+  if (!inputs.dry_run) {
+    const fetchResult = await _source.fetchSourceRef(
+      inputs.matched_repo.main_path,
+      fetchUrl,
+      source.source.ref,
+      fetchedRef,
+    )
+    if (!fetchResult.ok) {
+      await cleanup()
+      return {
+        ok: false,
+        error: "fork_unreachable",
+        message: `Could not fetch the ${source.provider} source repository. Check repository access and authentication.`,
+      }
+    }
+
+    const fetched = await _source.resolveRef(inputs.matched_repo.main_path, fetchedRef)
+    if (!fetched.ok || fetched.sha !== source.source.sha) {
+      await cleanup()
+      return {
+        ok: false,
+        error: "source_changed",
+        message: "The provider source changed after review. Resolve the change again.",
+      }
+    }
+
+    if (await _source.checkBranchExists(inputs.matched_repo.main_path, targetBranch)) {
+      const existing = await _source.resolveRef(inputs.matched_repo.main_path, targetBranch)
+      if (!existing.ok || existing.sha !== source.source.sha) {
+        await cleanup()
+        return {
+          ok: false,
+          error: "branch_conflict",
+          message: `The existing local branch '${targetBranch}' points at a different commit.`,
+        }
+      }
+    }
+  }
+
+  const origin = new URL(source.canonical_url).origin
+  return {
+    ok: true,
+    branch: targetBranch,
+    matchedRepoName: inputs.matched_repo.name,
+    fetchedRef,
+    cleanup,
+    sourceMetadata: {
+      kind: "forge",
+      forge: source.provider,
+      base_url: origin,
+      url: source.canonical_url,
+      change_type: source.provider === "gitlab" ? "mr" : "pr",
+      change_number: source.change_number,
+      repo: inputs.matched_repo.name,
+      repo_path: source.target.repository.path,
+      source_branch: source.source.branch,
+      source_ref: source.source.ref,
+      target_branch: source.target.branch,
+      web_url: source.canonical_url,
+      fetched_ref: fetchedRef,
+    },
+    preview: {
+      source: source.canonical_url,
+      forge: source.provider,
+      change: `${source.provider === "gitlab" ? "mr" : "pr"}#${source.change_number}`,
+      matchedRepo: inputs.matched_repo.name,
+      sourceBranch: source.source.branch,
+      sourceRef: source.source.ref,
+      targetBranch,
+      workspaceName: inputs.workspace_name,
+    },
+  }
 }
 
 function findRepoMatch(

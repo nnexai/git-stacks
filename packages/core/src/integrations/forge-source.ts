@@ -49,6 +49,8 @@ export type ForgeSourceResolutionError =
   | "auth_required"
   | "metadata_unavailable"
   | "branch_conflict"
+  | "source_changed"
+  | "fork_unreachable"
 
 export type ForgeSourceResolutionFailure = {
   ok: false
