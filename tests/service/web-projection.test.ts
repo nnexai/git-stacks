@@ -1,11 +1,46 @@
 import { describe, expect, test } from "@test/api"
-import type { WorkspaceSnapshotResponse } from "../../packages/protocol/src/service"
+import type { WorkspaceCatalog, WorkspaceSnapshotResponse } from "../../packages/protocol/src/service"
 import { projectWebOperation, projectWebSnapshot, projectWebTerminalSignals } from "../../packages/service/src/web/projection"
 
 const workspaceId = "11111111-1111-4111-8111-111111111111"
 const repositoryId = "22222222-2222-4222-8222-222222222222"
 
 describe("browser-safe service projection", () => {
+  test("PHASE123_RED web lifecycle contract", () => {
+    const active = [{
+      protocol: "v1", request_id: "req_abcdefghijklmnop", ok: true, revision: "12", generated_at: "2026-07-16T12:00:00.000Z",
+      workspace: {
+        id: workspaceId, name: "active", activity_at: "2026-07-16T11:00:00.000Z", branch: "feature/web", labels: [], pinned: false, priority: 0,
+        repositories: [{ id: repositoryId, name: "repo", mode: "worktree", path: "/secret/active" }],
+        status: [], file_status: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0 },
+        launch: { commands: [], environment: {}, redacted: [], references: {}, cwd: "/secret/cwd", ports: {}, named: [] },
+      },
+    }] as WorkspaceSnapshotResponse[]
+    const catalog: WorkspaceCatalog = {
+      revision: "12",
+      generated_at: "2026-07-16T12:00:00.000Z",
+      workspaces: active,
+      archived_workspaces: [
+        { id: "55555555-5555-4555-8555-555555555555", name: "newest", activity_at: "2026-07-16T10:00:00.000Z" },
+        { id: "66666666-6666-4666-8666-666666666666", name: "older", activity_at: "2026-07-15T10:00:00.000Z" },
+      ],
+    }
+    const projectCatalog = projectWebSnapshot as unknown as (value: WorkspaceCatalog) => ReturnType<typeof projectWebSnapshot>
+    const projected = projectCatalog(catalog)
+    expect(projected.revision).toBe("12")
+    expect(projected.archived_workspaces).toEqual(catalog.archived_workspaces)
+    expect(Object.keys(projected.archived_workspaces[0] ?? {})).toEqual(["id", "name", "activity_at"])
+    expect(JSON.stringify(projected)).not.toContain("/secret/active")
+
+    const empty = projectCatalog({
+      revision: "13",
+      generated_at: "2026-07-16T13:00:00.000Z",
+      workspaces: [],
+      archived_workspaces: [],
+    })
+    expect(empty).toMatchObject({ revision: "13", workspaces: [], archived_workspaces: [] })
+  })
+
   test("omits paths, commands, environment, secret references, ports, and launch details", () => {
     const trusted = [{
       protocol: "v1", request_id: "req_abcdefghijklmnop", ok: true, revision: "7", generated_at: "2026-07-13T12:00:00.000Z",
@@ -38,6 +73,25 @@ describe("browser-safe service projection", () => {
     expect(operation.result).toEqual({ workspace_name: "demo", snapshot_changed: true })
     expect(JSON.stringify(operation)).not.toContain("secret-step")
     expect(JSON.stringify(operation)).not.toContain("/secret/result")
+
+    const running = projectWebOperation({
+      operation_id: "op_123456789abcdefg", state: "running", accepted_at: "2026-07-13T12:00:00.000Z", started_at: "2026-07-13T12:00:01.000Z", completed_steps: [],
+      progress: { stage: "executing", message: "Checking worktrees", completed: 1, total: 4, data: { lifecycle_phase: "checking_worktrees", path: "/secret/progress", env: "SECRET_ENV" } },
+    })
+    expect(running.progress).toEqual({ message: "Checking worktrees", completed: 1, total: 4, lifecycle_phase: "checking_worktrees" })
+
+    const failed = projectWebOperation({
+      operation_id: "op_223456789abcdefg", state: "failed", accepted_at: "2026-07-13T12:00:00.000Z", finished_at: "2026-07-13T12:00:02.000Z", completed_steps: ["secret-step"],
+      error: { code: "workspace_dirty", message: "Dirty worktrees block removal", details: { path: "/secret/error" } },
+      lifecycle: { kind: "workspace_dirty", blocking_repositories: ["api", "web"], terminals_stopped: true, force_allowed: true },
+      rollback_attempted: false, rollback_succeeded: false, rollback_errors: [],
+    })
+    expect(failed.error).toEqual({
+      code: "workspace_dirty",
+      message: "Dirty worktrees block removal",
+      lifecycle: { kind: "workspace_dirty", blocking_repositories: ["api", "web"], terminals_stopped: true, force_allowed: true },
+    })
+    expect(JSON.stringify({ running, failed })).not.toMatch(/secret|\/secret|terminal_title|principal|environment/i)
   })
 
   test("exposes activity only while its service-owned browser tab still exists", () => {
@@ -51,6 +105,12 @@ describe("browser-safe service projection", () => {
     ]
 
     expect(projectWebTerminalSignals(signals, new Set([liveSurface])).map((signal) => signal.id)).toEqual([
+      "sig_0123456789abcdef",
+      "sig_2123456789abcdef",
+    ])
+
+    expect(projectWebTerminalSignals(signals, new Set([liveSurface]), new Set<string>()).map((signal) => signal.id)).toEqual([])
+    expect(projectWebTerminalSignals(signals, new Set([liveSurface]), new Set([workspaceId])).map((signal) => signal.id)).toEqual([
       "sig_0123456789abcdef",
       "sig_2123456789abcdef",
     ])

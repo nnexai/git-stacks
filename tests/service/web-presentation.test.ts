@@ -3,6 +3,9 @@ import * as ClientPresentation from "../../packages/client/src/presentation"
 import { deduplicateProviderSessions, isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../packages/client/src/presentation"
 import * as ServiceProtocol from "../../packages/protocol/src/service"
 import * as WebProtocol from "../../packages/protocol/src/web"
+import { readFileSync } from "node:fs"
+
+const webAppSource = readFileSync(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
 
 const base: PresentedSignal = {
   kind: "activity",
@@ -15,6 +18,28 @@ const base: PresentedSignal = {
 }
 
 describe("web signal presentation", () => {
+  test("browser lifecycle presentation keeps destructive intent explicit and replaceable", () => {
+    for (const seam of [
+      "showArchivedWorkspaces",
+      "showRemoveConfirmation",
+      "showDirtyRemovalFailure",
+      "showForceRemoveConfirmation",
+      "reconcileAuthoritativeState",
+      "workspaceSuccessorOrder",
+      "confirmation.value === workspace.name",
+      "terminalViews.delete(id)",
+      "workspace.archive",
+      "workspace.unarchive",
+      "workspace.remove",
+      "workspace.force-remove",
+    ]) expect(webAppSource, seam).toContain(seam)
+
+    expect(webAppSource).toMatch(/cancel\.focus\(\)/)
+    expect(webAppSource).toMatch(/if \(error instanceof ApiRequestError && error\.code === "conflict"\)[\s\S]*await reconcileAuthoritativeState\(\)[\s\S]*return/)
+    expect(webAppSource).not.toMatch(/workspace\.(?:remove|force-remove)[\s\S]{0,500}(?:retry|replay)/i)
+    expect(webAppSource).not.toMatch(/(?:split|match|includes)\([^\n]*Dirty worktrees/i)
+  })
+
   test("shared successor order proves every tie tier independently", () => {
     const order = (ClientPresentation as Record<string, unknown>).workspaceSuccessorOrder as (left: Record<string, unknown>, right: Record<string, unknown>) => number
     const base = { pinned: false, priority: 10, activity_at: "2026-07-10T00:00:00.000Z", name: "same", id: "018f47f4-5ab1-7c2d-8e90-123456789abc" }
