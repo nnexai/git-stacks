@@ -13,7 +13,55 @@ import {
   type WebShortcutEffectiveBinding,
   type WebShortcutMutation,
   type WebShortcutSettings,
+  type WebWorkspaceActionId,
 } from "@git-stacks/protocol"
+import type {
+  WorkspaceActionRegistry,
+  WorkspaceActionRegistryEntry,
+} from "@git-stacks/client"
+
+export const WEB_WORKSPACE_ACTION_GROUPS = [
+  { label: "Workspace", actions: ["workspace.open", "workspace.close", "workspace.rename", "workspace.pin", "workspace.unpin"] },
+  { label: "Git", actions: ["workspace.sync", "workspace.pull", "workspace.push", "workspace.merge"] },
+  { label: "Details", actions: ["workspace.notes.list", "workspace.files.inspect"] },
+  { label: "Lifecycle", actions: ["workspace.archive", "workspace.unarchive", "workspace.remove", "workspace.force-remove"] },
+] as const satisfies ReadonlyArray<{
+  label: string
+  actions: readonly WebWorkspaceActionId[]
+}>
+
+export type WorkspaceActionMenuRow = {
+  actionId: WebWorkspaceActionId
+  group: (typeof WEB_WORKSPACE_ACTION_GROUPS)[number]["label"]
+  label: string
+  destructive: boolean
+  disabledReason?: string
+  ariaDisabled: "true" | "false"
+  tabIndex: 0
+  callback: WorkspaceActionRegistryEntry["menu"]["callback"]
+}
+
+/** Renderer-neutral rows keep menu presentation tied to the shared descriptor callback. */
+export function workspaceActionMenuRows(registry: WorkspaceActionRegistry): WorkspaceActionMenuRow[] {
+  const rows: WorkspaceActionMenuRow[] = []
+  for (const group of WEB_WORKSPACE_ACTION_GROUPS) {
+    for (const actionId of group.actions) {
+      const entry = registry.entry(actionId)
+      if (!entry) continue
+      rows.push({
+        actionId,
+        group: group.label,
+        label: entry.label,
+        destructive: actionId === "workspace.remove" || actionId === "workspace.force-remove",
+        disabledReason: entry.disabledReason,
+        ariaDisabled: entry.availability.available ? "false" : "true",
+        tabIndex: 0,
+        callback: entry.menu.callback,
+      })
+    }
+  }
+  return rows
+}
 
 export type WebActionSource = "document" | "xterm"
 export type WebActionInvocation = {

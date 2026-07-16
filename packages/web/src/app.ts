@@ -3,10 +3,10 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { FUZZY_FIELD_WEIGHT, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
-import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { FUZZY_FIELD_WEIGHT, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type WorkspaceActionCallback } from "@git-stacks/client"
+import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebNotesResponse, type WebOperation, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -94,7 +94,7 @@ function providerBadge(source: string, className = "provider-chip"): HTMLElement
   return node
 }
 
-type ContextAction = { label: string; run: () => void; disabled?: boolean; destructive?: boolean }
+type ContextAction = { label: string; run: () => void; disabled?: boolean; disabledReason?: string; destructive?: boolean; group?: string }
 function hideContextMenu(): void {
   contextMenu.hidden = true
   contextMenu.replaceChildren()
@@ -103,10 +103,24 @@ function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
   event.preventDefault()
   event.stopPropagation()
   contextMenu.replaceChildren()
+  let group = ""
   for (const action of actions) {
+    if (action.group && action.group !== group) {
+      group = action.group
+      const heading = element("div", "context-menu-group", group)
+      heading.setAttribute("role", "presentation")
+      contextMenu.append(heading)
+    }
     const control = button(action.label, `context-menu-item${action.destructive ? " destructive" : ""}`)
-    control.disabled = action.disabled ?? false
-    control.addEventListener("click", () => { hideContextMenu(); action.run() })
+    const disabledReason = action.disabledReason ?? (action.disabled ? "This action is unavailable." : undefined)
+    control.setAttribute("role", "menuitem")
+    control.setAttribute("aria-disabled", String(Boolean(disabledReason)))
+    control.tabIndex = 0
+    if (disabledReason) control.append(element("span", "context-menu-reason", disabledReason))
+    control.addEventListener("click", () => {
+      if (disabledReason) { toast(`${action.label} unavailable — ${disabledReason}`, true); return }
+      hideContextMenu(); action.run()
+    })
     contextMenu.append(control)
   }
   contextMenu.hidden = false
@@ -115,7 +129,17 @@ function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
     .find((candidate): candidate is CSSStyleRule => candidate instanceof CSSStyleRule && candidate.selectorText === ".context-menu")
   rule?.style.setProperty("--menu-left", `${Math.max(6, Math.min(event.clientX, window.innerWidth - width - 6))}px`)
   rule?.style.setProperty("--menu-top", `${Math.max(6, Math.min(event.clientY, window.innerHeight - height - 6))}px`)
-  contextMenu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus()
+  const controls = [...contextMenu.querySelectorAll<HTMLButtonElement>("[role='menuitem']")]
+  controls[0]?.focus()
+  contextMenu.onkeydown = (keyboardEvent) => {
+    const current = controls.indexOf(document.activeElement as HTMLButtonElement)
+    if (keyboardEvent.key === "ArrowDown" || keyboardEvent.key === "ArrowUp") {
+      const direction = keyboardEvent.key === "ArrowDown" ? 1 : -1
+      controls[(Math.max(0, current) + direction + controls.length) % controls.length]?.focus()
+      keyboardEvent.preventDefault()
+    } else if (keyboardEvent.key === "Home") { controls[0]?.focus(); keyboardEvent.preventDefault() }
+    else if (keyboardEvent.key === "End") { controls.at(-1)?.focus(); keyboardEvent.preventDefault() }
+  }
 }
 function savePreferences(): void {
   preferences.recent = preferences.recent.slice(0, 20)
@@ -400,6 +424,10 @@ let eventCursor = "0"
 const terminalViews = new Map<string, TerminalView>()
 const pendingWorkspaceCreations = new Map<string, string>()
 const pendingLifecycleOperations = new Set<string>()
+const operationContexts = new Map<string, { actionId: Exclude<WebWorkspaceActionId, "operation.cancel">; workspaceId: string; workspaceName: string }>()
+let workspaceActionInventory: WebWorkspaceAction[] = []
+let workspaceActionInventoryKey = ""
+let workspaceActionLoadingKey = ""
 let overlayController: ReturnType<typeof createSingletonOverlayController>
 let shortcutSettings: WebShortcutSettings | undefined
 
@@ -501,7 +529,7 @@ registerOverlayShortcutAction("workspace.switch", (invocation) => {
   showWorkspaceSwitcher()
 })
 
-app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
+app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="operation-region" id="operations" aria-live="polite"></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
 const nav = document.querySelector<HTMLUListElement>("#nav")!
 const scope = document.querySelector<HTMLElement>("#scope")!
@@ -512,6 +540,7 @@ const signalInbox = document.querySelector<HTMLElement>("#signal-inbox")!
 const signalToggle = document.querySelector<HTMLButtonElement>("#signal-toggle")!
 const toastRegion = document.querySelector<HTMLElement>("#toasts")!
 const contextMenu = document.querySelector<HTMLElement>("#context-menu")!
+const operationRegion = document.querySelector<HTMLElement>("#operations")!
 
 function restoreOverlayFocus(terminalId: string | undefined): void {
   const terminal = terminalId ? terminalViews.get(terminalId) : undefined
@@ -532,6 +561,191 @@ overlayController = createSingletonOverlayController(document, { restoreFocus: r
 
 function selectedWorkspace(): Workspace | undefined { return snapshot.workspaces.find((item) => item.id === selectedPair?.workspaceId) }
 function selectedRepository(): Repository | undefined { return selectedWorkspace()?.repositories.find((item) => item.id === selectedPair?.repositoryId) }
+
+type WebOperationIntent = {
+  actionId: Exclude<WebWorkspaceActionId, "operation.cancel">
+  workspaceId: string
+  workspaceName: string
+  body: unknown
+  idempotencyKey: string
+}
+
+function operationCancellation(operationId: string): { state: "available" } | { state: "unavailable"; reason: "not-cancellable" } {
+  const available = workspaceActionInventory.some((descriptor) => descriptor.action_id === "operation.cancel"
+    && descriptor.subject.kind === "operation"
+    && descriptor.subject.operation_id === operationId
+    && descriptor.availability.available)
+  return available ? { state: "available" } : { state: "unavailable", reason: "not-cancellable" }
+}
+
+function summarizeOperation(operation: WebOperation, context: WebOperationIntent): WebOperationSummary {
+  const common = {
+    operation_id: operation.operation_id,
+    action_id: context.actionId,
+    workspace_id: context.workspaceId,
+    workspace_name: context.workspaceName,
+    accepted_at: operation.accepted_at,
+  }
+  if (operation.state === "accepted") return { ...common, state: "accepted" }
+  if (operation.state === "running") return {
+    ...common,
+    state: "running",
+    started_at: operation.started_at!,
+    progress: {
+      stage: "executing",
+      ...(operation.progress?.message ? { message: operation.progress.message } : {}),
+      ...(operation.progress?.completed === undefined ? {} : { completed: operation.progress.completed, total: operation.progress.total! }),
+    },
+    cancellation: operationCancellation(operation.operation_id),
+  }
+  if (operation.state === "succeeded") return {
+    ...common,
+    state: "succeeded",
+    started_at: operation.started_at!,
+    finished_at: operation.finished_at!,
+    cancellation: { state: "unavailable", reason: "finished" },
+    result: operation.result ?? {},
+  }
+  return {
+    ...common,
+    state: operation.state,
+    ...(operation.started_at ? { started_at: operation.started_at } : {}),
+    finished_at: operation.finished_at!,
+    cancellation: { state: "unavailable", reason: "finished" },
+    error: {
+      code: operation.error?.code ?? "operation_failed",
+      message: operation.error?.message ?? "The operation failed.",
+      retryable: operation.error?.code === "conflict",
+      ...(operation.error?.forge ? { forge: operation.error.forge } : {}),
+    },
+  }
+}
+
+const operationTracker = createOperationTracker<WebOperationIntent>({
+  async submit(intent) {
+    const operation = await api<WebOperation>("operation.submit", intent.body, {
+      scope: "operation.write",
+      idempotencyKey: intent.idempotencyKey,
+    })
+    operationContexts.set(operation.operation_id, {
+      actionId: intent.actionId,
+      workspaceId: intent.workspaceId,
+      workspaceName: intent.workspaceName,
+    })
+    return summarizeOperation(operation, intent)
+  },
+  async get(operationId) {
+    const context = operationContexts.get(operationId)
+    if (!context) throw new Error("Operation context is unavailable; refresh workspace state.")
+    const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+    return summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" })
+  },
+  cancel: (operationId) => api<OperationCancelResult>("operation.cancel", { operation_id: operationId }, { scope: "operation.write" }),
+  refresh: reconcileAuthoritativeState,
+  reconcile: () => { workspaceActionInventoryKey = "" },
+}, { maxCards: 3 })
+
+function renderOperationCards(): void {
+  operationRegion.replaceChildren()
+  const state = operationTracker.state()
+  if (state.phase === "submitting") {
+    const pending = element("article", "operation-card")
+    pending.setAttribute("aria-busy", "true")
+    pending.append(element("strong", "", "Workspace action…"), element("span", "", "Submitting once to the service."))
+    operationRegion.append(pending)
+  }
+  for (const operation of operationTracker.cards()) {
+    const card = element("article", `operation-card ${operation.state}`)
+    if (operation.state === "failed") card.setAttribute("role", "alert")
+    card.append(
+      element("strong", "", `${operation.action_id.replace("workspace.", "").replaceAll("-", " ")} — ${operation.workspace_name}`),
+      element("span", "operation-stage", operation.state === "running"
+        ? operation.progress.message ?? "Operation in progress."
+        : operation.state === "accepted"
+          ? "Operation accepted."
+          : operation.state === "succeeded"
+            ? "Workspace state refreshed."
+            : operation.error.message),
+    )
+    if ((operation.state === "accepted" || operation.state === "running") && operation.cancellation?.state === "available") {
+      const cancel = button(`Cancel ${operation.action_id.replace("workspace.", "")}`, "button")
+      cancel.addEventListener("click", async () => {
+        cancel.disabled = true
+        cancel.textContent = "Cancelling…"
+        const result = await operationTracker.cancel()
+        if ("outcome" in result && (result.outcome === "too-late" || result.outcome === "not-cancellable" || result.outcome === "already-finished")) {
+          toast(`${operation.action_id.replace("workspace.", "")} is already finishing and can no longer be cancelled.`)
+        }
+        renderOperationCards()
+      })
+      card.append(cancel)
+    }
+    operationRegion.append(card)
+  }
+  if (state.phase === "reconnecting") operationRegion.prepend(element("div", "operation-connection", "Reconnecting to the known workspace operation…"))
+  if (state.phase === "refresh-failed") {
+    const retry = button("Retry refresh", "button")
+    retry.addEventListener("click", async () => { await operationTracker.retryRefresh(); renderOperationCards(); renderAll() })
+    operationRegion.prepend(element("div", "operation-connection error", "Workspace state could not be refreshed."), retry)
+  }
+  const overflow = operationTracker.overflowCount()
+  if (overflow) {
+    const more = button(`View ${overflow} more operations`, "button operation-more")
+    more.addEventListener("click", () => {
+      const view = modal("Workspace operations")
+      if (view) view.body.append(element("p", "", `${overflow} older operations are retained by this session. Refresh authoritative state before repeating an action.`))
+    })
+    operationRegion.append(more)
+  }
+}
+
+async function observeTrackedOperation(operationId: string): Promise<void> {
+  const context = operationContexts.get(operationId)
+  if (!context) return
+  const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+  await operationTracker.observe(summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" }))
+  renderOperationCards()
+  renderAll()
+}
+
+async function submitDurableWorkspaceAction(
+  actionId: Exclude<WebWorkspaceActionId, "operation.cancel">,
+  workspace: Workspace,
+  body: unknown,
+): Promise<{ kind: "operation"; operationId: string }> {
+  const submission = operationTracker.submit({
+    actionId,
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+    body,
+    idempotencyKey: `${actionId}-${workspace.id}-${crypto.randomUUID()}`,
+  })
+  renderOperationCards()
+  const result = await submission
+  renderOperationCards()
+  if (result.status !== "observing") throw new Error(`${actionId} is already running for ${workspace.name}.`)
+  return { kind: "operation", operationId: result.operationId }
+}
+
+async function loadWorkspaceActions(workspace: Workspace): Promise<void> {
+  const key = `${workspace.id}:${snapshot.revision}`
+  if (workspaceActionInventoryKey === key || workspaceActionLoadingKey === key) return
+  workspaceActionLoadingKey = key
+  try {
+    const inventory = await api<WebWorkspaceAction[]>("workspace.actions", {
+      workspace_id: workspace.id,
+      expected_revision: snapshot.revision,
+    }, { scope: "snapshot.read" })
+    if (selectedPair?.workspaceId !== workspace.id || snapshot.revision !== key.slice(key.indexOf(":") + 1)) return
+    workspaceActionInventory = inventory
+    workspaceActionInventoryKey = key
+    renderScope()
+  } catch {
+    if (selectedPair?.workspaceId === workspace.id) toast("Workspace actions could not be loaded. Retry after refreshing.", true)
+  } finally {
+    if (workspaceActionLoadingKey === key) workspaceActionLoadingKey = ""
+  }
+}
 function visibleTerminals(): TerminalMeta[] {
   if (!selectedPair) return []
   return [...terminalViews.values()].map((view) => view.meta)
@@ -542,18 +756,163 @@ function visibleTerminals(): TerminalMeta[] {
     })
 }
 function selectPair(pair: Pair): void {
+  if (selectedPair?.workspaceId !== pair.workspaceId) {
+    workspaceActionInventory = []
+    workspaceActionInventoryKey = ""
+  }
   selectedPair = pair
   preferences.lastPair = pair
   savePreferences()
   const first = visibleTerminals()[0]
   activeTerminalId = first?.id
   renderAll()
+  const workspace = selectedWorkspace()
+  if (workspace) void loadWorkspaceActions(workspace)
   void refreshSignals()
 }
 
-const workspaceLifecycleActionRegistry = {
-  archive: (workspace: Workspace) => { void archiveWorkspace(workspace) },
-  remove: (workspace: Workspace) => { showRemoveConfirmation(workspace) },
+const confirmedForceNames = new Map<string, string>()
+
+function confirmWorkspaceDescriptor(descriptor: WebWorkspaceAction): Promise<boolean> | boolean {
+  if (descriptor.confirmation === "none") return true
+  const workspace = snapshot.workspaces.find(({ id }) => id === descriptor.subject.workspace_id)
+  if (!workspace) return false
+  return new Promise<boolean>((resolve) => {
+    const exact = descriptor.confirmation === "exact-name"
+    const action = descriptor.action_id === "workspace.remove"
+      ? "Remove"
+      : descriptor.action_id === "workspace.merge"
+        ? "Merge"
+        : descriptor.action_id === "workspace.notes.clear"
+          ? "Clear all notes for"
+          : "Force remove"
+    const view = modal(`${action} ${workspace.name}?`)
+    if (!view) { resolve(false); return }
+    if (descriptor.action_id === "workspace.remove") {
+      view.body.append(element("p", "lifecycle-warning", `Remove ${workspace.name} permanently. This cannot be undone.`))
+      const inventory = element("ul", "removal-inventory")
+      for (const item of ["Service-owned terminals", "Managed Git worktrees", "Workspace directory", "Workspace YAML definition"]) inventory.append(element("li", "", item))
+      view.body.append(inventory)
+    } else if (descriptor.action_id === "workspace.notes.clear") {
+      view.body.append(element("p", "lifecycle-warning", `Clear all notes for ${workspace.name}? This permanently removes the workspace note history.`))
+    } else {
+      view.body.append(element("p", "lifecycle-warning", `${action} ${workspace.name}? Review the authoritative workspace state before continuing.`))
+    }
+    const confirmation = exact ? element("input") : undefined
+    if (confirmation) {
+      confirmation.setAttribute("aria-label", `Type ${workspace.name} to confirm irreversible removal`)
+      confirmation.placeholder = workspace.name
+      view.body.append(confirmation)
+    }
+    const actions = element("div", "modal-actions")
+    const keep = button(descriptor.action_id === "workspace.notes.clear" ? "Keep notes" : exact ? "Back" : "Keep workspace")
+    const submit = button(
+      descriptor.action_id === "workspace.notes.clear" ? "Clear workspace notes" : `${action} workspace`,
+      descriptor.action_id === "workspace.remove" || exact || descriptor.action_id === "workspace.notes.clear" ? "button danger" : "button primary",
+    )
+    if (confirmation) {
+      submit.disabled = true
+      confirmation.addEventListener("input", () => { submit.disabled = confirmation.value !== workspace.name })
+    }
+    let settled = false
+    const finish = (accepted: boolean) => {
+      if (settled) return
+      settled = true
+      if (accepted && confirmation) confirmedForceNames.set(workspace.id, confirmation.value)
+      view.close()
+      resolve(accepted)
+    }
+    keep.addEventListener("click", () => finish(false))
+    submit.addEventListener("click", () => finish(!confirmation || confirmation.value === workspace.name))
+    actions.append(keep, submit)
+    view.body.append(actions)
+    keep.focus()
+  })
+}
+
+function workspaceActionCallbacks(workspace: Workspace): Record<WebWorkspaceActionId, WorkspaceActionCallback> {
+  const terminal = async (): Promise<{ kind: "terminal" }> => ({ kind: "terminal" })
+  const durable = (actionId: Exclude<WebWorkspaceActionId, "operation.cancel">, body: unknown) =>
+    submitDurableWorkspaceAction(actionId, workspace, body)
+  const workspaceMutation = (actionId: "workspace.open" | "workspace.close" | "workspace.sync" | "workspace.pull" | "workspace.push" | "workspace.merge") =>
+    durable(actionId, { kind: actionId, request: { workspace_id: workspace.id, expected_revision: snapshot.revision } })
+  return {
+    "workspace.archive": async () => { await archiveWorkspace(workspace); return terminal() },
+    "workspace.unarchive": async () => { await unarchiveWorkspace(lifecycleTarget(workspace)); return terminal() },
+    "workspace.remove": async () => {
+      const operation = await runWorkspaceLifecycle("workspace.remove", lifecycleTarget(workspace))
+      const details = operation?.state === "failed" ? operation.error?.lifecycle : undefined
+      if (details?.kind === "workspace_dirty" && details.terminals_stopped && details.force_allowed) {
+        const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
+        if (current) showDirtyRemovalFailure(current, details)
+      }
+      return terminal()
+    },
+    "workspace.force-remove": async () => {
+      const confirmation = confirmedForceNames.get(workspace.id)
+      confirmedForceNames.delete(workspace.id)
+      if (confirmation === workspace.name) await runWorkspaceLifecycle("workspace.force-remove", lifecycleTarget(workspace), confirmation)
+      return terminal()
+    },
+    "workspace.rename": async () => {
+      const nextName = prompt(`Rename ${workspace.name}`, workspace.name)?.trim()
+      if (!nextName || nextName === workspace.name) return terminal()
+      return durable("workspace.rename", { mutation: "workspace.rename", request: { workspace: workspace.name, new_name: nextName } })
+    },
+    "workspace.open": () => workspaceMutation("workspace.open"),
+    "workspace.close": () => workspaceMutation("workspace.close"),
+    "workspace.pin": async () => { await persistPins([...preferences.pins, workspace.id]); return terminal() },
+    "workspace.unpin": async () => { await persistPins([...preferences.pins].filter((id) => id !== workspace.id)); return terminal() },
+    "workspace.sync": () => workspaceMutation("workspace.sync"),
+    "workspace.pull": () => workspaceMutation("workspace.pull"),
+    "workspace.push": () => workspaceMutation("workspace.push"),
+    "workspace.merge": () => workspaceMutation("workspace.merge"),
+    "workspace.notes.list": async () => { await showWorkspaceNotes(workspace); return terminal() },
+    "workspace.notes.add": terminal,
+    "workspace.notes.clear": terminal,
+    "workspace.files.inspect": async () => { await showWorkspaceFileStatus(workspace); return terminal() },
+    "operation.cancel": async () => { await operationTracker.cancel(); renderOperationCards(); return terminal() },
+  }
+}
+
+function actionRegistryFor(workspace: Workspace) {
+  return createWorkspaceActionRegistry(workspaceActionInventory, workspaceActionCallbacks(workspace), {
+    confirm: confirmWorkspaceDescriptor,
+    localAvailability: (descriptor) => operationTracker.isLocked()
+      && descriptor.action_id !== "workspace.notes.list"
+      && descriptor.action_id !== "workspace.files.inspect"
+      && descriptor.action_id !== "operation.cancel"
+      ? { available: false, reason: "Another workspace action is still reconciling." }
+      : { available: true },
+  })
+}
+
+function invokeWorkspaceAction(workspace: Workspace, actionId: WebWorkspaceActionId): void {
+  const entry = actionRegistryFor(workspace).entry(actionId)
+  if (!entry) {
+    if (actionId === "workspace.remove") showRemoveConfirmation(workspace)
+    else toast("Workspace action is not loaded yet.", true)
+    return
+  }
+  void entry.pointer.callback().then((result) => {
+    if (result.status === "unavailable") toast(`${entry.label} unavailable — ${result.reason}`, true)
+    renderOperationCards()
+  }).catch(() => toast(`${entry.label} could not be submitted. Refresh before trying again.`, true))
+}
+
+function canonicalContextActions(workspace: Workspace): ContextAction[] {
+  return workspaceActionMenuRows(actionRegistryFor(workspace)).map((row) => ({
+    label: row.label,
+    group: row.group,
+    destructive: row.destructive,
+    disabledReason: row.disabledReason,
+    run: () => {
+      void row.callback().then((result) => {
+        if (result.status === "unavailable") toast(`${row.label} unavailable — ${result.reason}`, true)
+        renderOperationCards()
+      }).catch(() => toast(`${row.label} could not be submitted. Refresh before trying again.`, true))
+    },
+  }))
 }
 
 function attentionCount(workspaceId: string, repositoryId?: string, surfaceId?: string): number {
@@ -605,17 +964,6 @@ function reorderWorkspace(sourceId: string, targetId: string, after: boolean): v
   const targetIndex = order.findIndex(({ id }) => id === targetId)
   order.splice(targetIndex + Number(after), 0, source!)
   void persistPriorities(order.map((workspace, index) => ({ workspace_id: workspace.id, priority: order.length - index })))
-}
-function editWorkspacePriority(workspace: Workspace): void {
-  const value = prompt(`Priority for ${workspace.name} (higher sorts first; empty resets)`, workspace.priority === 0 ? "" : String(workspace.priority))
-  if (value === null) return
-  const trimmed = value.trim()
-  const priority = trimmed === "" ? 0 : Number(trimmed)
-  if (((trimmed !== "") && !/^-?\d+$/.test(trimmed)) || !Number.isInteger(priority) || priority < -2147483648 || priority > 2147483647) {
-    toast("Priority must be a signed 32-bit integer", true)
-    return
-  }
-  void persistPriorities([{ workspace_id: workspace.id, priority }])
 }
 type SidebarEntry = { workspace: Workspace; repository: Repository }
 type SidebarGroupKind = "pinned" | "active" | "label" | "repository"
@@ -709,21 +1057,13 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   row.addEventListener("click", () => selectPair({ workspaceId: workspace.id, repositoryId: repository.id }))
   row.addEventListener("contextmenu", (event) => {
     selectPair({ workspaceId: workspace.id, repositoryId: repository.id })
-    showContextMenu(event, [
-      { label: pinned ? "Unpin workspace" : "Pin workspace", run: () => void persistPins(pinned ? [...preferences.pins].filter((id) => id !== workspace.id) : [...preferences.pins, workspace.id]) },
-      { label: "Set priority…", run: () => editWorkspacePriority(workspace) },
-      { label: "New shell", run: () => void createTerminal() },
-      { label: "Run configured command…", run: showLauncher },
-      { label: "Open workspace", run: () => void workspaceOperation("workspace.open", workspace) },
-      { label: "Close workspace", run: () => void workspaceOperation("workspace.close", workspace), destructive: true },
-      { label: "Archive", run: () => workspaceLifecycleActionRegistry.archive(workspace) },
-      { label: "Remove…", run: () => workspaceLifecycleActionRegistry.remove(workspace), destructive: true },
-    ])
+    const canonical = canonicalContextActions(workspace)
+    showContextMenu(event, canonical.length ? canonical : [{ label: "Workspace actions", disabledReason: "Actions are still loading.", run: () => undefined }])
   })
   const pin = button(pinned ? "★" : "☆", `pin-button${pinned ? " pin" : ""}`)
   pin.setAttribute("aria-label", `${pinned ? "Unpin" : "Pin"} workspace ${workspace.name}`)
   pin.addEventListener("click", () => {
-    void persistPins(pinned ? [...preferences.pins].filter((id) => id !== workspace.id) : [...preferences.pins, workspace.id])
+    invokeWorkspaceAction(workspace, pinned ? "workspace.unpin" : "workspace.pin")
   })
   container.append(row, pin); item.append(container)
   return item
@@ -770,25 +1110,43 @@ function renderScope(): void {
   else title.textContent = "Select a repository"
   scope.append(title)
   if (workspace && repository) {
+    void loadWorkspaceActions(workspace)
     const shell = button("New shell", "button primary")
     shell.addEventListener("click", () => void createTerminal())
     const actions = element("div", "scope-actions")
-    const toggle = button("•••", "button icon")
+    const toggle = button("Workspace actions", "button workspace-actions-toggle")
     toggle.setAttribute("aria-label", "Workspace actions")
+    toggle.setAttribute("aria-haspopup", "menu")
     toggle.setAttribute("aria-expanded", "false")
     const menu = element("div", "scope-menu")
+    menu.setAttribute("role", "menu")
     menu.hidden = true
-    const menuAction = (label: string, action: () => void) => {
-      const control = button(label, "scope-menu-item")
-      control.addEventListener("click", () => { menu.hidden = true; toggle.setAttribute("aria-expanded", "false"); action() })
+    const rows = canonicalContextActions(workspace)
+    let group = ""
+    for (const row of rows) {
+      if (row.group && row.group !== group) {
+        group = row.group
+        menu.append(element("div", "scope-menu-group", group))
+      }
+      const control = button(row.label, `scope-menu-item${row.destructive ? " destructive" : ""}`)
+      control.setAttribute("role", "menuitem")
+      control.setAttribute("aria-disabled", String(Boolean(row.disabledReason)))
+      control.tabIndex = 0
+      if (row.disabledReason) control.append(element("span", "scope-menu-reason", row.disabledReason))
+      control.addEventListener("click", () => {
+        if (row.disabledReason) { toast(`${row.label} unavailable — ${row.disabledReason}`, true); return }
+        menu.hidden = true
+        toggle.setAttribute("aria-expanded", "false")
+        row.run()
+      })
       menu.append(control)
     }
-    menuAction("Copy terminal selection", () => { if (activeTerminalId) terminalViews.get(activeTerminalId)?.copySelection() })
-    menuAction("Open workspace", () => void workspaceOperation("workspace.open", workspace))
-    menuAction("Close workspace", () => void workspaceOperation("workspace.close", workspace))
-    menuAction("Archive", () => workspaceLifecycleActionRegistry.archive(workspace))
-    menuAction("Remove…", () => workspaceLifecycleActionRegistry.remove(workspace))
-    toggle.addEventListener("click", () => { menu.hidden = !menu.hidden; toggle.setAttribute("aria-expanded", String(!menu.hidden)) })
+    if (!rows.length) menu.append(element("div", "scope-menu-empty", "Workspace actions are loading…"))
+    toggle.addEventListener("click", () => {
+      menu.hidden = !menu.hidden
+      toggle.setAttribute("aria-expanded", String(!menu.hidden))
+      if (!menu.hidden) menu.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus()
+    })
     actions.append(toggle, menu)
     scope.append(shell, actions)
   }
@@ -945,7 +1303,7 @@ function renderSignals(): void {
 }
 function connectionSummary(): string { return `${snapshot.workspaces.length} workspaces · revision ${snapshot.revision} · ${terminalViews.size} browser terminals` }
 function renderAll(): void {
-  renderNav(); renderScope(); renderSignals(); statusNode.textContent = connectionSummary()
+  renderNav(); renderScope(); renderSignals(); renderOperationCards(); statusNode.textContent = connectionSummary()
   document.querySelector("#next-attention")?.classList.toggle("attention", hasResolvableAttention())
   for (const [selector, actionId] of [["#next-attention", "attention.next"], ["#launcher", "commands.open"], ["#create", "workspace.new"]] as const) {
     const control = document.querySelector<HTMLButtonElement>(selector)
@@ -974,12 +1332,6 @@ async function createTerminal(commandId?: string): Promise<boolean> {
     terminalViews.get(meta.id)?.focusInput()
     return true
   } catch (error) { toast(String(error), true); return false }
-}
-async function workspaceOperation(kind: "workspace.open" | "workspace.close", workspace: Workspace): Promise<void> {
-  try {
-    const operation = await api<{ operation_id: string; state: string }>("operation.submit", { kind, request: { workspace_id: workspace.id, expected_revision: snapshot.revision } }, { scope: "operation.write", idempotencyKey: `${kind}-${workspace.id}-${crypto.randomUUID()}` })
-    toast(`${kind === "workspace.open" ? "Opening" : "Closing"} ${workspace.name} · ${operation.state}`)
-  } catch (error) { toast(String(error), true) }
 }
 async function dismissSignal(id: string): Promise<void> {
   try { await api("signals.dismiss", { signal_id: id }, { scope: "signal.dismiss" }); await refreshSignals() } catch (error) { toast(String(error), true) }
@@ -1333,6 +1685,57 @@ function showShortcutSettings(): void {
   })
 }
 
+async function showWorkspaceNotes(workspace: Workspace): Promise<void> {
+  const view = modal(`Workspace notes — ${workspace.name}`)
+  if (!view) return
+  const content = element("div", "workspace-notes")
+  content.append(element("div", "detail-loading", "Loading workspace notes…"))
+  view.body.append(content)
+  try {
+    const notes = await api<WebNotesResponse>("workspace.notes.list", {
+      workspace_id: workspace.id,
+      expected_revision: snapshot.revision,
+    }, { scope: "snapshot.read" })
+    content.replaceChildren()
+    if (!notes.records.length) content.append(element("strong", "", "No workspace notes"), element("p", "", "Add an operator note to keep workspace context here."))
+    else for (const record of notes.records) {
+      const item = element("article", "workspace-note")
+      item.append(element("time", "", relativeTime(record.created_at) || record.created_at), element("p", "", record.text))
+      content.append(item)
+    }
+  } catch {
+    content.replaceChildren(element("div", "detail-error", "Workspace notes could not be loaded. Retry without changing stored notes."))
+  }
+}
+
+async function showWorkspaceFileStatus(workspace: Workspace): Promise<void> {
+  const view = modal(`Workspace file status — ${workspace.name}`)
+  if (!view) return
+  const content = element("div", "workspace-file-status")
+  content.append(element("div", "detail-loading", "Loading workspace file status…"))
+  view.body.append(content)
+  try {
+    const status = await api<WebFileStatusResponse>("workspace.files.inspect", {
+      workspace_id: workspace.id,
+      expected_revision: snapshot.revision,
+    }, { scope: "snapshot.read" })
+    content.replaceChildren()
+    if (!status.groups.length) content.append(element("strong", "", "No configured workspace files"), element("p", "", "This workspace has no configured copy, symlink, or sync targets."))
+    else for (const group of status.groups) {
+      const section = element("section", "file-status-group")
+      section.append(element("strong", "", `${group.name} · ${group.summary.attention} need attention`))
+      for (const entry of group.entries) {
+        const row = element("div", `file-status-entry ${entry.severity}`)
+        row.append(element("span", "file-target", entry.target), element("span", "file-state", `${entry.type} · ${entry.state}`), element("span", "file-message", entry.message))
+        section.append(row)
+      }
+      content.append(section)
+    }
+  } catch {
+    content.replaceChildren(element("div", "detail-error", "Workspace file status could not be loaded. Retry the service check."))
+  }
+}
+
 async function showCreation(): Promise<void> {
   const view = modal("Create workspace")
   if (!view) return
@@ -1376,6 +1779,10 @@ async function refreshSnapshot(): Promise<void> {
   const refreshed = await api<Snapshot>("web.snapshot", undefined, { scope: "snapshot.read" })
   if (generation !== snapshotRefreshGeneration) return
   snapshot = refreshed
+  if (workspaceActionInventoryKey !== `${selectedPair?.workspaceId ?? ""}:${snapshot.revision}`) {
+    workspaceActionInventory = []
+    workspaceActionInventoryKey = ""
+  }
   preferences.pins = new Set(snapshot.pinned_workspace_ids)
   let preferencesChanged = false
   if (selectedPair && !snapshot.workspaces.some((workspace) => workspace.id === selectedPair?.workspaceId && workspace.repositories.some((repository) => repository.id === selectedPair?.repositoryId))) selectedPair = undefined
@@ -1445,6 +1852,12 @@ function connectEvents(): void {
     else if (data.type === "signal") void refreshSignals()
     else if (data.type === "operation" && data.operation) {
       const operation = data.operation
+      if (operationContexts.has(operation.operation_id)) {
+        void observeTrackedOperation(operation.operation_id).catch(() => {
+          toast("Operation status could not be refreshed. Reconnect before repeating the action.", true)
+        })
+        return
+      }
       if (pendingLifecycleOperations.has(operation.operation_id)) {
         if (operation.progress?.message) statusNode.textContent = operation.progress.message
         return
@@ -1506,7 +1919,12 @@ window.addEventListener("blur", hideContextMenu)
 window.addEventListener("resize", hideContextMenu)
 document.addEventListener("scroll", hideContextMenu, true)
 document.addEventListener("visibilitychange", () => terminalViews.forEach((view) => view.syncStreaming()))
-window.addEventListener("online", () => { statusNode.textContent = "Back online · reconnecting terminals" })
+window.addEventListener("online", () => {
+  statusNode.textContent = "Back online · reconnecting terminals"
+  void operationTracker.reconnect().then(() => renderOperationCards()).catch(() => {
+    toast("The known workspace operation could not be reconnected yet.", true)
+  })
+})
 window.addEventListener("offline", () => { statusNode.textContent = "Offline · local terminal sessions remain in the service" })
 
 void (async () => {
