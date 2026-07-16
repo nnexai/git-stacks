@@ -1,6 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
 import { existsSync } from "fs"
+import {
+  WEB_WORKSPACE_ACTION_IDS,
+  type WebWorkspaceAction,
+  type WebWorkspaceActionDisabledReason,
+  type WebWorkspaceActionId,
+} from "@git-stacks/protocol"
 import { makeDashboardCoreState, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
@@ -12,6 +18,64 @@ process.env.GIT_STACKS_CONFIG_DIR = configDir
 
 // Workspace YAML path (for D-18 side-effect assertion)
 const wsYamlPath = `${configDir}/workspaces/test-ws.yml`
+const workspaceId = "00000000-0000-4000-8000-000000000001"
+
+type UnavailableAction = {
+  reason: WebWorkspaceActionDisabledReason
+  message: string
+}
+
+function canonicalActionInventory(
+  id: string,
+  unavailable: Partial<Record<WebWorkspaceActionId, UnavailableAction>>,
+): WebWorkspaceAction[] {
+  return WEB_WORKSPACE_ACTION_IDS
+    .filter((actionId) => actionId !== "operation.cancel")
+    .map((action_id): WebWorkspaceAction => {
+      const disabled = unavailable[action_id]
+      return {
+        action_id,
+        subject: { kind: "workspace", workspace_id: id },
+        availability: disabled ? { available: false, ...disabled } : { available: true },
+        confirmation: action_id === "workspace.force-remove"
+          ? "exact-name"
+          : action_id === "workspace.remove" || action_id === "workspace.merge" || action_id === "workspace.notes.clear"
+            ? "confirm"
+            : "none",
+      }
+    })
+}
+
+const workspaceActionInventory = canonicalActionInventory(workspaceId, {
+  "workspace.unarchive": {
+    reason: "workspace_active",
+    message: "This action does not apply to the active workspace state.",
+  },
+  "workspace.force-remove": {
+    reason: "dirty_worktree",
+    message: "Force Remove requires a fresh dirty-worktree check.",
+  },
+  "workspace.unpin": {
+    reason: "workspace_active",
+    message: "This action does not apply to the active workspace state.",
+  },
+  "workspace.sync": {
+    reason: "remote_unavailable",
+    message: "No repository remote is available for this action.",
+  },
+  "workspace.pull": {
+    reason: "remote_unavailable",
+    message: "No repository remote is available for this action.",
+  },
+  "workspace.push": {
+    reason: "remote_unavailable",
+    message: "No repository remote is available for this action.",
+  },
+  "workspace.merge": {
+    reason: "merge_unavailable",
+    message: "No eligible clean worktree is available to merge.",
+  },
+})
 
 // Inline workspace fixture
 const wsFixture = {
@@ -206,7 +270,7 @@ mock.module("@git-stacks/service/client", () => ({
 
 mock.module("../../../packages/tui/src/official-service", () => ({
   officialService: {
-    fetchWorkspaceActionInventory: mock(async () => { throw new Error("unused") }),
+    fetchWorkspaceActionInventory: mock(async () => workspaceActionInventory),
     runWorkspaceLifecycleMutation: workspaceLifecycleMutationMock,
   },
 }))
@@ -276,10 +340,10 @@ describe("integration: action menu dispatch", () => {
     mockInput.pressEnter()
     await renderOnce()
     const frame = captureCharFrame()
-    // Action menu should show all workspace actions
-    expect(frame).toContain("Open")
-    expect(frame).toContain("Rename")
-    expect(frame).toContain("Remove")
+    // The authoritative inventory and adapted local rows render together.
+    expect(frame).toContain("Sync workspace")
+    expect(frame).toContain("View notes")
+    expect(frame).toContain("Archive workspace")
   })
 
   test("selecting Remove confirms through the lifecycle service and deletes workspace YAML", async () => {
@@ -326,10 +390,10 @@ describe("integration: action menu dispatch", () => {
     // Open action menu
     mockInput.pressEnter()
     await renderOnce()
-    // Verify action menu is visible
+    // Verify the canonical action menu is visible
     let frame = captureCharFrame()
-    expect(frame).toContain("Open")
-    expect(frame).toContain("Sync")
+    expect(frame).toContain("Sync workspace")
+    expect(frame).toContain("Archive workspace")
 
     // Escape from action menu
     mockInput.pressEscape()
@@ -338,7 +402,7 @@ describe("integration: action menu dispatch", () => {
     // Workspace list should be visible after escape
     expect(frame).toContain("test-ws")
     // The action menu ">" cursor indicator should be gone
-    expect(frame).not.toContain("> [o] Open")
+    expect(frame).not.toContain("> [a] Archive workspace")
   })
 
   test("repo edit opens registry YAML and returns to repos list without remove confirmation", async () => {

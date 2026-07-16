@@ -1,5 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import {
+  WEB_WORKSPACE_ACTION_IDS,
+  type WebWorkspaceAction,
+  type WebWorkspaceActionDisabledReason,
+  type WebWorkspaceActionId,
+} from "@git-stacks/protocol"
 
 import {
   cleanup,
@@ -31,6 +37,32 @@ const UUIDS = {
   other: "00000000-0000-4000-8000-000000000003",
   archived: "00000000-0000-4000-8000-000000000004",
 } as const
+
+type UnavailableAction = {
+  reason: WebWorkspaceActionDisabledReason
+  message: string
+}
+
+function canonicalActionInventory(
+  id: string,
+  unavailable: Partial<Record<WebWorkspaceActionId, UnavailableAction>>,
+): WebWorkspaceAction[] {
+  return WEB_WORKSPACE_ACTION_IDS
+    .filter((actionId) => actionId !== "operation.cancel")
+    .map((action_id): WebWorkspaceAction => {
+      const disabled = unavailable[action_id]
+      return {
+        action_id,
+        subject: { kind: "workspace", workspace_id: id },
+        availability: disabled ? { available: false, ...disabled } : { available: true },
+        confirmation: action_id === "workspace.force-remove"
+          ? "exact-name"
+          : action_id === "workspace.remove" || action_id === "workspace.merge" || action_id === "workspace.notes.clear"
+            ? "confirm"
+            : "none",
+      }
+    })
+}
 
 function workspace(input: {
   id: string
@@ -86,6 +118,41 @@ let currentState = coreState([
 let reloadedState = currentState
 let lifecycleScenario: "success" | "dirty" | "stale" | "terminal-failure" = "success"
 let callOrder: string[] = []
+
+function lifecycleActionInventory(workspaceId: string): WebWorkspaceAction[] {
+  const active = currentState.workspaces.find((entry: any) => entry.definition.id === workspaceId)
+  const archived = currentState.archived_workspaces?.some((entry: ArchivedSummary) => entry.id === workspaceId)
+  const unavailable: Partial<Record<WebWorkspaceActionId, UnavailableAction>> = {}
+  const disable = (actionId: WebWorkspaceActionId, reason: WebWorkspaceActionDisabledReason, message: string) => {
+    unavailable[actionId] = { reason, message }
+  }
+
+  if (!active && !archived) {
+    for (const actionId of WEB_WORKSPACE_ACTION_IDS) {
+      if (actionId !== "operation.cancel") disable(actionId, "workspace_unavailable", "Workspace is no longer available.")
+    }
+    return canonicalActionInventory(workspaceId, unavailable)
+  }
+  if (archived) {
+    for (const actionId of WEB_WORKSPACE_ACTION_IDS) {
+      if (actionId !== "operation.cancel" && actionId !== "workspace.unarchive") {
+        disable(actionId, "workspace_archived", "Archived workspaces can only be unarchived.")
+      }
+    }
+    return canonicalActionInventory(workspaceId, unavailable)
+  }
+
+  disable("workspace.unarchive", "workspace_active", "This action does not apply to the active workspace state.")
+  disable("workspace.force-remove", "dirty_worktree", "Force Remove requires a fresh dirty-worktree check.")
+  if (active.definition.pinned === true) {
+    disable("workspace.pin", "workspace_active", "This action does not apply to the active workspace state.")
+  } else {
+    disable("workspace.unpin", "workspace_active", "This action does not apply to the active workspace state.")
+  }
+  disable("workspace.pull", "nothing_to_pull", "All repositories are up to date with their remotes.")
+  disable("workspace.push", "nothing_to_push", "No repository commits are waiting to be pushed.")
+  return canonicalActionInventory(workspaceId, unavailable)
+}
 
 const fetchCoreStateMock = mock(async () => {
   callOrder.push(`reload:${reloadedState.revision}`)
@@ -229,7 +296,10 @@ mock.module("@git-stacks/service/client", () => ({
 }))
 
 mock.module("../../../packages/tui/src/official-service", () => ({
-  officialService: { runWorkspaceLifecycleMutation: lifecycleMutationMock },
+  officialService: {
+    fetchWorkspaceActionInventory: mock(async (request: { workspace_id: string }) => lifecycleActionInventory(request.workspace_id)),
+    runWorkspaceLifecycleMutation: lifecycleMutationMock,
+  },
 }))
 
 const { testRender } = await import("@opentui/solid")

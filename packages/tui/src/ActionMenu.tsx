@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
-import { For, createSignal } from "solid-js"
+import { For, Match, Switch, createSignal } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { WebWorkspaceAction, WebWorkspaceActionId } from "@git-stacks/protocol"
 import type { Action } from "./types"
@@ -199,18 +199,25 @@ function LegacyActionMenu(props: Props) {
   )
 }
 
+function ReadyActionMenu(props: Props) {
+  if (!props.descriptors || !props.onInvoke) {
+    return <InventoryUnavailableMenu workspaceName={props.workspaceName} inventoryState="error" inventoryError="Workspace actions could not be loaded." onCancel={props.onCancel} />
+  }
+  return <CanonicalActionMenu {...props} descriptors={props.descriptors} onInvoke={props.onInvoke} />
+}
+
 export function ActionMenu(props: Props) {
-  if (props.inventoryState === "loading" || props.inventoryState === "error") {
-    return <InventoryUnavailableMenu workspaceName={props.workspaceName} inventoryState={props.inventoryState} inventoryError={props.inventoryError} onCancel={props.onCancel} />
-  }
-  if (props.inventoryState === "ready") {
-    if (!props.descriptors || !props.onInvoke) {
-      return <InventoryUnavailableMenu workspaceName={props.workspaceName} inventoryState="error" inventoryError="Workspace actions could not be loaded." onCancel={props.onCancel} />
-    }
-    return <CanonicalActionMenu {...props} descriptors={props.descriptors} onInvoke={props.onInvoke} />
-  }
-  if (props.descriptors && props.onInvoke) {
-    return <CanonicalActionMenu {...props} descriptors={props.descriptors} onInvoke={props.onInvoke} />
-  }
-  return <LegacyActionMenu {...props} />
+  return (
+    <Switch fallback={<LegacyActionMenu {...props} />}>
+      <Match when={props.inventoryState === "loading" || props.inventoryState === "error"}>
+        <InventoryUnavailableMenu workspaceName={props.workspaceName} inventoryState={props.inventoryState} inventoryError={props.inventoryError} onCancel={props.onCancel} />
+      </Match>
+      <Match when={props.inventoryState === "ready"}>
+        <ReadyActionMenu {...props} />
+      </Match>
+      <Match when={props.descriptors && props.onInvoke}>
+        <ReadyActionMenu {...props} />
+      </Match>
+    </Switch>
+  )
 }

@@ -1,5 +1,13 @@
 /** @jsxImportSource @opentui/solid */
-import { describe, test, expect, mock, afterAll } from "bun:test"
+import { describe, test, expect, mock, afterAll, beforeEach } from "bun:test"
+import {
+  WEB_WORKSPACE_ACTION_IDS,
+  type WebOperation,
+  type WebOperationMutation,
+  type WebWorkspaceAction,
+  type WebWorkspaceActionDisabledReason,
+  type WebWorkspaceActionId,
+} from "@git-stacks/protocol"
 import { makeConfigMock, makeDashboardCoreState, makeLifecycleMock, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — MUST be set before any import that touches paths.ts
@@ -7,6 +15,66 @@ import { makeConfigMock, makeDashboardCoreState, makeLifecycleMock, makeTmpDir, 
 // before App.tsx and its transitive imports are loaded.
 const configDir = makeTmpDir("integ-sync-progress")
 process.env.GIT_STACKS_CONFIG_DIR = configDir
+const syncWorkspaceId = "00000000-0000-4000-8000-000000000001"
+
+type UnavailableAction = {
+  reason: WebWorkspaceActionDisabledReason
+  message: string
+}
+
+function canonicalActionInventory(
+  id: string,
+  unavailable: Partial<Record<WebWorkspaceActionId, UnavailableAction>>,
+): WebWorkspaceAction[] {
+  return WEB_WORKSPACE_ACTION_IDS
+    .filter((actionId) => actionId !== "operation.cancel")
+    .map((action_id): WebWorkspaceAction => {
+      const disabled = unavailable[action_id]
+      return {
+        action_id,
+        subject: { kind: "workspace", workspace_id: id },
+        availability: disabled ? { available: false, ...disabled } : { available: true },
+        confirmation: action_id === "workspace.force-remove"
+          ? "exact-name"
+          : action_id === "workspace.remove" || action_id === "workspace.merge" || action_id === "workspace.notes.clear"
+            ? "confirm"
+            : "none",
+      }
+    })
+}
+
+const syncActionInventory = canonicalActionInventory(syncWorkspaceId, {
+  "workspace.unarchive": {
+    reason: "workspace_active",
+    message: "This action does not apply to the active workspace state.",
+  },
+  "workspace.force-remove": {
+    reason: "dirty_worktree",
+    message: "Force Remove requires a fresh dirty-worktree check.",
+  },
+  "workspace.unpin": {
+    reason: "workspace_active",
+    message: "This action does not apply to the active workspace state.",
+  },
+  "workspace.pull": {
+    reason: "nothing_to_pull",
+    message: "All repositories are up to date with their remotes.",
+  },
+  "workspace.push": {
+    reason: "nothing_to_push",
+    message: "No repository commits are waiting to be pushed.",
+  },
+})
+
+const completedSyncOperation: WebOperation = {
+  operation_id: "op_1234567890123456",
+  state: "succeeded",
+  accepted_at: "2026-07-14T00:00:00.000Z",
+  started_at: "2026-07-14T00:00:00.000Z",
+  finished_at: "2026-07-14T00:00:01.000Z",
+  result: { snapshot_changed: true, revision: "2" },
+}
+const submitWebOperationMock = mock(async (_mutation: WebOperationMutation) => completedSyncOperation)
 
 // Seed YAML fixtures before App is imported (Pitfall 4: hooks load data at mount time)
 write(configDir, "config.yml", "workspace_root: /tmp/integ-sync-root\n")
@@ -165,7 +233,16 @@ mock.module("@git-stacks/service/client", () => ({
 }))
 
 mock.module("../../../packages/tui/src/official-service", () => ({
-  officialService: { fetchWorkspaceActionInventory: mock(async () => { throw new Error("unused") }) },
+  officialService: {
+    fetchWorkspaceActionInventory: mock(async () => syncActionInventory),
+    submitWebOperation: submitWebOperationMock,
+    fetchWebOperation: mock(async () => completedSyncOperation),
+    cancelWebOperation: mock(async () => ({
+      operation_id: completedSyncOperation.operation_id,
+      outcome: "already-finished" as const,
+      operation_state: "succeeded" as const,
+    })),
+  },
 }))
 
 // Dynamic imports happen AFTER env is set and mocks are registered
@@ -175,6 +252,10 @@ const { setCoreStateFactoryForTests } = await import("../../../packages/tui/src/
 setCoreStateFactoryForTests(() => makeDashboardCoreState([syncWsFixture as any], [], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }
+
+beforeEach(() => {
+  submitWebOperationMock.mockClear()
+})
 
 afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })
 
@@ -196,60 +277,44 @@ describe("integration: sync progress flow", () => {
     expect(frame).toContain("Sync")
   })
 
-  test("selecting Sync shows confirm dialog", async () => {
+  test("selecting Sync submits the canonical operation without a legacy confirmation", async () => {
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <App />,
       renderOpts
     )
     await renderOnce()
 
-    // Open ActionMenu on first (only) workspace
     mockInput.pressEnter()
     await renderOnce()
-
-    // Press "s" to select Sync action (ActionMenu key for sync is "s")
     mockInput.pressKey("s")
+    await Bun.sleep(20)
     await renderOnce()
 
-    const frame = captureCharFrame()
-    // ConfirmDialog should be rendered with sync message
-    // App.tsx confirm label for sync: "Sync 'sync-ws'? (rebase from upstream)"
-    expect(frame).toContain("sync-ws")
-    // ConfirmDialog renders "[y] Yes  [n/Esc] No"
-    expect(frame).toContain("[y]")
+    expect(submitWebOperationMock).toHaveBeenCalledTimes(1)
+    expect(submitWebOperationMock).toHaveBeenCalledWith({
+      kind: "workspace.sync",
+      request: { workspace_id: syncWorkspaceId, expected_revision: "1" },
+    })
+    expect(captureCharFrame()).not.toContain("[y]")
   })
 
-  test("confirming sync shows progress then returns to list", async () => {
+  test("completed canonical Sync remains visible until Back returns to the list", async () => {
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <App />,
       renderOpts
     )
     await renderOnce()
 
-    // Open ActionMenu and select Sync
     mockInput.pressEnter()
     await renderOnce()
     mockInput.pressKey("s")
+    await Bun.sleep(20)
     await renderOnce()
 
-    // Confirm the sync with "y"
-    mockInput.pressKey("y")
+    expect(captureCharFrame()).toContain("Sync workspace completed.")
+    mockInput.pressEnter()
     await renderOnce()
-
-    // After confirming: executeSync is called which:
-    // 1. Sets view to "sync-progress"
-    // 2. Calls syncWorkspace (which is mocked and resolves synchronously)
-    // 3. Sets syncDone = true
-    // The sync-progress view shows rows from the progress updates.
-    // Since the mock resolves synchronously, syncDone may already be true.
-    const frame = captureCharFrame()
-
-    // The frame should contain sync-related content (progress rows or list with sync-ws)
-    const hasSyncContent = (
-      frame.includes("sync-repo") ||
-      frame.includes("sync-ws") ||
-      frame.includes("Syncing")
-    )
-    expect(hasSyncContent).toBe(true)
+    expect(captureCharFrame()).toContain("sync-ws")
+    expect(captureCharFrame()).not.toContain("Workspace operation")
   })
 })
