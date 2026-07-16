@@ -10,6 +10,7 @@ provides:
   - Strict scoped action, note, file-status, operation, and forge-source routes with allowlist-only projections
   - Principal/revision/source/body/idempotency-bound 256-bit expiring review-token authority
   - Submit-time catalog/provider revalidation, full-SHA verification, normal workspace creation, and private-ref cleanup
+  - Startup recovery for interrupted reviewed-source refs before the service accepts new work
 affects: [126-05, 126-06, 126-07, 126-08, 127-live-web-tui-uat]
 tech-stack:
   added: []
@@ -32,6 +33,7 @@ key-decisions:
 patterns-established:
   - "Provider and system failures cross the client boundary only as fixed typed code, recovery, and message tuples."
   - "Reviewed source authority rechecks current catalog and provider identity, then delegates SHA verification and creation to existing core seams."
+  - "Startup GC is restricted to the constant refs/git-stacks/review/ namespace and fails service startup safely if cleanup cannot complete."
 requirements-completed: [PARITY-01, PARITY-02, PARITY-03, PARITY-04, SOURCE-01, SOURCE-02, SOURCE-03, SOURCE-04]
 coverage:
   - id: D1
@@ -119,7 +121,7 @@ status: complete
 - **Started:** 2026-07-16T19:59:17+02:00
 - **Completed:** 2026-07-16T20:20:46+02:00
 - **Tasks:** 3
-- **Files modified:** 16 in the independent review repair, in addition to the original Plan 04 implementation
+- **Files modified:** 21 in the independent review repairs, in addition to the original Plan 04 implementation
 
 ## Accomplishments
 
@@ -127,6 +129,7 @@ status: complete
 - Added an in-memory 256-bit opaque review-token authority with bounded TTL, principal/canonical-source/revision/body/idempotency binding, atomic competing-submit rejection, and restart-safe invalidation.
 - Revalidated current template/repository membership and provider identity, verified the fetched private ref against the immutable full head SHA, then invoked normal workspace creation with idempotent cleanup on all exits.
 - Closed the independent security review by blocking raw browser snapshots, deferring Git refs until durable registration, enforcing HTTPS/validated SSH fetches, preserving strict forge recovery details, and making correctable review retries safe.
+- Closed the residual restart window by settling interrupted operations first, then garbage-collecting only reviewed-source private refs across authoritative Git repositories before the service starts accepting work.
 
 ## Task Commits
 
@@ -136,6 +139,8 @@ status: complete
 4. **Independent review: adversarial security/regression coverage** - `fbf7ce44` (RED)
 5. **Independent review: authority, transport, operation, and cleanup repairs** - `9d1358a9` (GREEN)
 6. **Independent review: authoritative CLI provider fixtures** - `a50f2cb1` (regression repair)
+7. **Residual review: restart cleanup and runtime retry coverage** - `97a59f2c` (RED)
+8. **Residual review: reviewed-ref recovery and exact runtime binding release** - `aa5eedd7` (GREEN)
 
 ## Files Created/Modified
 
@@ -146,8 +151,10 @@ status: complete
 - `tests/service/forge-source-review.test.ts` - Entropy, expiry, replay, revision, atomic reservation, provider movement, SHA-preparation failure, creation, and cleanup coverage.
 - `tests/service/web-safe-detail.test.ts` - POSIX/Windows path, credential, clone/fetch, argv/output, environment, and raw-error canary coverage.
 - `tests/service/web-workflow-authority.test.ts` - Route scope, strict-body, ownership, notes/file lookup, cancellation, principal binding, and reviewed registration coverage.
-- `packages/protocol/src/secure.ts`, `packages/protocol/src/web.ts`, and `packages/service/src/security/session-authority.ts` - Strict union of shortcut and forge transport recovery details.
+- `packages/protocol/src/secure.ts`, `packages/protocol/src/web.ts`, and `packages/service/src/security/session-authority.ts` - Strict union of shortcut and forge transport recovery details, including durable browser operation summaries.
 - `packages/core/src/workspace-source.ts` - HTTPS/validated-SSH fetch admission and retry-safe private-ref deletion.
+- `packages/core/src/git.ts` - Checked ref deletion and fixed-error ref enumeration for the reserved reviewed-source namespace.
+- `packages/service/src/policy/reviewed-source-recovery.ts` - Startup recovery sequencing, authoritative repository deduplication, and fixed-safe cleanup failure handling.
 - `packages/service/src/policy/operations.ts` - Allowlisted forge recovery preservation on durable terminal failures.
 - `tests/commands/workspace-source*.test.ts` and `tests/helpers.ts` - Injected authoritative GitLab provider metadata for CLI regressions without real hosted calls or synthetic resolver fallback.
 
@@ -166,6 +173,9 @@ status: complete
 5. `branch_conflict` and `repo_not_matched` pre-commit failures release the exact atomic body binding so an edited draft may retry; source movement, accepted operations, and other unsafe paths remain consumed.
 6. Secure responses and durable operation failures preserve only strict allowlisted forge reason/recovery/context schemas; arbitrary details are discarded.
 7. `operation.get` now uses the strict operation-ID request schema, rejecting malformed and extra fields before registry lookup.
+8. Startup recovery marks interrupted operations failed before enumerating authoritative Git repositories, skips directory-only entries, and deletes only refs under the constant `refs/git-stacks/review/` prefix. Listing or deletion failure prevents runtime startup with a fixed safe error.
+9. An execution-time `branch_conflict` keeps its exact token/body/admission binding until private-ref cleanup succeeds. Once cleanup completes, only that matching binding is released so an edited draft can retry; cleanup failure keeps the retry blocked, while `source_changed` and other unsafe paths remain consumed.
+10. Durable browser operation summaries retain the same strict typed forge reason/recovery/context detail as direct failures, allowing later clients to offer `change_branch` after an accepted operation fails without exposing arbitrary fields.
 
 ## Deviations from Plan
 
@@ -190,7 +200,7 @@ None - existing provider CLI authentication and configured forge metadata remain
 
 ## Self-Check: PASSED
 
-- Plan 04 plus source/resolver/operation/protocol/session/router regression matrix passed: 16 files, 157 tests.
+- Plan 04 plus source/resolver/operation/protocol/session/router/restart regression matrix passed: 18 files, 175 tests.
 - Full Node architecture/conformance/secure-runtime matrix passed: 46 tests.
 - Core, protocol, and service typechecks passed; package architecture/dependency cycles passed.
 - Full package build and `git diff --check` passed.
