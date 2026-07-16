@@ -6,6 +6,8 @@ import type { WebOperationSummary, WebWorkspaceAction } from "@git-stacks/protoc
 
 import { ActionMenu } from "../../../packages/tui/src/ActionMenu"
 import { WorkspaceOperationView } from "../../../packages/tui/src/WorkspaceOperationView"
+import { WorkspaceNotesDialog } from "../../../packages/tui/src/WorkspaceNotesDialog"
+import { WorkspaceFileStatusDialog } from "../../../packages/tui/src/WorkspaceFileStatusDialog"
 
 const renderOptions = { width: 92, height: 30, kittyKeyboard: true }
 const workspaceId = "00000000-0000-4000-8000-000000000126"
@@ -175,5 +177,116 @@ describe("OpenTUI workspace parity", () => {
     mockInput.pressKey("r")
     await renderOnce()
     expect(reconnects).toBe(1)
+  })
+})
+
+describe("OpenTUI authoritative workspace details", () => {
+  test("notes retain a stable empty frame and validate note input before transport", async () => {
+    let adds = 0
+    const response = {
+      workspace_id: workspaceId,
+      revision: "7",
+      notes_revision: "notes-7",
+      count: 0,
+      records: [],
+    }
+    const { renderOnce, captureCharFrame, mockInput } = await testRender(
+      () => <WorkspaceNotesDialog workspaceName="parity-ws" response={response} onAdd={() => { adds += 1 }} onClear={() => {}} onRetry={() => {}} onBack={() => {}} />,
+      renderOptions,
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("No workspace notes")
+    expect(captureCharFrame()).toContain("Add an operator note")
+    mockInput.pressKey("a")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Workspace notes cannot be blank")
+    expect(adds).toBe(0)
+  })
+
+  test("notes show authoritative newest-first count and confirm clear safely", async () => {
+    let clears = 0
+    const response = {
+      workspace_id: workspaceId,
+      revision: "7",
+      notes_revision: "notes-7",
+      count: 2,
+      records: [
+        { text: "Newest operator context", created_at: "2026-07-16T12:00:00.000Z" },
+        { text: "Older operator context", created_at: "2026-07-15T12:00:00.000Z" },
+      ],
+    }
+    const { renderOnce, captureCharFrame, mockInput } = await testRender(
+      () => <WorkspaceNotesDialog workspaceName="parity-ws" response={response} onAdd={() => {}} onClear={() => { clears += 1 }} onRetry={() => {}} onBack={() => {}} />,
+      renderOptions,
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Workspace notes — parity-ws (2)")
+    expect(frame.indexOf("Newest operator context")).toBeLessThan(frame.indexOf("Older operator context"))
+    mockInput.pressKey("x")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Clear all workspace notes for parity-ws?")
+    mockInput.pressKey("y")
+    await renderOnce()
+    expect(clears).toBe(1)
+  })
+
+  test("file status renders shared states, groups, counts and no host path canary", async () => {
+    const response = {
+      workspace_id: workspaceId,
+      revision: "7",
+      generated_at: "2026-07-16T12:00:00.000Z",
+      summary: { total: 2, ok: 0, warnings: 1, errors: 1, attention: 2 },
+      groups: [
+        {
+          scope: "workspace" as const,
+          name: "Workspace files",
+          summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
+          entries: [{ id: "file_1234567890123456", target: ".env.local", type: "copy" as const, state: "missing" as const, severity: "warning" as const, needs_attention: true, reason: "target_missing" as const, message: "Configured target is missing." }],
+        },
+        {
+          scope: "repository" as const,
+          repository_id: "00000000-0000-4000-8000-000000000777",
+          name: "api",
+          summary: { total: 1, ok: 0, warnings: 0, errors: 1, attention: 1 },
+          entries: [{ id: "file_abcdefghijklmnop", target: "config/app.yml", type: "sync" as const, state: "diverged" as const, severity: "error" as const, needs_attention: true, reason: "diverged" as const, message: "Source and target both changed.", counts: { equal: 1, source_only: 1, target_only: 1, differing: 1, errors: 0 } }],
+        },
+      ],
+    }
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => <WorkspaceFileStatusDialog workspaceName="parity-ws" response={response} onRetry={() => {}} onBack={() => {}} />,
+      renderOptions,
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("2 entries, 2 need attention")
+    expect(frame).toContain("missing")
+    expect(frame).toContain("diverged")
+    expect(frame).toContain("config/app.yml")
+    expect(frame).not.toContain("/home/secret")
+    expect(frame).not.toContain("main_path")
+    expect(frame).not.toContain("task_path")
+  })
+
+  test("file status preserves stable loading and retryable error frames", async () => {
+    const loading = await testRender(
+      () => <WorkspaceFileStatusDialog workspaceName="parity-ws" loading onRetry={() => {}} onBack={() => {}} />,
+      renderOptions,
+    )
+    await loading.renderOnce()
+    expect(loading.captureCharFrame()).toContain("Loading workspace file status")
+
+    let retries = 0
+    const failed = await testRender(
+      () => <WorkspaceFileStatusDialog workspaceName="parity-ws" error="Workspace file status could not be loaded." onRetry={() => { retries += 1 }} onBack={() => {}} />,
+      renderOptions,
+    )
+    await failed.renderOnce()
+    expect(failed.captureCharFrame()).toContain("[r] Retry")
+    failed.mockInput.pressKey("r")
+    await failed.renderOnce()
+    expect(retries).toBe(1)
   })
 })
