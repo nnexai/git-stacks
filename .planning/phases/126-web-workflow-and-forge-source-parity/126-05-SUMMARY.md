@@ -70,7 +70,7 @@ coverage:
         status: pass
     human_judgment: false
 
-duration: 34min
+duration: 37min
 completed: 2026-07-16
 status: complete
 ---
@@ -81,9 +81,9 @@ status: complete
 
 ## Performance
 
-- **Duration:** 34 min
+- **Duration:** 37 min
 - **Started:** 2026-07-16T18:23:00Z
-- **Completed:** 2026-07-16T18:57:24Z
+- **Completed:** 2026-07-16T19:00:00Z
 - **Tasks:** 3
 - **Files modified:** 7
 
@@ -99,7 +99,7 @@ Each task was committed atomically through RED/GREEN TDD:
 
 1. **Task 1: Shared action descriptor registry** — `801c91b9` (RED), `8c82d2d9` (GREEN)
 2. **Task 2: Durable operation tracker** — `4e5cc37c` (RED), `8d4db7b5` (GREEN)
-3. **Task 3: Reviewed forge coordinator** — `5c9eaddb` (RED), `208f9fd0` (durable-recovery RED), `898783fa` (GREEN)
+3. **Task 3: Reviewed forge coordinator** — `5c9eaddb` (RED), `208f9fd0` (durable-recovery RED), `898783fa` (GREEN), `09caf246` / `18cdb550` (selection-validation RED/GREEN)
 
 ## Files Created/Modified
 
@@ -129,10 +129,18 @@ Each task was committed atomically through RED/GREEN TDD:
 - **Verification:** Focused forge suite passes all nine cases, including accepted durable branch-conflict recovery.
 - **Committed in:** `208f9fd0`, `898783fa`
 
+**2. [Rule 2 - Missing Critical] Validated edited selections against resolved candidates**
+- **Found during:** Plan-level acceptance review while awaiting the final upstream startup guard
+- **Issue:** Protocol-shape validation alone accepted an edited template or repository identity that was absent from the resolved candidates, delaying basic user feedback until service rejection.
+- **Fix:** Added candidate-aware advisory validation and left unknown non-source branch mappings empty instead of inventing client-side branch authority.
+- **Files modified:** `packages/client/src/forge-review.ts`, `tests/lib/client-forge-review.test.ts`
+- **Verification:** The forge suite rejects an unknown template locally with zero create transport calls.
+- **Committed in:** `09caf246`, `18cdb550`
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 missing critical functionality)
-**Impact on plan:** The addition closes the intended typed recovery contract for the service's durable execution path without expanding client authority.
+**Total deviations:** 2 auto-fixed (2 missing critical functionality)
+**Impact on plan:** Both additions close intended recovery and feedback behavior without expanding client authority.
 
 ## Issues Encountered
 
@@ -140,7 +148,7 @@ Each task was committed atomically through RED/GREEN TDD:
 
 ## Verification
 
-- `./node_modules/.bin/vitest run tests/lib/client-*.test.ts` — 7 files, 45 tests passed.
+- `./node_modules/.bin/vitest run tests/lib/client-*.test.ts` — 7 files, 46 tests passed.
 - `npm run typecheck --workspace @git-stacks/client` — passed.
 - `npm run build --workspace @git-stacks/client` — passed.
 - `npm run test:deps` — package architecture passed.
