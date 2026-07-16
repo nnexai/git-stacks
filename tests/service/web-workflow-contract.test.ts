@@ -29,6 +29,7 @@ import {
 
 const workspaceId = "00000000-0000-4000-8000-000000000001"
 const repositoryId = "00000000-0000-4000-8000-000000000002"
+const alternateRepositoryId = "00000000-0000-4000-8000-000000000003"
 const operationId = "op_0123456789abcdef"
 const token = `review_${"a".repeat(43)}`
 
@@ -60,11 +61,9 @@ describe("web workflow protocol contract", () => {
   })
 
   test("requires a strict complete action inventory with typed availability and confirmations", () => {
-    const rows = WEB_WORKSPACE_ACTION_IDS.map((action_id) => ({
+    const rows = WEB_WORKSPACE_ACTION_IDS.filter((action_id) => action_id !== "operation.cancel").map((action_id) => ({
       action_id,
-      subject: action_id === "operation.cancel"
-        ? { kind: "operation" as const, operation_id: operationId, workspace_id: workspaceId }
-        : { kind: "workspace" as const, workspace_id: workspaceId },
+      subject: { kind: "workspace" as const, workspace_id: workspaceId },
       availability: action_id === "workspace.push"
         ? { available: false as const, reason: "remote_unavailable" as const, message: "No writable remote is available." }
         : { available: true as const },
@@ -79,6 +78,32 @@ describe("web workflow protocol contract", () => {
     expect(WebWorkspaceActionInventorySchema.safeParse([...rows.slice(0, -1), rows[0]]).success).toBe(false)
     expect(WebWorkspaceActionInventorySchema.safeParse(rows.map((row, index) => index === 0 ? { ...row, hidden: true } : row)).success).toBe(false)
     expect(WebWorkspaceActionInventorySchema.safeParse(rows.map((row, index) => index === 3 ? { ...row, confirmation: "none" } : row)).success).toBe(false)
+
+    const pendingRows = rows.map((row, index) => index === 0 ? {
+      ...row,
+      availability: { available: false as const, reason: "operation_in_progress" as const, message: "An operation is already running." },
+      pending_operation_id: operationId,
+    } : row)
+    const cancel = {
+      action_id: "operation.cancel" as const,
+      subject: { kind: "operation" as const, operation_id: operationId, workspace_id: workspaceId },
+      availability: { available: true as const },
+      confirmation: "none" as const,
+    }
+    expect(WebWorkspaceActionInventorySchema.parse([...pendingRows, cancel])).toEqual([...pendingRows, cancel])
+    expect(WebWorkspaceActionInventorySchema.safeParse([...rows, cancel]).success).toBe(false)
+    expect(WebWorkspaceActionInventorySchema.safeParse([...pendingRows, {
+      ...cancel,
+      subject: { ...cancel.subject, operation_id: "op_fedcba9876543210" },
+    }]).success).toBe(false)
+    expect(WebWorkspaceActionInventorySchema.safeParse(rows.map((row, index) => index === 0 ? {
+      ...row,
+      pending_operation_id: operationId,
+    } : row)).success).toBe(false)
+    expect(WebWorkspaceActionInventorySchema.safeParse(pendingRows.map((row, index) => index === 0 ? {
+      ...row,
+      availability: { available: true as const },
+    } : row)).success).toBe(false)
   })
 
   test("models honest cancellability and state-consistent cancel outcomes", () => {
@@ -101,22 +126,62 @@ describe("web workflow protocol contract", () => {
     ]) expect(OperationCancelResultSchema.safeParse(invalid).success).toBe(false)
   })
 
-  test("projects bounded operation identity without arbitrary progress or result records", () => {
-    const running = {
+  test("projects a strict state-discriminated operation lifecycle", () => {
+    const identity = {
       operation_id: operationId,
-      action_id: "workspace.pull",
+      action_id: "workspace.pull" as const,
       workspace_id: workspaceId,
       workspace_name: "demo",
-      state: "running",
       accepted_at: "2026-07-16T12:00:00.000Z",
+    }
+    const accepted = { ...identity, state: "accepted" as const, cancellation: { state: "available" as const } }
+    const running = {
+      ...identity,
+      state: "running" as const,
       started_at: "2026-07-16T12:00:01.000Z",
       progress: { stage: "executing", message: "Pulling workspace", completed: 1, total: 2 },
       cancellation: { state: "available" },
     }
+    const succeeded = {
+      ...identity,
+      state: "succeeded" as const,
+      started_at: "2026-07-16T12:00:01.000Z",
+      finished_at: "2026-07-16T12:00:02.000Z",
+      cancellation: { state: "unavailable" as const, reason: "finished" as const },
+      result: { workspace_name: "demo", revision: "8", snapshot_changed: true },
+    }
+    const failed = {
+      ...identity,
+      state: "failed" as const,
+      started_at: "2026-07-16T12:00:01.000Z",
+      finished_at: "2026-07-16T12:00:02.000Z",
+      cancellation: { state: "unavailable" as const, reason: "finished" as const },
+      error: { code: "pull_failed", message: "Pull failed.", retryable: true },
+    }
+    expect(WebOperationSummarySchema.parse(accepted)).toEqual(accepted)
     expect(WebOperationSummarySchema.parse(running)).toEqual(running)
+    expect(WebOperationSummarySchema.parse(succeeded)).toEqual(succeeded)
+    expect(WebOperationSummarySchema.parse(failed)).toEqual(failed)
     expect(WebOperationSummarySchema.safeParse({ ...running, progress: { ...running.progress, data: { cwd: "/secret" } } }).success).toBe(false)
     expect(WebOperationSummarySchema.safeParse({ ...running, result: { raw: "provider output" } }).success).toBe(false)
     expect(WebOperationSummarySchema.safeParse({ ...running, action_id: "workspace.notes.list", cancellation: { state: "available" } }).success).toBe(false)
+    for (const invalid of [
+      { ...accepted, finished_at: succeeded.finished_at },
+      { ...accepted, progress: running.progress },
+      { ...accepted, result: succeeded.result },
+      { ...accepted, error: failed.error },
+      { ...running, cancellation: undefined },
+      { ...running, cancellation: { state: "unavailable", reason: "finished" } },
+      { ...running, finished_at: succeeded.finished_at },
+      { ...running, error: failed.error },
+      { ...succeeded, error: failed.error },
+      { ...succeeded, progress: { ...running.progress, stage: "completed" } },
+      { ...succeeded, cancellation: undefined },
+      { ...failed, result: succeeded.result },
+      { ...failed, cancellation: { state: "available" } },
+      { ...failed, error: undefined },
+      { ...failed, state: "cancelled", result: succeeded.result },
+    ]) expect(WebOperationSummarySchema.safeParse(invalid).success).toBe(false)
   })
 
   test("extends carrier and browser mutation kinds without changing lifecycle shapes", () => {
@@ -196,7 +261,7 @@ describe("browser-safe notes and file status", () => {
     }
   })
 
-  test("rejects host paths, raw errors, roots, and verbose diff arrays", () => {
+  test("rejects every path-bearing message, raw errors, roots, and verbose diff arrays", () => {
     const base = {
       workspace_id: workspaceId,
       revision: "7",
@@ -221,7 +286,52 @@ describe("browser-safe notes and file status", () => {
       { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, raw_error: "EACCES /secret" }] }] },
       { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, sourceOnly: ["/secret/a"] }] }] },
       { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, hint: "Read /secret/a" }] }] },
+      { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, message: "Read /srv/git-stacks/state.json for details." }] }] },
+      { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, message: "Read D:\\projects\\repo\\state.json for details." }] }] },
+      { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, message: "Read \\\\server\\share\\state.json for details." }] }] },
+      { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, message: "Read ~/repo/state.json for details." }] }] },
+      { ...base, groups: [{ ...base.groups[0], entries: [{ ...entry, message: "Read file:///srv/git-stacks/state.json for details." }] }] },
     ]) expect(WebFileStatusResponseSchema.safeParse(canary).success).toBe(false)
+  })
+
+  test("derives file attention and summaries from exact entry states", () => {
+    const entry = {
+      id: "file_0123456789abcdef", target: ".env", type: "copy", state: "pullable", severity: "warning",
+      needs_attention: true, reason: "content_differs", message: "The configured source has changes to pull.",
+    }
+    const group = {
+      scope: "workspace" as const,
+      name: "demo",
+      summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1 },
+      entries: [entry],
+    }
+    const response = {
+      workspace_id: workspaceId,
+      revision: "7",
+      generated_at: "2026-07-16T12:00:00.000Z",
+      summary: group.summary,
+      groups: [group],
+    }
+    expect(WebFileStatusResponseSchema.parse(response)).toEqual(response)
+    for (const invalidEntry of [
+      { ...entry, needs_attention: false },
+      { ...entry, reason: "none" },
+      { ...entry, reason: "target_missing" },
+      { ...entry, state: "materialized", severity: "ok", needs_attention: false, reason: "content_differs" },
+      { ...entry, state: "missing", reason: "content_differs" },
+      { ...entry, state: "pushable", reason: "source_missing" },
+      { ...entry, state: "diverged", severity: "error", reason: "comparison_failed" },
+      { ...entry, state: "error", severity: "error", reason: "diverged" },
+    ]) expect(WebFileStatusResponseSchema.safeParse({ ...response, groups: [{ ...group, entries: [invalidEntry] }] }).success).toBe(false)
+    expect(WebFileStatusResponseSchema.safeParse({
+      ...response,
+      groups: [{ ...group, summary: { total: 1, ok: 1, warnings: 0, errors: 0, attention: 0 } }],
+      summary: { total: 1, ok: 1, warnings: 0, errors: 0, attention: 0 },
+    }).success).toBe(false)
+    expect(WebFileStatusResponseSchema.safeParse({
+      ...response,
+      groups: [{ ...group, entries: [] }],
+    }).success).toBe(false)
   })
 })
 
@@ -274,6 +384,8 @@ describe("reviewed forge source protocol", () => {
     for (const invalid of [
       { url: "github.com/acme/app/pull/42" },
       { url: "https://user:token@github.com/acme/app/pull/42" },
+      { url: `${source.web_url}?access_token=secret` },
+      { url: `${source.web_url}#token=secret` },
       { url: "file:///home/user/repo" },
       { url: source.web_url, create: draft },
       { source_url: source.web_url },
@@ -303,6 +415,32 @@ describe("reviewed forge source protocol", () => {
       { cwd: "/home/user/repo" },
       { command: ["gh", "pr", "checkout", "42"] },
     ]) expect(WebForgeResolveResponseSchema.safeParse({ ...response, ...extra }).success).toBe(false)
+    for (const invalid of [
+      { ...response, source: { ...source, web_url: `${source.web_url}?token=secret` } },
+      { ...response, source: { ...source, web_url: `${source.web_url}#credentials` } },
+      { ...response, source: { ...source, web_url: "https://github.com/acme/other/pull/42" } },
+      { ...response, source: { ...source, cross_repository: false } },
+      { ...response, source: { ...source, source_repository: source.target_repository, cross_repository: true } },
+      { ...response, terminology: { provider: "gitlab", change: "Merge request", source_branch: "Source branch", target_branch: "Target branch" } },
+      { ...response, draft: { ...draft, template_name: "missing" } },
+      { ...response, candidates: {
+        ...response.candidates,
+        source_repositories: [{ ...repositoryCandidate, matched_source: false }],
+      } },
+      { ...response, candidates: {
+        ...response.candidates,
+        source_repositories: [repositoryCandidate, { ...repositoryCandidate, repository_id: alternateRepositoryId }],
+      } },
+      { ...response, draft: {
+        ...draft,
+        matched_source_repository_id: alternateRepositoryId,
+        repositories: [{ ...draft.repositories[0], repository_id: alternateRepositoryId }],
+      } },
+      { ...response, candidates: {
+        ...response.candidates,
+        templates: [{ name: "full", repositories: [{ ...repositoryCandidate, repository_id: alternateRepositoryId, matched_source: false }] }],
+      } },
+    ]) expect(WebForgeResolveResponseSchema.safeParse(invalid).success).toBe(false)
   })
 
   test("reviewed create requires token, revision, and a complete draft", () => {
