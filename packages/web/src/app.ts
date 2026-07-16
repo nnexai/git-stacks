@@ -6,7 +6,7 @@ import "./app.css"
 import { FUZZY_FIELD_WEIGHT, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type WorkspaceActionCallback } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebNotesResponse, type WebOperation, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -1688,23 +1688,141 @@ function showShortcutSettings(): void {
 async function showWorkspaceNotes(workspace: Workspace): Promise<void> {
   const view = modal(`Workspace notes — ${workspace.name}`)
   if (!view) return
-  const content = element("div", "workspace-notes")
-  content.append(element("div", "detail-loading", "Loading workspace notes…"))
-  view.body.append(content)
-  try {
-    const notes = await api<WebNotesResponse>("workspace.notes.list", {
+  let notes: WebNotesResponse | undefined
+  let mutationPending = false
+
+  const load = () => api<WebNotesResponse>("workspace.notes.list", {
       workspace_id: workspace.id,
       expected_revision: snapshot.revision,
     }, { scope: "snapshot.read" })
-    content.replaceChildren()
-    if (!notes.records.length) content.append(element("strong", "", "No workspace notes"), element("p", "", "Add an operator note to keep workspace context here."))
+
+  const observeMutation = async (operationId: string) => {
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const context = operationContexts.get(operationId)
+      if (!context) throw new Error("Workspace note operation context was lost.")
+      const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+      const summary = summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" })
+      await operationTracker.observe(summary)
+      renderOperationCards()
+      if (["succeeded", "failed", "cancelled"].includes(operation.state)) return operation
+      await delay(100)
+    }
+    throw new Error("Workspace note operation did not finish in time.")
+  }
+
+  const render = (message?: string) => {
+    if (!notes) return
+    view.body.replaceChildren()
+    const list = element("section", "workspace-notes")
+    list.setAttribute("aria-label", `${notes.count} workspace notes`)
+    list.append(element("div", "detail-heading", `${notes.count} workspace note${notes.count === 1 ? "" : "s"}`))
+    if (!notes.records.length) list.append(element("strong", "", "No workspace notes"), element("p", "", "Add an operator note to keep workspace context here."))
     else for (const record of notes.records) {
       const item = element("article", "workspace-note")
-      item.append(element("time", "", relativeTime(record.created_at) || record.created_at), element("p", "", record.text))
-      content.append(item)
+      const created = element("time", "", relativeTime(record.created_at) || record.created_at)
+      created.dateTime = record.created_at
+      item.append(created, element("p", "", record.text))
+      list.append(item)
     }
-  } catch {
-    content.replaceChildren(element("div", "detail-error", "Workspace notes could not be loaded. Retry without changing stored notes."))
+
+    const composer = element("section", "note-composer")
+    const label = element("label", "field", "New workspace note")
+    const input = element("textarea")
+    input.rows = 4
+    input.setAttribute("aria-describedby", "note-hint note-error")
+    label.append(input)
+    const hint = element("div", "detail-hint", "Plain text only. Notes are stored by the service for this workspace.")
+    hint.id = "note-hint"
+    const error = element("div", "detail-error", message)
+    error.id = "note-error"
+    error.setAttribute("aria-live", "polite")
+    const controls = element("div", "modal-actions")
+    const clear = button("Clear notes", "button danger")
+    clear.disabled = mutationPending || notes.count === 0
+    const add = button("Add note", "button primary")
+    add.disabled = true
+    input.addEventListener("input", () => {
+      const validation = validateWorkspaceNoteDraft(input.value)
+      error.textContent = validation.valid ? "" : validation.message
+      add.disabled = mutationPending || !validation.valid
+    })
+    add.addEventListener("click", async () => {
+      const validation = validateWorkspaceNoteDraft(input.value)
+      if (!validation.valid || mutationPending) { error.textContent = validation.valid ? "" : validation.message; return }
+      mutationPending = true
+      input.disabled = true
+      add.disabled = true
+      clear.disabled = true
+      try {
+        const submitted = await submitDurableWorkspaceAction("workspace.notes.add", workspace, {
+          kind: "workspace.notes.add",
+          request: {
+            workspace_id: workspace.id,
+            expected_revision: snapshot.revision,
+            expected_notes_revision: notes!.notes_revision,
+            text: validation.text,
+          },
+        })
+        const terminal = await observeMutation(submitted.operationId)
+        if (terminal.state !== "succeeded") throw new Error("note-add-failed")
+        notes = await load()
+        mutationPending = false
+        render()
+      } catch {
+        mutationPending = false
+        render("The note was not added. Review the message and retry.")
+      }
+    })
+    clear.addEventListener("click", () => {
+      view.body.replaceChildren()
+      view.body.append(element("p", "lifecycle-warning", `Clear all notes for ${workspace.name}? This permanently removes the workspace note history.`))
+      const actions = element("div", "modal-actions")
+      const keep = button("Keep notes")
+      const confirm = button("Clear workspace notes", "button danger")
+      keep.addEventListener("click", () => render())
+      confirm.addEventListener("click", async () => {
+        if (mutationPending) return
+        mutationPending = true
+        keep.disabled = true
+        confirm.disabled = true
+        try {
+          const submitted = await submitDurableWorkspaceAction("workspace.notes.clear", workspace, {
+            kind: "workspace.notes.clear",
+            request: {
+              workspace_id: workspace.id,
+              expected_revision: snapshot.revision,
+              expected_notes_revision: notes!.notes_revision,
+            },
+          })
+          const terminal = await observeMutation(submitted.operationId)
+          if (terminal.state !== "succeeded") throw new Error("note-clear-failed")
+          notes = await load()
+          mutationPending = false
+          render()
+        } catch {
+          mutationPending = false
+          render("Workspace notes were not cleared. Refresh the list before retrying.")
+        }
+      })
+      actions.append(keep, confirm)
+      view.body.append(actions)
+      keep.focus()
+    })
+    controls.append(clear, add)
+    composer.append(label, hint, error, controls)
+    view.body.append(list, composer)
+    view.setPrimaryFocus(() => input.focus())
+  }
+
+  view.body.append(element("div", "detail-loading", "Loading workspace notes…"))
+  try { notes = await load(); render() }
+  catch {
+    view.body.replaceChildren()
+    const error = element("div", "detail-error", "Workspace notes could not be loaded. Retry without changing stored notes.")
+    const retry = button("Retry workspace notes", "button primary")
+    retry.addEventListener("click", () => { view.close(false); void showWorkspaceNotes(workspace) })
+    view.body.append(error, retry)
+    retry.focus()
   }
 }
 
@@ -1714,26 +1832,50 @@ async function showWorkspaceFileStatus(workspace: Workspace): Promise<void> {
   const content = element("div", "workspace-file-status")
   content.append(element("div", "detail-loading", "Loading workspace file status…"))
   view.body.append(content)
-  try {
-    const status = await api<WebFileStatusResponse>("workspace.files.inspect", {
+  const load = async () => {
+    content.replaceChildren(element("div", "detail-loading", "Loading workspace file status…"))
+    try {
+      const status = await api<WebFileStatusResponse>("workspace.files.inspect", {
       workspace_id: workspace.id,
       expected_revision: snapshot.revision,
-    }, { scope: "snapshot.read" })
-    content.replaceChildren()
-    if (!status.groups.length) content.append(element("strong", "", "No configured workspace files"), element("p", "", "This workspace has no configured copy, symlink, or sync targets."))
-    else for (const group of status.groups) {
-      const section = element("section", "file-status-group")
-      section.append(element("strong", "", `${group.name} · ${group.summary.attention} need attention`))
-      for (const entry of group.entries) {
-        const row = element("div", `file-status-entry ${entry.severity}`)
-        row.append(element("span", "file-target", entry.target), element("span", "file-state", `${entry.type} · ${entry.state}`), element("span", "file-message", entry.message))
-        section.append(row)
+      }, { scope: "snapshot.read" })
+      content.replaceChildren()
+      content.append(element("div", "detail-heading", status.summary.attention
+        ? `${status.summary.attention} configured file ${status.summary.attention === 1 ? "target needs" : "targets need"} attention.`
+        : "All configured workspace files are in sync."))
+      if (!status.groups.length) content.append(element("strong", "", "No configured workspace files"), element("p", "", "This workspace has no configured copy, symlink, or sync targets."))
+      else for (const group of status.groups) {
+        const section = element("section", "file-status-group")
+        const toggle = button(`${group.name} · ${group.summary.attention} need attention`, "file-group-toggle")
+        const rows = element("div", "file-status-entries")
+        const expandedByDefault = group.summary.attention > 0
+        toggle.setAttribute("aria-expanded", String(expandedByDefault))
+        rows.hidden = !expandedByDefault
+        toggle.addEventListener("click", () => {
+          rows.hidden = !rows.hidden
+          toggle.setAttribute("aria-expanded", String(!rows.hidden))
+        })
+        for (const entry of group.entries) {
+          const row = element("div", `file-status-entry ${entry.severity}`)
+          row.setAttribute("data-severity", entry.severity)
+          const target = element("span", "file-target", entry.target)
+          target.title = entry.target
+          row.append(target, element("span", "file-state", `${entry.type} · ${entry.state}`), element("span", "file-message", entry.message))
+          if (entry.counts) row.append(element("span", "file-counts", `${entry.counts.equal} equal · ${entry.counts.source_only} source only · ${entry.counts.target_only} target only · ${entry.counts.differing} differing · ${entry.counts.errors} errors`))
+          rows.append(row)
+        }
+        section.append(toggle, rows)
+        content.append(section)
       }
-      content.append(section)
+    } catch {
+      content.replaceChildren(element("div", "detail-error", "Workspace file status could not be loaded. Retry the service check."))
+      const retry = button("Retry file status", "button primary")
+      retry.addEventListener("click", () => void load())
+      content.append(retry)
+      retry.focus()
     }
-  } catch {
-    content.replaceChildren(element("div", "detail-error", "Workspace file status could not be loaded. Retry the service check."))
   }
+  await load()
 }
 
 async function showCreation(): Promise<void> {

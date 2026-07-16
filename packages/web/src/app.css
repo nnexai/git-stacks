@@ -172,6 +172,30 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .archived-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archived-identity span, .archived-empty { color: var(--muted); font-size: 12px; }
 .archived-empty { padding: 22px; text-align: center; }
+.detail-heading { color: var(--text); font-size: 14px; font-weight: 650; line-height: 1.3; }
+.detail-loading, .detail-hint, .detail-error { overflow-wrap: anywhere; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.detail-error:not(:empty) { color: var(--danger); }
+.workspace-notes { display: grid; gap: 8px; max-height: min(42vh, 420px); overflow: auto; }
+.workspace-note { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.workspace-note time { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.workspace-note p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 13px; line-height: 1.45; }
+.note-composer { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.note-composer textarea { width: 100%; min-height: 92px; resize: vertical; padding: 8px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; }
+.workspace-file-status { display: grid; gap: 12px; }
+.file-status-group { display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.file-group-toggle { width: 100%; min-height: 36px; padding: 8px 10px; border: 0; background: transparent; color: var(--text); text-align: left; font-size: 14px; font-weight: 650; cursor: pointer; }
+.file-group-toggle::after { content: "▸"; float: right; color: var(--muted); }
+.file-group-toggle[aria-expanded="true"]::after { content: "▾"; }
+.file-status-entries { display: grid; border-top: 1px solid var(--line); }
+.file-status-entries[hidden] { display: none; }
+.file-status-entry { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px; border-bottom: 1px solid var(--line); }
+.file-status-entry:last-child { border-bottom: 0; }
+.file-status-entry.warning { border-left: 3px solid var(--warning); }
+.file-status-entry.error { border-left: 3px solid var(--danger); }
+.file-target { min-width: 0; overflow-wrap: anywhere; font: 13px/1.45 ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace; }
+.file-state { color: var(--muted); font-size: 11px; line-height: 1.4; text-transform: capitalize; }
+.file-message, .file-counts { grid-column: 1 / -1; overflow-wrap: anywhere; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.file-counts { font-size: 11px; }
 .field { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
 .field input, .field select, .modal-body > input { width: 100%; min-height: 36px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }
 .repository-picker { display: grid; gap: 5px; max-height: 190px; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }

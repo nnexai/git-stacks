@@ -8,6 +8,7 @@ import {
 import {
   WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
   WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
+  WEB_NOTE_LIMITS,
   WebShortcutErrorDetailsSchema,
   type WebShortcutActionId,
   type WebShortcutEffectiveBinding,
@@ -15,6 +16,19 @@ import {
   type WebShortcutSettings,
   type WebWorkspaceActionId,
 } from "@git-stacks/protocol"
+
+export type WorkspaceNoteDraftValidation =
+  | { valid: true; text: string }
+  | { valid: false; message: string }
+
+export function validateWorkspaceNoteDraft(value: string): WorkspaceNoteDraftValidation {
+  const text = value.trim()
+  if (!text) return { valid: false, message: "Enter a workspace note." }
+  if (new TextEncoder().encode(text).byteLength > WEB_NOTE_LIMITS.text_bytes) {
+    return { valid: false, message: `Workspace notes must be ${WEB_NOTE_LIMITS.text_bytes} bytes or fewer.` }
+  }
+  return { valid: true, text }
+}
 import type {
   WorkspaceActionRegistry,
   WorkspaceActionRegistryEntry,
