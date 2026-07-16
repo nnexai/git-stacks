@@ -189,12 +189,15 @@ export function deriveWorkspaceActionInventory(input: WorkspaceActionAuthorityIn
   }
 
   const inventory = CANONICAL_WORKSPACE_ACTION_IDS.map((actionId): CanonicalWorkspaceAction => {
+    const availability = availabilityFor(actionId)
+    const pending = actionId === "operation.cancel"
+      || (!availability.available && availability.reason === "operation_in_progress")
     const descriptor: CanonicalWorkspaceAction = {
       action_id: actionId,
       workspace_id: input.workspaceId,
-      availability: availabilityFor(actionId),
+      availability,
       confirmation: confirmation(actionId),
-      ...(operation ? { pending_operation_id: operation.operation_id } : {}),
+      ...(operation && pending ? { pending_operation_id: operation.operation_id } : {}),
     }
     return Object.freeze(descriptor)
   })

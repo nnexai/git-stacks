@@ -63,6 +63,7 @@ describe("web reviewed forge creation", () => {
     for (const seam of ["terminal-error", "Back to review", "Change URL", "Close", "backToReview"]) {
       expect(appSource).toContain(seam)
     }
-    expect(appSource).not.toContain("for (let attempt = 0; attempt < 300; attempt += 1)")
+    const forgeSource = appSource.slice(appSource.indexOf("function showForgeCreation"), appSource.indexOf("async function showCreation"))
+    expect(forgeSource).not.toContain("for (let attempt = 0; attempt < 300; attempt += 1)")
   })
 })

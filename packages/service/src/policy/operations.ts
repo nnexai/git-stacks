@@ -52,6 +52,7 @@ import {
 import { runManualCommand } from "@git-stacks/core/workspace-command"
 import { CLIENT_MODEL_LIMITS } from "@git-stacks/protocol"
 import type { CoreMutationName, CoreMutationRequest } from "./core-contract"
+import type { WorkspaceActionOperation } from "./workspace-actions.js"
 
 export const DEFAULT_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_OPERATION_TERMINAL_LIMIT = 10_000
@@ -89,7 +90,15 @@ export interface SubmitOperationInput {
   idempotencyKey: string
   request: unknown
   execution: OperationExecution
+  webContext?: OperationWebContext
 }
+
+export type OperationWebContext = Readonly<{
+  actionId: WorkspaceActionOperation["action_id"] | "workspace.create" | "workspace.create.reviewed"
+  workspaceId?: string
+  workspaceName: string
+  expectedRevision?: string
+}>
 
 export class IdempotencyConflictError extends Error {
   readonly code = "idempotency_conflict"
@@ -103,6 +112,7 @@ type PersistedReservation = {
   request_hash: string
   operation_id: string
   created_at: string
+  web_context?: OperationWebContext
 }
 
 type Store = { operations: Operation[]; reservations: PersistedReservation[] }
@@ -295,6 +305,7 @@ export class OperationRegistry {
         request_hash: requestHash,
         operation_id: accepted.operation_id,
         created_at: accepted.accepted_at,
+        ...(input.webContext ? { web_context: { ...input.webContext } } : {}),
       }
       this.store.operations.push(accepted)
       this.store.reservations.push(reservation)
@@ -335,6 +346,53 @@ export class OperationRegistry {
     if (active?.committed) return { state: "unavailable", reason: "committed" }
     if (active?.signal.aborted) return { state: "requested" }
     return { state: "available" }
+  }
+
+  webContextForClient(id: string, clientId: string): OperationWebContext | undefined {
+    const reservation = this.store.reservations.find((item) => item.operation_id === id && item.client_id === clientId)
+    return reservation?.web_context ? { ...reservation.web_context } : undefined
+  }
+
+  workspaceActionState(workspaceId: string, clientId: string, revision: string): {
+    operations: WorkspaceActionOperation[]
+    removal?: { revision: string; details: WorkspaceLifecycleFailureDetails }
+    openState?: "open" | "closed"
+  } {
+    const operations = this.store.reservations
+      .filter((reservation) => reservation.web_context?.workspaceId === workspaceId)
+      .flatMap((reservation) => {
+        const operation = this.get(reservation.operation_id)
+        const context = reservation.web_context
+        if (!operation || !context || context.actionId === "workspace.create" || context.actionId === "workspace.create.reviewed") return []
+        const cancellation = reservation.client_id === clientId
+          ? this.cancellationView(operation.operation_id)
+          : { state: "unavailable", reason: "not-cancellable" } as const
+        return [{
+          operation_id: operation.operation_id,
+          workspace_id: workspaceId,
+          action_id: context.actionId,
+          state: operation.state,
+          ...(cancellation ? { cancellation } : {}),
+        } satisfies WorkspaceActionOperation]
+      })
+    const removalReservation = [...this.store.reservations].reverse().find((reservation) =>
+      reservation.web_context?.workspaceId === workspaceId
+      && reservation.web_context.actionId === "workspace.remove"
+      && reservation.web_context.expectedRevision === revision)
+    const removalOperation = removalReservation ? this.get(removalReservation.operation_id) : undefined
+    const removal = removalOperation?.state === "failed" && removalOperation.lifecycle
+      ? { revision, details: removalOperation.lifecycle }
+      : undefined
+    const openStateReservation = [...this.store.reservations].reverse().find((reservation) =>
+      reservation.web_context?.workspaceId === workspaceId
+      && (reservation.web_context.actionId === "workspace.open" || reservation.web_context.actionId === "workspace.close")
+      && this.get(reservation.operation_id)?.state === "succeeded")
+    const openState = openStateReservation?.web_context?.actionId === "workspace.open"
+      ? "open" as const
+      : openStateReservation?.web_context?.actionId === "workspace.close"
+        ? "closed" as const
+        : undefined
+    return { operations, ...(removal ? { removal } : {}), ...(openState ? { openState } : {}) }
   }
 
   async cancel(id: string): Promise<OperationCancelResult> {

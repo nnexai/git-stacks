@@ -262,6 +262,12 @@ export const WebWorkspaceMutationSchema = z.strictObject({
   workspace_id: EntityIdSchema,
   expected_revision: RevisionSchema,
 })
+export const WebWorkspaceRenameRequestSchema = z.strictObject({
+  workspace_id: EntityIdSchema,
+  expected_revision: RevisionSchema,
+  new_name: utf8BoundedString(96, 1),
+})
+export type WebWorkspaceRenameRequest = z.infer<typeof WebWorkspaceRenameRequestSchema>
 export const WebSignalDismissSchema = z.strictObject({ signal_id: SignalIdSchema })
 export const WebSignalAcknowledgeSchema = z.strictObject({ surface_id: EntityIdSchema })
 export const WebTerminalSocketControlSchema = z.discriminatedUnion("type", [
@@ -363,10 +369,20 @@ export const WebOperationSchema = z.strictObject({
 })
 export type WebOperation = z.infer<typeof WebOperationSchema>
 
+export const WEB_OPERATION_ACTION_IDS = [
+  "workspace.archive", "workspace.unarchive", "workspace.remove", "workspace.force-remove",
+  "workspace.rename", "workspace.open", "workspace.close", "workspace.pin", "workspace.unpin",
+  "workspace.sync", "workspace.pull", "workspace.push", "workspace.merge",
+  "workspace.notes.list", "workspace.notes.add", "workspace.notes.clear", "workspace.files.inspect",
+  "workspace.create", "workspace.create.reviewed",
+] as const
+export const WebOperationActionIdSchema = z.enum(WEB_OPERATION_ACTION_IDS)
+export type WebOperationActionId = z.infer<typeof WebOperationActionIdSchema>
+
 const WebOperationSummaryIdentitySchema = {
   operation_id: OperationIdSchema,
-  action_id: WebWorkspaceActionIdSchema.exclude(["operation.cancel"]),
-  workspace_id: EntityIdSchema,
+  action_id: WebOperationActionIdSchema,
+  workspace_id: EntityIdSchema.optional(),
   workspace_name: utf8BoundedString(96, 1),
   accepted_at: TimestampSchema,
 }
@@ -381,6 +397,7 @@ const WebOperationProgressSummarySchema = z.strictObject({
   message: SafeBrowserMessageSchema.optional(),
   completed: z.number().int().nonnegative().optional(),
   total: z.number().int().positive().optional(),
+  lifecycle_phase: WorkspaceLifecyclePhaseSchema.optional(),
 }).refine((progress) => (progress.completed === undefined) === (progress.total === undefined), {
   message: "completed and total must be provided together",
 })
@@ -395,6 +412,7 @@ const WebOperationErrorSummarySchema = z.strictObject({
   message: SafeBrowserMessageSchema,
   retryable: z.boolean(),
   forge: z.lazy(() => WebForgeErrorDetailsSchema).optional(),
+  lifecycle: WorkspaceLifecycleFailureDetailsSchema.optional(),
 })
 export const WebOperationSummarySchema = z.discriminatedUnion("state", [
   z.strictObject({
@@ -433,7 +451,10 @@ export const WebOperationSummarySchema = z.discriminatedUnion("state", [
     cancellation: WebFinishedCancellationSchema,
     error: WebOperationErrorSummarySchema,
   }),
-]).superRefine(({ action_id, cancellation }, context) => {
+]).superRefine(({ action_id, workspace_id, cancellation }, context) => {
+  if (action_id !== "workspace.create" && action_id !== "workspace.create.reviewed" && workspace_id === undefined) {
+    context.addIssue({ code: "custom", path: ["workspace_id"], message: "Workspace operations require stable workspace identity" })
+  }
   if ((action_id === "workspace.notes.list" || action_id === "workspace.files.inspect") && cancellation?.state === "available") {
     context.addIssue({ code: "custom", path: ["cancellation"], message: "Read actions cannot expose durable-operation cancellation" })
   }
@@ -792,6 +813,7 @@ export const WebOperationMutationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("workspace.create"), request: WorkspaceCreationRequestSchema }),
   z.strictObject({ kind: z.literal("workspace.create.reviewed"), request: WebReviewedWorkspaceCreateRequestSchema }),
   z.strictObject({ kind: z.enum(["workspace.open", "workspace.close", "workspace.sync", "workspace.pull", "workspace.push", "workspace.merge"]), request: WebWorkspaceMutationSchema }),
+  z.strictObject({ kind: z.literal("workspace.rename"), request: WebWorkspaceRenameRequestSchema }),
   z.strictObject({ kind: z.literal("workspace.notes.add"), request: WebNotesAddRequestSchema }),
   z.strictObject({ kind: z.literal("workspace.notes.clear"), request: WebNotesClearRequestSchema }),
 ])

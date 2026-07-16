@@ -93,6 +93,12 @@ describe("secure web workflow authority", () => {
     const router = new SecureServiceRouter({
       snapshot: snapshot(),
       core: { build: async () => coreState, notes: async () => [], editTarget: () => { throw new Error("unused") } } as never,
+      operations: { workspaceActionState: () => ({ operations: [] }) } as never,
+      mutations: Object.fromEntries(["workspace.rename", "workspace.open", "workspace.close", "workspace.sync", "workspace.pull", "workspace.push", "workspace.merge", "workspace.notes.add", "workspace.notes.clear"].map((name) => [name, () => ({ cancellation: "none", steps: [] })])) as never,
+      setWorkspacePins: () => undefined,
+      workspaceNotes: async () => ({ revision: "1", count: 0, records: [] }),
+      workspaceFileStatus: async () => { throw new Error("unused") },
+      workspaceLifecycle: { submit: async () => { throw new Error("unused") } } as never,
     })
     const result = await router.request(context(["snapshot.read"]), request("workspace.actions", {
       workspace_id: workspaceId,
@@ -103,6 +109,50 @@ describe("secure web workflow authority", () => {
     expect(parsed.find(({ action_id }) => action_id === "workspace.pull")?.availability).toEqual({ available: true })
     await expect(router.request(context([]), request("workspace.actions", { workspace_id: workspaceId, expected_revision: "7" })))
       .rejects.toMatchObject({ code: "unauthorized" })
+  })
+
+  test("wires operation, removal, open-state, and capability authority into action derivation", async () => {
+    const coreState = {
+      revision: "7", generated_at: generatedAt, config: {},
+      workspaces: [{ definition: { id: workspaceId, name: "demo", schema_version: "1", created: generatedAt, branch: "demo", repos: [] }, projection: workspace.workspace }],
+      archived_workspaces: [], templates: [], repositories: [],
+    }
+    let active = true
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      core: { build: async () => coreState } as never,
+      operations: {
+        workspaceActionState: () => ({
+          operations: active ? [{
+            operation_id: "op_0123456789abcdef", workspace_id: workspaceId, action_id: "workspace.pull",
+            state: "running", cancellation: { state: "available" },
+          }] : [],
+          removal: { revision: "7", details: { kind: "workspace_dirty", terminals_stopped: true, force_allowed: true, blocking_repositories: ["app"] } },
+        }),
+      } as never,
+      mutations: {
+        "workspace.pull": () => ({ cancellation: "none", steps: [] }),
+        "workspace.open": () => ({ cancellation: "none", steps: [] }),
+        "workspace.close": () => ({ cancellation: "none", steps: [] }),
+      } as never,
+      workspaceLifecycle: { submit: async () => { throw new Error("unused") } } as never,
+      workspaceOpenState: () => "closed",
+    })
+    const inventory = WebWorkspaceActionInventorySchema.parse(await router.request(context(["snapshot.read"]), request("workspace.actions", {
+      workspace_id: workspaceId, expected_revision: "7",
+    })))
+    expect(inventory.find(({ action_id }) => action_id === "operation.cancel")).toMatchObject({
+      subject: { operation_id: "op_0123456789abcdef" }, availability: { available: true },
+    })
+    expect(inventory.find(({ action_id }) => action_id === "workspace.close")?.availability).toMatchObject({ reason: "operation_in_progress" })
+    expect(inventory.find(({ action_id }) => action_id === "workspace.rename")?.availability).toMatchObject({ reason: "capability_unavailable" })
+    active = false
+    const idleInventory = WebWorkspaceActionInventorySchema.parse(await router.request(context(["snapshot.read"]), request("workspace.actions", {
+      workspace_id: workspaceId, expected_revision: "7",
+    })))
+    expect(idleInventory.find(({ action_id }) => action_id === "workspace.open")?.availability).toEqual({ available: true })
+    expect(idleInventory.find(({ action_id }) => action_id === "workspace.close")?.availability).toMatchObject({ reason: "workspace_closed" })
+    expect(idleInventory.find(({ action_id }) => action_id === "workspace.force-remove")?.availability).toEqual({ available: true })
   })
 
   test("resolves stable IDs for bounded note and path-free file reads", async () => {
@@ -201,11 +251,13 @@ describe("secure web workflow authority", () => {
           reads += 1
           return { operation_id: "op_0123456789abcdef", state: "accepted", accepted_at: generatedAt }
         },
+        webContextForClient: () => ({ actionId: "workspace.pull", workspaceId, workspaceName: "demo", expectedRevision: "7" }),
+        cancellationView: () => ({ state: "available" }),
       } as never,
     })
     const valid = { operation_id: "op_0123456789abcdef" }
     expect(await router.request(context(["snapshot.read"]), request("operation.get", valid)))
-      .toMatchObject({ operation_id: valid.operation_id })
+      .toMatchObject({ operation_id: valid.operation_id, action_id: "workspace.pull", workspace_id: workspaceId, workspace_name: "demo" })
     for (const body of [
       { ...valid, path: "/private/canary" },
       { operation_id: "malformed" },
@@ -215,6 +267,36 @@ describe("secure web workflow authority", () => {
         .rejects.toMatchObject({ code: "invalid_request" })
     }
     expect(reads).toBe(1)
+  })
+
+  test("maps stable-ID browser rename through the strict operation route", async () => {
+    const calls: unknown[] = []
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      operations: {
+        submit: async (input: unknown) => {
+          calls.push(input)
+          return { operation_id: "op_0123456789abcdef", state: "accepted", accepted_at: generatedAt }
+        },
+        cancellationView: () => ({ state: "unavailable", reason: "not-cancellable" }),
+      } as never,
+      mutations: {
+        "workspace.rename": (input: unknown) => {
+          calls.push(input)
+          return { cancellation: "none", steps: [] }
+        },
+      },
+    })
+    const result = await router.request(context(["operation.write"]), request("operation.submit", {
+      kind: "workspace.rename",
+      request: { workspace_id: workspaceId, expected_revision: "7", new_name: "renamed-demo" },
+    }, "rename-key"))
+    expect(calls[0]).toEqual({ workspace: "demo", new_name: "renamed-demo", options: {} })
+    expect(calls[1]).toMatchObject({
+      endpoint: "workspace.rename",
+      webContext: { actionId: "workspace.rename", workspaceId, workspaceName: "demo", expectedRevision: "7" },
+    })
+    expect(result).toMatchObject({ action_id: "workspace.rename", workspace_id: workspaceId, workspace_name: "demo" })
   })
 
   test("binds forge resolution to the authenticated principal and operation scope", async () => {

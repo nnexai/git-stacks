@@ -2,13 +2,15 @@ import { createHash } from "node:crypto"
 
 import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
 import type { WorkspaceNotesSnapshot } from "@git-stacks/core/notes"
-import type { Operation, Signal, SignalDismissal, WorkspaceCatalog, WorkspaceCreationCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
+import type { Operation, OperationCancellationView, Signal, SignalDismissal, WorkspaceCatalog, WorkspaceCreationCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
+import type { OperationWebContext } from "../policy/operations.js"
 import type { CanonicalWorkspaceAction } from "../policy/workspace-actions.js"
 
 import {
   WebFileStatusResponseSchema,
   WebNotesResponseSchema,
   WebOperationSchema,
+  WebOperationSummarySchema,
   WebForgeErrorDetailsSchema,
   WebSnapshotSchema,
   WebWorkspaceActionInventorySchema,
@@ -17,6 +19,7 @@ import {
   type WebFileStatusResponse,
   type WebNotesResponse,
   type WebOperation,
+  type WebOperationSummary,
   type WebSnapshot,
   type WebWorkspaceActionInventory,
 } from "@git-stacks/protocol"
@@ -118,6 +121,82 @@ export function projectWebOperation(operation: Operation): WebOperation {
     } })
   }
   return WebOperationSchema.parse(common)
+}
+
+export function projectWebOperationSummary(
+  operation: Operation,
+  context: OperationWebContext,
+  cancellation?: OperationCancellationView,
+): WebOperationSummary {
+  const common = {
+    operation_id: operation.operation_id,
+    action_id: context.actionId,
+    ...(context.workspaceId ? { workspace_id: context.workspaceId } : {}),
+    workspace_name: context.workspaceName,
+    accepted_at: operation.accepted_at,
+  }
+  if (operation.state === "accepted") {
+    return WebOperationSummarySchema.parse({ ...common, state: "accepted", ...(cancellation ? { cancellation } : {}) })
+  }
+  if (operation.state === "running") {
+    const lifecyclePhase = WorkspaceLifecyclePhaseSchema.safeParse(operation.progress.data?.lifecycle_phase)
+    const stage = operation.progress.stage === "rolling_back"
+      ? "rolling_back"
+      : operation.progress.stage === "preparing"
+        ? "preparing"
+        : "executing"
+    return WebOperationSummarySchema.parse({
+      ...common,
+      state: "running",
+      started_at: operation.started_at,
+      progress: {
+        stage,
+        message: lifecyclePhase.success ? lifecycleProgressMessage(lifecyclePhase.data) : operationProgressMessage(operation.progress.stage),
+        ...(operation.progress.completed === undefined ? {} : { completed: operation.progress.completed, total: operation.progress.total }),
+        ...(lifecyclePhase.success ? { lifecycle_phase: lifecyclePhase.data } : {}),
+      },
+      cancellation: cancellation ?? { state: "unavailable", reason: "not-cancellable" },
+    })
+  }
+  if (operation.state === "succeeded") {
+    const result = operation.result ?? {}
+    return WebOperationSummarySchema.parse({
+      ...common,
+      state: "succeeded",
+      started_at: operation.started_at,
+      finished_at: operation.finished_at,
+      cancellation: { state: "unavailable", reason: "finished" },
+      result: {
+        ...(typeof result.workspace_name === "string" ? { workspace_name: result.workspace_name } : {}),
+        ...(typeof result.snapshot_changed === "boolean" ? { snapshot_changed: result.snapshot_changed } : {}),
+        ...(typeof result.revision === "string" ? { revision: result.revision } : {}),
+        ...(typeof result.terminals_stopped === "boolean" ? { terminals_stopped: result.terminals_stopped } : {}),
+      },
+    })
+  }
+  const lifecycle = operation.lifecycle
+    ? {
+        kind: operation.lifecycle.kind,
+        ...(operation.lifecycle.blocking_repositories ? { blocking_repositories: [...operation.lifecycle.blocking_repositories] } : {}),
+        terminals_stopped: operation.lifecycle.terminals_stopped,
+        force_allowed: operation.lifecycle.force_allowed,
+      }
+    : undefined
+  const forge = WebForgeErrorDetailsSchema.safeParse(operation.error.details)
+  return WebOperationSummarySchema.parse({
+    ...common,
+    state: operation.state,
+    ...(operation.started_at ? { started_at: operation.started_at } : {}),
+    finished_at: operation.finished_at,
+    cancellation: { state: "unavailable", reason: "finished" },
+    error: {
+      code: operation.error.code,
+      message: operationFailureMessage(operation.error.code, lifecycle?.kind),
+      retryable: operation.error.code === "conflict",
+      ...(lifecycle ? { lifecycle } : {}),
+      ...(forge.success ? { forge: forge.data } : {}),
+    },
+  })
 }
 
 function lifecycleProgressMessage(phase: ReturnType<typeof WorkspaceLifecyclePhaseSchema.parse>): string {

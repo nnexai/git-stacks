@@ -7,7 +7,7 @@ import {
   type WebForgeResolveRequest,
   type WebForgeResolveResponse,
   type WebForgeTerminology,
-  type WebForgeErrorDetails,
+  type WebOperationSummary,
   type WebReviewedWorkspaceCreateRequest,
   type WebReviewedWorkspaceDraft,
   type ForgeSourceIdentity,
@@ -41,6 +41,7 @@ export type ForgeReviewState =
   | ({ phase: "review"; failure?: WebForgeFailure } & ReviewStateFields)
   | ({ phase: "creating" } & ReviewStateFields)
   | ({ phase: "accepted"; operationId: string; reconciled: boolean } & ReviewStateFields)
+  | ({ phase: "terminal-error"; operationId: string; outcome: "failed" | "cancelled"; message: string } & ReviewStateFields)
 
 export type ForgeReviewEdit =
   | { kind: "workspace_name"; value: string }
@@ -48,12 +49,6 @@ export type ForgeReviewEdit =
   | { kind: "matched_source_repository"; repositoryId: string }
   | { kind: "repository_included"; repositoryId: string; included: boolean }
   | { kind: "repository_branch"; repositoryId: string; workspaceBranch: string; baseBranch?: string }
-
-export type ForgeReviewOperationObservation = {
-  operation_id: string
-  state: "accepted" | "running" | "succeeded" | "failed" | "cancelled"
-  error?: { message: string; forge?: WebForgeErrorDetails }
-}
 
 export type ForgeReviewCoordinatorCallbacks = {
   resolve(request: WebForgeResolveRequest): Promise<WebForgeResolveResponse>
@@ -67,7 +62,8 @@ export type ForgeReviewCoordinator = {
   resolve(): Promise<unknown>
   edit(action: ForgeReviewEdit): void
   create(): Promise<unknown>
-  observeOperation(operation: ForgeReviewOperationObservation): void
+  observeOperation(operation: WebOperationSummary): void
+  backToReview(): { status: "review" } | { status: "ignored" }
   reconcile(): void
 }
 
@@ -301,10 +297,24 @@ export function createForgeReviewCoordinator(
     create,
     observeOperation(operation) {
       if (current.phase !== "accepted" || operation.operation_id !== current.operationId) return
-      if ((operation.state !== "failed" && operation.state !== "cancelled") || !operation.error?.forge) return
-      const failure = classifyForgeReviewFailure({ message: operation.error.message, details: operation.error.forge })
-      if (!failure) return
+      if (operation.state !== "failed" && operation.state !== "cancelled") return
       const accepted = current
+      const failure = operation.error.forge
+        ? classifyForgeReviewFailure({ message: operation.error.message, details: operation.error.forge })
+        : undefined
+      if (!failure) {
+        current = {
+          phase: "terminal-error",
+          url: accepted.url,
+          anchor: accepted.anchor,
+          draft: accepted.draft,
+          validation: validateForgeReviewDraft(accepted.draft, accepted.anchor),
+          operationId: operation.operation_id,
+          outcome: operation.state,
+          message: operation.error.message,
+        }
+        return
+      }
       current = requiresResolveAgain(failure)
         ? { phase: "resolve", url: accepted.url, resolving: false, failure }
         : {
@@ -315,6 +325,17 @@ export function createForgeReviewCoordinator(
             validation: validateForgeReviewDraft(accepted.draft, accepted.anchor),
             failure,
           }
+    },
+    backToReview() {
+      if (current.phase !== "terminal-error") return { status: "ignored" }
+      current = {
+        phase: "review",
+        url: current.url,
+        anchor: current.anchor,
+        draft: current.draft,
+        validation: validateForgeReviewDraft(current.draft, current.anchor),
+      }
+      return { status: "review" }
     },
     reconcile() {
       if (current.phase === "accepted") current = { ...current, reconciled: true }

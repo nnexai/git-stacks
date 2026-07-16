@@ -19,14 +19,14 @@ import {
 import { WebShortcutConflictRecoveryError, WebShortcutConflictRefreshError, WebShortcutOwnerConflictError } from "./navigation"
 
 type OverlayControllerOptions = {
-  restoreFocus(target: string | undefined): void
+  restoreFocus(target: string | HTMLElement | undefined): void
 }
 
 export type OverlayOpenOptions = {
   id: string
   title: string
   closeLabel: string
-  returnTarget?: string
+  returnTarget?: string | HTMLElement
   exclusive?: boolean
 }
 
@@ -45,7 +45,7 @@ export type OverlayOpenResult =
 type ActiveOverlay = {
   id: string
   exclusive: boolean
-  returnTarget?: string
+  returnTarget?: string | HTMLElement
   backdrop: HTMLElement
   dialog: HTMLElement
   body: HTMLElement

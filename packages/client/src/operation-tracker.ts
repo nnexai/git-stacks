@@ -20,7 +20,7 @@ export type OperationTrackerCallbacks<Intent = unknown> = {
   cancel(operationId: string): Promise<OperationCancelResult>
   refresh(): Promise<unknown>
   reconcile?(request: {
-    workspaceId: string
+    workspaceId?: string
     operationId: string
     outcome: OperationTerminalOutcome
   }): void
@@ -39,6 +39,7 @@ export type OperationTracker<Intent = unknown> = {
   state(): OperationTrackerState
   submit(intent: Intent): Promise<OperationSubmitResult>
   observe(operation: WebOperationSummary): boolean | Promise<void>
+  hydrate(operationId: string): Promise<void>
   reconnect(): Promise<void>
   cancel(): Promise<OperationCancelResult | OperationCancelIgnored>
   retryRefresh(): Promise<void>
@@ -67,6 +68,7 @@ export function createOperationTracker<Intent = unknown>(
   let currentState: OperationTrackerState = { phase: "ready" }
   let currentOperationId: string | undefined
   let cancelPending = false
+  let reconnectPending: Promise<void> | undefined
   const operations = new Map<string, WebOperationSummary>()
   const fingerprints = new Map<string, string>()
 
@@ -82,7 +84,7 @@ export function createOperationTracker<Intent = unknown>(
 
   const refreshAfter = async (operation: WebOperationSummary, outcome: OperationTerminalOutcome): Promise<void> => {
     const operationId = operation.operation_id
-    callbacks.reconcile?.({ workspaceId: operation.workspace_id, operationId, outcome })
+    callbacks.reconcile?.({ ...(operation.workspace_id ? { workspaceId: operation.workspace_id } : {}), operationId, outcome })
     currentState = { phase: "refreshing", operationId, outcome }
     try {
       await callbacks.refresh()
@@ -107,6 +109,16 @@ export function createOperationTracker<Intent = unknown>(
     return refreshAfter(operation, outcome)
   }
 
+  const reconnectById = (operationId: string): Promise<void> => {
+    if (reconnectPending) return reconnectPending
+    currentOperationId = operationId
+    currentState = { phase: "reconnecting", operationId }
+    reconnectPending = callbacks.get(operationId)
+      .then(async (operation) => { await observe(operation) })
+      .finally(() => { reconnectPending = undefined })
+    return reconnectPending
+  }
+
   return {
     state: () => currentState,
     async submit(intent) {
@@ -128,12 +140,13 @@ export function createOperationTracker<Intent = unknown>(
       }
     },
     observe,
+    async hydrate(operationId) {
+      if (currentOperationId && currentOperationId !== operationId) return
+      await reconnectById(operationId)
+    },
     async reconnect() {
       if (!currentOperationId) return
-      const operationId = currentOperationId
-      currentState = { phase: "reconnecting", operationId }
-      const operation = await callbacks.get(operationId)
-      await observe(operation)
+      await reconnectById(currentOperationId)
     },
     async cancel() {
       if (cancelPending) return { status: "ignored", reason: "cancel-pending" }

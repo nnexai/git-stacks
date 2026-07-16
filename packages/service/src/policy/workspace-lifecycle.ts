@@ -229,7 +229,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
         result,
       }
     },
-    async submit(input: { clientId: string; idempotencyKey: string; mutation: WorkspaceLifecycleMutation }): Promise<Operation> {
+    async submit(input: { clientId: string; idempotencyKey: string; mutation: WorkspaceLifecycleMutation; webContext?: import("./operations.js").OperationWebContext }): Promise<Operation> {
       if (!options.operations) throw new Error("Workspace lifecycle operations are unavailable")
       return options.operations.submit({
         clientId: input.clientId,
@@ -237,6 +237,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
         idempotencyKey: input.idempotencyKey,
         request: input.mutation,
         execution: this.execution(input.mutation),
+        ...(input.webContext ? { webContext: input.webContext } : {}),
       })
     },
   }

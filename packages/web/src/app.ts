@@ -4,7 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
 import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
-import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperation, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
 import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
@@ -95,13 +95,18 @@ function providerBadge(source: string, className = "provider-chip"): HTMLElement
 }
 
 type ContextAction = { label: string; run: () => void; disabled?: boolean; disabledReason?: string; destructive?: boolean; group?: string }
-function hideContextMenu(): void {
+let contextMenuInvoker: HTMLElement | undefined
+let pendingOverlayInvoker: HTMLElement | undefined
+function hideContextMenu(restoreFocus = false): void {
   contextMenu.hidden = true
   contextMenu.replaceChildren()
+  if (restoreFocus && contextMenuInvoker?.isConnected) contextMenuInvoker.focus()
+  if (restoreFocus) contextMenuInvoker = undefined
 }
 function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
   event.preventDefault()
   event.stopPropagation()
+  contextMenuInvoker = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
   contextMenu.replaceChildren()
   let group = ""
   for (const action of actions) {
@@ -119,6 +124,7 @@ function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
     if (disabledReason) control.append(element("span", "context-menu-reason", disabledReason))
     control.addEventListener("click", () => {
       if (disabledReason) { toast(`${action.label} unavailable — ${disabledReason}`, true); return }
+      pendingOverlayInvoker = contextMenuInvoker
       hideContextMenu(); action.run()
     })
     contextMenu.append(control)
@@ -424,10 +430,12 @@ let eventCursor = "0"
 const terminalViews = new Map<string, TerminalView>()
 const pendingWorkspaceCreations = new Map<string, string>()
 const pendingLifecycleOperations = new Set<string>()
-const operationContexts = new Map<string, { actionId: Exclude<WebWorkspaceActionId, "operation.cancel">; workspaceId: string; workspaceName: string }>()
+const reviewedOperationObservers = new Map<string, () => Promise<void>>()
 let workspaceActionInventory: WebWorkspaceAction[] = []
 let workspaceActionInventoryKey = ""
 let workspaceActionLoadingKey = ""
+let inventoryGeneration = 0
+const workspaceActionRegistryCache = new Map<string, { generation: number; registry: ReturnType<typeof createWorkspaceActionRegistry> }>()
 let overlayController: ReturnType<typeof createSingletonOverlayController>
 let shortcutSettings: WebShortcutSettings | undefined
 
@@ -542,7 +550,12 @@ const toastRegion = document.querySelector<HTMLElement>("#toasts")!
 const contextMenu = document.querySelector<HTMLElement>("#context-menu")!
 const operationRegion = document.querySelector<HTMLElement>("#operations")!
 
-function restoreOverlayFocus(terminalId: string | undefined): void {
+function restoreOverlayFocus(target: string | HTMLElement | undefined): void {
+  if (target instanceof HTMLElement && target.isConnected) {
+    requestAnimationFrame(() => target.focus())
+    return
+  }
+  const terminalId = typeof target === "string" ? target : undefined
   const terminal = terminalId ? terminalViews.get(terminalId) : undefined
   if (terminal) {
     const { workspace_id: workspaceId, repository_id: repositoryId } = terminal.meta
@@ -570,76 +583,14 @@ type WebOperationIntent = {
   idempotencyKey: string
 }
 
-function operationCancellation(operationId: string): { state: "available" } | { state: "unavailable"; reason: "not-cancellable" } {
-  const available = workspaceActionInventory.some((descriptor) => descriptor.action_id === "operation.cancel"
-    && descriptor.subject.kind === "operation"
-    && descriptor.subject.operation_id === operationId
-    && descriptor.availability.available)
-  return available ? { state: "available" } : { state: "unavailable", reason: "not-cancellable" }
-}
-
-function summarizeOperation(operation: WebOperation, context: WebOperationIntent): WebOperationSummary {
-  const common = {
-    operation_id: operation.operation_id,
-    action_id: context.actionId,
-    workspace_id: context.workspaceId,
-    workspace_name: context.workspaceName,
-    accepted_at: operation.accepted_at,
-  }
-  if (operation.state === "accepted") return { ...common, state: "accepted" }
-  if (operation.state === "running") return {
-    ...common,
-    state: "running",
-    started_at: operation.started_at!,
-    progress: {
-      stage: "executing",
-      ...(operation.progress?.message ? { message: operation.progress.message } : {}),
-      ...(operation.progress?.completed === undefined ? {} : { completed: operation.progress.completed, total: operation.progress.total! }),
-    },
-    cancellation: operationCancellation(operation.operation_id),
-  }
-  if (operation.state === "succeeded") return {
-    ...common,
-    state: "succeeded",
-    started_at: operation.started_at!,
-    finished_at: operation.finished_at!,
-    cancellation: { state: "unavailable", reason: "finished" },
-    result: operation.result ?? {},
-  }
-  return {
-    ...common,
-    state: operation.state,
-    ...(operation.started_at ? { started_at: operation.started_at } : {}),
-    finished_at: operation.finished_at!,
-    cancellation: { state: "unavailable", reason: "finished" },
-    error: {
-      code: operation.error?.code ?? "operation_failed",
-      message: operation.error?.message ?? "The operation failed.",
-      retryable: operation.error?.code === "conflict",
-      ...(operation.error?.forge ? { forge: operation.error.forge } : {}),
-    },
-  }
-}
-
 const operationTracker = createOperationTracker<WebOperationIntent>({
   async submit(intent) {
-    const operation = await api<WebOperation>("operation.submit", intent.body, {
+    return api<WebOperationSummary>("operation.submit", intent.body, {
       scope: "operation.write",
       idempotencyKey: intent.idempotencyKey,
     })
-    operationContexts.set(operation.operation_id, {
-      actionId: intent.actionId,
-      workspaceId: intent.workspaceId,
-      workspaceName: intent.workspaceName,
-    })
-    return summarizeOperation(operation, intent)
   },
-  async get(operationId) {
-    const context = operationContexts.get(operationId)
-    if (!context) throw new Error("Operation context is unavailable; refresh workspace state.")
-    const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
-    return summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" })
-  },
+  get: (operationId) => api<WebOperationSummary>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" }),
   cancel: (operationId) => api<OperationCancelResult>("operation.cancel", { operation_id: operationId }, { scope: "operation.write" }),
   refresh: reconcileAuthoritativeState,
   reconcile: () => { workspaceActionInventoryKey = "" },
@@ -700,15 +651,13 @@ function renderOperationCards(): void {
 }
 
 async function observeTrackedOperation(operationId: string): Promise<void> {
-  const context = operationContexts.get(operationId)
-  if (!context) return
-  const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
-  const workspace = snapshot.workspaces.find(({ id }) => id === context.workspaceId)
+  const operation = await api<WebOperationSummary>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+  const workspace = operation.workspace_id ? snapshot.workspaces.find(({ id }) => id === operation.workspace_id) : undefined
   if (workspace) {
     workspaceActionInventoryKey = ""
     await loadWorkspaceActions(workspace)
   }
-  await operationTracker.observe(summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" }))
+  await operationTracker.observe(operation)
   renderOperationCards()
   renderAll()
 }
@@ -744,6 +693,11 @@ async function loadWorkspaceActions(workspace: Workspace): Promise<void> {
     if (selectedPair?.workspaceId !== workspace.id || snapshot.revision !== key.slice(key.indexOf(":") + 1)) return
     workspaceActionInventory = inventory
     workspaceActionInventoryKey = key
+    inventoryGeneration += 1
+    workspaceActionRegistryCache.clear()
+    for (const pending of inventory.flatMap((descriptor) => descriptor.pending_operation_id ? [descriptor.pending_operation_id] : [])) {
+      void operationTracker.hydrate(pending).then(() => renderOperationCards()).catch(() => undefined)
+    }
     renderScope()
   } catch {
     if (selectedPair?.workspaceId === workspace.id) toast("Workspace actions could not be loaded. Retry after refreshing.", true)
@@ -764,6 +718,8 @@ function selectPair(pair: Pair): void {
   if (selectedPair?.workspaceId !== pair.workspaceId) {
     workspaceActionInventory = []
     workspaceActionInventoryKey = ""
+    inventoryGeneration += 1
+    workspaceActionRegistryCache.clear()
   }
   selectedPair = pair
   preferences.lastPair = pair
@@ -845,12 +801,7 @@ function workspaceActionCallbacks(workspace: Workspace): Record<WebWorkspaceActi
     "workspace.archive": async () => { await archiveWorkspace(workspace); return terminal() },
     "workspace.unarchive": async () => { await unarchiveWorkspace(lifecycleTarget(workspace)); return terminal() },
     "workspace.remove": async () => {
-      const operation = await runWorkspaceLifecycle("workspace.remove", lifecycleTarget(workspace))
-      const details = operation?.state === "failed" ? operation.error?.lifecycle : undefined
-      if (details?.kind === "workspace_dirty" && details.terminals_stopped && details.force_allowed) {
-        const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
-        if (current) showDirtyRemovalFailure(current, details)
-      }
+      await runWorkspaceLifecycle("workspace.remove", lifecycleTarget(workspace))
       return terminal()
     },
     "workspace.force-remove": async () => {
@@ -862,7 +813,10 @@ function workspaceActionCallbacks(workspace: Workspace): Record<WebWorkspaceActi
     "workspace.rename": async () => {
       const nextName = prompt(`Rename ${workspace.name}`, workspace.name)?.trim()
       if (!nextName || nextName === workspace.name) return terminal()
-      return durable("workspace.rename", { mutation: "workspace.rename", request: { workspace: workspace.name, new_name: nextName } })
+      return durable("workspace.rename", {
+        kind: "workspace.rename",
+        request: { workspace_id: workspace.id, expected_revision: snapshot.revision, new_name: nextName },
+      })
     },
     "workspace.open": () => workspaceMutation("workspace.open"),
     "workspace.close": () => workspaceMutation("workspace.close"),
@@ -881,7 +835,10 @@ function workspaceActionCallbacks(workspace: Workspace): Record<WebWorkspaceActi
 }
 
 function actionRegistryFor(workspace: Workspace) {
-  return createWorkspaceActionRegistry(workspaceActionInventory, workspaceActionCallbacks(workspace), {
+  const key = `${workspace.id}:${workspaceActionInventoryKey}`
+  const cached = workspaceActionRegistryCache.get(key)
+  if (cached?.generation === inventoryGeneration) return cached.registry
+  const registry = createWorkspaceActionRegistry(workspaceActionInventory, workspaceActionCallbacks(workspace), {
     confirm: confirmWorkspaceDescriptor,
     localAvailability: (descriptor) => operationTracker.isLocked()
       && descriptor.action_id !== "workspace.notes.list"
@@ -890,13 +847,14 @@ function actionRegistryFor(workspace: Workspace) {
       ? { available: false, reason: "Another workspace action is still reconciling." }
       : { available: true },
   })
+  workspaceActionRegistryCache.set(key, { generation: inventoryGeneration, registry })
+  return registry
 }
 
 function invokeWorkspaceAction(workspace: Workspace, actionId: WebWorkspaceActionId): void {
   const entry = actionRegistryFor(workspace).entry(actionId)
   if (!entry) {
-    if (actionId === "workspace.remove") showRemoveConfirmation(workspace)
-    else toast("Workspace action is not loaded yet.", true)
+    toast("Workspace action is not loaded yet.", true)
     return
   }
   void entry.pointer.callback().then((result) => {
@@ -1357,10 +1315,11 @@ function modal(title: string, shortcutAction?: WebShortcutActionId): OverlayView
     id: shortcutAction ?? `exclusive:${title}`,
     title,
     closeLabel: `Close ${title.toLocaleLowerCase()}`,
-    returnTarget: activeTerminalId,
+    returnTarget: pendingOverlayInvoker ?? activeTerminalId,
     exclusive: shortcutAction === undefined,
   })
   if (opened.kind === "unavailable") return undefined
+  pendingOverlayInvoker = undefined
   return opened.view
 }
 
@@ -1373,13 +1332,13 @@ function lifecycleTarget(workspace: Pick<Workspace, "id" | "name">): LifecycleTa
 
 const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
 
-async function observeLifecycleOperation(initial: WebOperation): Promise<WebOperation> {
+async function observeLifecycleOperation(initial: WebOperationSummary): Promise<WebOperationSummary> {
   let operation = initial
   for (let attempt = 0; attempt < 300; attempt += 1) {
     if (["succeeded", "failed", "cancelled"].includes(operation.state)) return operation
-    if (operation.progress?.message) statusNode.textContent = operation.progress.message
+    if (operation.state === "running" && operation.progress.message) statusNode.textContent = operation.progress.message
     await delay(100)
-    operation = await api<WebOperation>("operation.get", { operation_id: operation.operation_id }, { scope: "operation.write" })
+    operation = await api<WebOperationSummary>("operation.get", { operation_id: operation.operation_id }, { scope: "snapshot.read" })
   }
   throw new Error("Workspace lifecycle operation did not finish in time")
 }
@@ -1388,9 +1347,9 @@ async function submitWorkspaceLifecycle(
   kind: LifecycleKind,
   workspace: LifecycleTarget,
   confirmationName?: string,
-): Promise<WebOperation | undefined> {
+): Promise<WebOperationSummary | undefined> {
   try {
-    const operation = await api<WebOperation>("operation.submit", {
+    const operation = await api<WebOperationSummary>("operation.submit", {
       kind,
       workspace_id: workspace.id,
       expected_revision: workspace.expectedRevision,
@@ -1424,7 +1383,7 @@ async function runWorkspaceLifecycle(
   kind: LifecycleKind,
   workspace: LifecycleTarget,
   confirmationName?: string,
-): Promise<WebOperation | undefined> {
+): Promise<WebOperationSummary | undefined> {
   const operation = await submitWorkspaceLifecycle(kind, workspace, confirmationName)
   if (!operation) return
   if (operation.state === "succeeded") {
@@ -1432,7 +1391,7 @@ async function runWorkspaceLifecycle(
     return operation
   }
   await reconcileAuthoritativeState()
-  if (operation.error) toast(operation.error.message, true)
+  if (operation.state === "failed" || operation.state === "cancelled") toast(operation.error.message, true)
   return operation
 }
 
@@ -1473,88 +1432,6 @@ function showArchivedWorkspaces(): void {
     }
   }
   view.body.append(list)
-}
-
-function showRemoveConfirmation(workspace: Workspace): void {
-  const target = lifecycleTarget(workspace)
-  const view = modal(`Remove ${workspace.name}?`)
-  if (!view) return
-  view.body.append(
-    element("p", "lifecycle-warning", `Remove ${workspace.name} permanently. This cannot be undone.`),
-  )
-  const inventory = element("ul", "removal-inventory")
-  for (const item of ["Service-owned terminals", "Managed Git worktrees", "Workspace directory", "Workspace YAML definition"]) {
-    inventory.append(element("li", "", item))
-  }
-  const actions = element("div", "modal-actions")
-  const cancel = button("Cancel")
-  const remove = button("Remove", "button danger")
-  cancel.addEventListener("click", () => view.close())
-  remove.addEventListener("click", async () => {
-    view.close()
-    const operation = await runWorkspaceLifecycle("workspace.remove", target)
-    const details = operation?.state === "failed" ? operation.error?.lifecycle : undefined
-    if (details?.kind === "workspace_dirty" && details.terminals_stopped && details.force_allowed) {
-      const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
-      if (current) showDirtyRemovalFailure(current, details)
-    }
-  })
-  actions.append(cancel, remove)
-  view.body.append(inventory, actions)
-  cancel.focus()
-}
-
-function showDirtyRemovalFailure(workspace: Workspace, details: WorkspaceLifecycleFailureDetails): void {
-  const view = modal(`Dirty worktrees block ${workspace.name}`)
-  if (!view) return
-  view.body.append(element("p", "lifecycle-warning", "Workspace terminals are already stopped. No workspace files were deleted."))
-  const blockers = element("ul", "removal-blockers")
-  for (const repository of details.blocking_repositories ?? []) blockers.append(element("li", "", repository))
-  const actions = element("div", "modal-actions")
-  const cancel = button("Keep workspace")
-  cancel.addEventListener("click", () => view.close())
-  actions.append(cancel)
-  if (details.force_allowed) {
-    const force = button("Force Remove…", "button danger")
-    force.addEventListener("click", () => { view.close(); void showForceRemoveConfirmation(workspace) })
-    actions.append(force)
-  }
-  view.body.append(element("strong", "", "Dirty repositories"), blockers, actions)
-  cancel.focus()
-}
-
-async function showForceRemoveConfirmation(requestedWorkspace: Workspace): Promise<void> {
-  await refreshSnapshot()
-  const workspace = snapshot.workspaces.find(({ id }) => id === requestedWorkspace.id)
-  if (!workspace) { toast("Workspace no longer exists.", true); return }
-  const target = lifecycleTarget(workspace)
-  const view = modal(`Force Remove ${workspace.name}?`)
-  if (!view) return
-  view.body.append(element("p", "lifecycle-warning", "This irreversibly deletes dirty worktrees and the workspace resources listed in the previous confirmation."))
-  const confirmation = element("input")
-  confirmation.placeholder = workspace.name
-  confirmation.setAttribute("aria-label", `Type ${workspace.name} to enable Force Remove`)
-  const actions = element("div", "modal-actions")
-  const cancel = button("Cancel")
-  const force = button("Force Remove", "button danger")
-  force.disabled = true
-  confirmation.addEventListener("input", () => { force.disabled = !(confirmation.value === workspace.name) })
-  cancel.addEventListener("click", () => view.close())
-  force.addEventListener("click", async () => {
-    if (!(confirmation.value === workspace.name)) return
-    await refreshSnapshot()
-    const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
-    if (!current || current.name !== workspace.name || confirmation.value !== current.name || snapshot.revision !== target.expectedRevision) {
-      view.close()
-      toast("Workspace state changed. Start Force Remove again from a fresh dirty-worktree result.", true)
-      return
-    }
-    view.close()
-    await runWorkspaceLifecycle("workspace.force-remove", target, confirmation.value)
-  })
-  actions.append(cancel, force)
-  view.body.append(confirmation, actions)
-  cancel.focus()
 }
 
 function showWorkspaceSwitcher(): void {
@@ -1713,11 +1590,8 @@ async function showWorkspaceNotes(workspace: Workspace): Promise<void> {
 
   const observeMutation = async (operationId: string) => {
     for (let attempt = 0; attempt < 300; attempt += 1) {
-      const context = operationContexts.get(operationId)
-      if (!context) throw new Error("Workspace note operation context was lost.")
-      const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
-      const summary = summarizeOperation(operation, { ...context, body: {}, idempotencyKey: "" })
-      await operationTracker.observe(summary)
+      const operation = await api<WebOperationSummary>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+      await operationTracker.observe(operation)
       renderOperationCards()
       if (["succeeded", "failed", "cancelled"].includes(operation.state)) return operation
       await delay(100)
@@ -1901,42 +1775,30 @@ function forgeFailureText(state: ForgeReviewState): string | undefined {
 
 function showForgeCreation(view: OverlayView): void {
   let coordinator: ReturnType<typeof createForgeReviewCoordinator>
-  let operationPolling = false
+  let operationReadPending = false
 
-  const pollAcceptedOperation = async (operationId: string) => {
-    if (operationPolling) return
-    operationPolling = true
+  const observeAcceptedOperation = async (operationId: string) => {
+    if (operationReadPending) return
+    operationReadPending = true
     try {
-      for (let attempt = 0; attempt < 300; attempt += 1) {
-        const operation = await api<WebOperation>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
-        if (operation.state === "succeeded") {
-          await refreshSnapshot()
-          coordinator.reconcile()
-          view.close()
-          toast("Workspace created. Authoritative workspace state has been refreshed.")
-          return
-        }
-        if (operation.state === "failed" || operation.state === "cancelled") {
-          coordinator.observeOperation({
-            operation_id: operation.operation_id,
-            state: operation.state,
-            error: {
-              code: operation.error?.code ?? "operation_failed",
-              message: operation.error?.message ?? "Workspace creation failed.",
-              retryable: operation.error?.code === "conflict",
-              ...(operation.error?.forge ? { forge: operation.error.forge } : {}),
-            },
-          } as WebOperationSummary)
-          operationPolling = false
-          render()
-          return
-        }
-        await delay(100)
+      const operation = await api<WebOperationSummary>("operation.get", { operation_id: operationId }, { scope: "snapshot.read" })
+      if (operation.state === "succeeded") {
+        reviewedOperationObservers.delete(operationId)
+        await refreshSnapshot()
+        coordinator.reconcile()
+        view.close()
+        toast("Workspace created. Authoritative workspace state has been refreshed.")
+        return
       }
-      throw new Error("Reviewed workspace creation did not finish in time.")
+      if (operation.state === "failed" || operation.state === "cancelled") {
+        reviewedOperationObservers.delete(operationId)
+        coordinator.observeOperation(operation)
+        render()
+      }
     } catch {
-      operationPolling = false
       render("Workspace creation status could not be refreshed. Reconnect before creating again.")
+    } finally {
+      operationReadPending = false
     }
   }
 
@@ -1944,7 +1806,7 @@ function showForgeCreation(view: OverlayView): void {
     resolve: (request) => api<WebForgeResolveResponse>("forge.source.resolve", request, { scope: "operation.write" }),
     async create(request) {
       const expectedRevision = request.expected_revision
-      const operation = await api<WebOperation>("operation.submit", {
+      const operation = await api<WebOperationSummary>("operation.submit", {
         kind: "workspace.create.reviewed",
         request: { ...request, expected_revision: expectedRevision },
       }, {
@@ -2017,7 +1879,7 @@ function showForgeCreation(view: OverlayView): void {
       shell.append(footer)
       view.body.append(shell)
       view.setPrimaryFocus(() => input.focus())
-      input.focus()
+      requestAnimationFrame(() => { if (input.isConnected) input.focus() })
       return
     }
 
@@ -2027,7 +1889,28 @@ function showForgeCreation(view: OverlayView): void {
       progress.setAttribute("aria-live", "polite")
       shell.append(progress)
       view.body.append(shell)
-      void pollAcceptedOperation(state.operationId)
+      reviewedOperationObservers.set(state.operationId, () => observeAcceptedOperation(state.operationId))
+      void observeAcceptedOperation(state.operationId)
+      return
+    }
+
+    if (state.phase === "terminal-error") {
+      shell.append(
+        element("h2", "", state.outcome === "cancelled" ? "Workspace creation cancelled" : "Workspace creation failed"),
+        element("p", "forge-error", state.message),
+      )
+      const footer = element("div", "forge-review-footer")
+      const back = button("Back to review", "button primary")
+      const change = button("Change URL")
+      const close = button("Close")
+      back.addEventListener("click", () => { coordinator.backToReview(); render() })
+      change.addEventListener("click", () => { coordinator.setUrl(state.url); render() })
+      close.addEventListener("click", () => view.close())
+      footer.append(change, close, back)
+      shell.append(footer)
+      view.body.append(shell)
+      view.setPrimaryFocus(() => back.focus())
+      requestAnimationFrame(() => back.focus())
       return
     }
 
@@ -2128,7 +2011,7 @@ function showForgeCreation(view: OverlayView): void {
       try {
         const result = await request
         render()
-        if (result && typeof result === "object" && "operationId" in result) void pollAcceptedOperation(String(result.operationId))
+        if (result && typeof result === "object" && "operationId" in result) void observeAcceptedOperation(String(result.operationId))
       } catch { render() }
     })
     shell.addEventListener("keydown", (event) => {
@@ -2137,11 +2020,19 @@ function showForgeCreation(view: OverlayView): void {
     footer.append(change, close, create)
     shell.append(footer)
     view.body.append(shell)
-    const invalid = form.querySelector<HTMLElement>(".field-error")?.parentElement?.querySelector<HTMLElement>("input, select")
-    view.setPrimaryFocus(() => (invalid ?? name).focus())
+    focusInvalidForgeField(form, name, view)
   }
 
   render()
+}
+
+function focusInvalidForgeField(form: HTMLElement, fallback: HTMLElement, view: OverlayView): void {
+  const invalid = [...form.querySelectorAll<HTMLElement>(".field-error")]
+    .find((candidate) => Boolean(candidate.textContent?.trim()))
+    ?.parentElement?.querySelector<HTMLElement>("input, select")
+  const target = invalid ?? fallback
+  view.setPrimaryFocus(() => target.focus())
+  requestAnimationFrame(() => { if (target.isConnected) target.focus() })
 }
 
 async function showCreation(): Promise<void> {
@@ -2192,6 +2083,8 @@ async function refreshSnapshot(): Promise<void> {
   if (workspaceActionInventoryKey !== `${selectedPair?.workspaceId ?? ""}:${snapshot.revision}`) {
     workspaceActionInventory = []
     workspaceActionInventoryKey = ""
+    inventoryGeneration += 1
+    workspaceActionRegistryCache.clear()
   }
   preferences.pins = new Set(snapshot.pinned_workspace_ids)
   let preferencesChanged = false
@@ -2262,7 +2155,12 @@ function connectEvents(): void {
     else if (data.type === "signal") void refreshSignals()
     else if (data.type === "operation" && data.operation) {
       const operation = data.operation
-      if (operationContexts.has(operation.operation_id)) {
+      const reviewedObserver = reviewedOperationObservers.get(operation.operation_id)
+      if (reviewedObserver) {
+        void reviewedObserver()
+        return
+      }
+      if (operationTracker.cards().some(({ operation_id }) => operation_id === operation.operation_id)) {
         void observeTrackedOperation(operation.operation_id).catch(() => {
           toast("Operation status could not be refreshed. Reconnect before repeating the action.", true)
         })
@@ -2284,7 +2182,20 @@ function connectEvents(): void {
         toast(operation.progress.message)
       }
     }
-  }).catch((error) => { statusNode.textContent = `Secure event channel unavailable: ${String(error)}` })
+  }).then(() => reconnectKnownOperation(), (error) => {
+    statusNode.textContent = `Secure event channel unavailable: ${String(error)}`
+    return reconnectKnownOperation()
+  })
+}
+
+async function reconnectKnownOperation(): Promise<void> {
+  try {
+    await operationTracker.reconnect()
+    await Promise.all([...reviewedOperationObservers.values()].map((observe) => observe()))
+    renderOperationCards()
+  } catch {
+    toast("The known workspace operation could not be reconnected yet.", true)
+  }
 }
 
 async function pairFromFragment(): Promise<void> {
@@ -2320,20 +2231,18 @@ document.querySelector("#theme")!.addEventListener("click", () => {
   toast(`Theme: ${preferences.theme}`)
 })
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !contextMenu.hidden) { hideContextMenu(); event.preventDefault(); return }
+  if (event.key === "Escape" && !contextMenu.hidden) { hideContextMenu(true); event.preventDefault(); return }
   if (event.key === "Escape" && !signalInbox.hidden) { closeSignalInbox(); event.preventDefault(); return }
   shortcutDispatcher.handleDocument(event)
 })
 document.addEventListener("pointerdown", (event) => { if (!contextMenu.hidden && !contextMenu.contains(event.target as Node)) hideContextMenu() })
-window.addEventListener("blur", hideContextMenu)
-window.addEventListener("resize", hideContextMenu)
-document.addEventListener("scroll", hideContextMenu, true)
+window.addEventListener("blur", () => hideContextMenu())
+window.addEventListener("resize", () => hideContextMenu())
+document.addEventListener("scroll", () => hideContextMenu(), true)
 document.addEventListener("visibilitychange", () => terminalViews.forEach((view) => view.syncStreaming()))
 window.addEventListener("online", () => {
   statusNode.textContent = "Back online · reconnecting terminals"
-  void operationTracker.reconnect().then(() => renderOperationCards()).catch(() => {
-    toast("The known workspace operation could not be reconnected yet.", true)
-  })
+  void reconnectKnownOperation()
 })
 window.addEventListener("offline", () => { statusNode.textContent = "Offline · local terminal sessions remain in the service" })
 

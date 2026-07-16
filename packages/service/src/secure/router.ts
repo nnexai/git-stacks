@@ -41,7 +41,7 @@ import {
 import type { EventBroker, EventSubscription } from "../policy/event-broker.js"
 import { CoreMutationSchemas, EditTargetRequestSchema, type CoreMutationName } from "../policy/core-contract.js"
 import type { CoreStateProvider } from "../policy/core-state.js"
-import type { CoreMutationAdapter, OperationExecution, OperationRegistry, WorkspaceCreateMutation } from "../policy/operations.js"
+import type { CoreMutationAdapter, OperationExecution, OperationRegistry, OperationWebContext, WorkspaceCreateMutation } from "../policy/operations.js"
 import type { SnapshotAdapter } from "../snapshot-adapter.js"
 import type { TerminalAttachment } from "../terminal-attachment.js"
 import type { SecureRequest, SecureScope } from "@git-stacks/protocol"
@@ -55,6 +55,7 @@ import {
   projectWebFileStatus,
   projectWebNotes,
   projectWebOperation,
+  projectWebOperationSummary,
   projectWebSignal,
   projectWebSnapshot,
   projectWebTerminalSignals,
@@ -75,6 +76,7 @@ type Mutation = (request: {
   options?: Record<string, unknown>
   expected_notes_revision?: string
   text?: string
+  new_name?: string
 }, signal?: AbortSignal) => OperationExecution
 
 export interface SecureServiceRouterOptions {
@@ -111,6 +113,7 @@ export interface SecureServiceRouterOptions {
   localTargetId?: string
   dynamicEnvironment?: Pick<DynamicEnvironmentStore, "replace">
   parseDynamicEnvironmentRefresh?: (value: unknown) => DynamicEnvironmentParseResult
+  workspaceOpenState?: (workspaceId: string) => "open" | "closed" | undefined
 }
 
 type SessionResources = {
@@ -245,7 +248,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
         if (!this.options.core || typeof body?.workspace !== "string") throw coded("Workspace notes are unavailable", "capability_unavailable")
         return this.options.core.notes(body.workspace, 5)
       }
-      case "workspace.actions": return this.workspaceActions(body)
+      case "workspace.actions": return this.workspaceActions(context, body)
       case "workspace.notes.list": return this.workspaceNotes(body)
       case "workspace.files.inspect": return this.workspaceFiles(body)
       case "forge.source.resolve": {
@@ -544,7 +547,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
     return { parsed: parsed.data, selected, revision, generatedAt: catalog?.generated_at ?? selected.generated_at }
   }
 
-  private async workspaceActions(body?: Record<string, unknown>): Promise<unknown> {
+  private async workspaceActions(context: SecureSessionContext, body?: Record<string, unknown>): Promise<unknown> {
     const parsed = WebWorkspaceMutationSchema.safeParse(body)
     if (!parsed.success) throw coded("Invalid workspace action request", "invalid_request")
     if (!this.options.core) throw coded("Workspace actions are unavailable", "capability_unavailable")
@@ -554,7 +557,36 @@ export class SecureServiceRouter implements SecureSessionHandler {
       && !state.archived_workspaces.some(({ id }) => id === parsed.data.workspace_id)) {
       throw coded("Workspace not found", "not_found")
     }
-    return projectWebActionInventory(deriveWorkspaceActionInventory({ state, workspaceId: parsed.data.workspace_id }))
+    const actionState = this.options.operations?.workspaceActionState(parsed.data.workspace_id, context.principalId, state.revision)
+    const available = (name: string) => Boolean(this.options.operations && this.options.mutations?.[name])
+    const capabilities = {
+      "workspace.archive": Boolean(this.workspaceLifecycle),
+      "workspace.unarchive": Boolean(this.workspaceLifecycle),
+      "workspace.remove": Boolean(this.workspaceLifecycle),
+      "workspace.force-remove": Boolean(this.workspaceLifecycle),
+      "workspace.rename": available("workspace.rename"),
+      "workspace.open": available("workspace.open"),
+      "workspace.close": available("workspace.close"),
+      "workspace.pin": Boolean(this.options.setWorkspacePins),
+      "workspace.unpin": Boolean(this.options.setWorkspacePins),
+      "workspace.sync": available("workspace.sync"),
+      "workspace.pull": available("workspace.pull"),
+      "workspace.push": available("workspace.push"),
+      "workspace.merge": available("workspace.merge"),
+      "workspace.notes.list": Boolean(this.options.workspaceNotes),
+      "workspace.notes.add": available("workspace.notes.add"),
+      "workspace.notes.clear": available("workspace.notes.clear"),
+      "workspace.files.inspect": Boolean(this.options.workspaceFileStatus),
+      "operation.cancel": Boolean(this.options.operations),
+    } as const
+    return projectWebActionInventory(deriveWorkspaceActionInventory({
+      state,
+      workspaceId: parsed.data.workspace_id,
+      operations: actionState?.operations,
+      removal: actionState?.removal,
+      openState: actionState?.openState ?? this.options.workspaceOpenState?.(parsed.data.workspace_id),
+      capabilities,
+    }))
   }
 
   private async workspaceNotes(body?: Record<string, unknown>): Promise<unknown> {
@@ -604,17 +636,38 @@ export class SecureServiceRouter implements SecureSessionHandler {
     if (lifecycleIntent) {
       if (!lifecycle) throw coded("Invalid workspace lifecycle request", "invalid_request")
       if (!this.workspaceLifecycle) throw coded("Workspace lifecycle is unavailable", "capability_unavailable")
+      let webContext: OperationWebContext | undefined
+      if (context.mode === "browser") {
+        const state = await this.options.core?.build()
+        const target = state?.workspaces.find(({ definition, projection }) => definition.id === lifecycle.workspace_id || projection.id === lifecycle.workspace_id)
+        const archived = state?.archived_workspaces.find(({ id }) => id === lifecycle.workspace_id)
+        const catalog = !target && !archived && this.options.snapshot.buildCatalog ? await this.options.snapshot.buildCatalog() : undefined
+        const catalogTarget = catalog?.workspaces.find(({ workspace }) => workspace.id === lifecycle.workspace_id)
+        const catalogArchived = catalog?.archived_workspaces.find(({ id }) => id === lifecycle.workspace_id)
+        const workspaceName = target?.projection.name ?? target?.definition.name ?? archived?.name ?? catalogTarget?.workspace.name ?? catalogArchived?.name
+        if (!workspaceName) throw coded("Workspace not found", "not_found")
+        webContext = {
+          actionId: lifecycle.kind,
+          workspaceId: lifecycle.workspace_id,
+          workspaceName,
+          expectedRevision: lifecycle.expected_revision,
+        }
+      }
       const operation = await this.workspaceLifecycle.submit({
         clientId: context.principalId,
         idempotencyKey: request.idempotency_key,
         mutation: lifecycle,
+        ...(webContext ? { webContext } : {}),
       })
-      return context.mode === "browser" ? projectWebOperation(operation) : operation
+      return context.mode === "browser"
+        ? projectWebOperationSummary(operation, webContext!, this.options.operations?.cancellationView?.(operation.operation_id))
+        : operation
     }
     const web = WebOperationMutationSchema.safeParse(request.body)
     let mutation: string
     let parsedRequest: unknown
     let execution: OperationExecution
+    let webContext: OperationWebContext | undefined
     let admissionCleanup: (() => Promise<void>) | undefined
     if (web.success) {
       mutation = web.data.kind
@@ -622,6 +675,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
         if (!this.options.workspaceCreate) throw coded("Workspace creation is unavailable", "capability_unavailable")
         parsedRequest = web.data.request
         execution = this.options.workspaceCreate(web.data.request)
+        webContext = { actionId: web.data.kind, workspaceName: web.data.request.name }
       } else if (web.data.kind === "workspace.create.reviewed") {
         if (!this.options.forgeSourceReview) throw coded("Reviewed workspace creation is unavailable", "capability_unavailable")
         let admission
@@ -655,6 +709,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
         }
         parsedRequest = web.data.request
         execution = admission.execution
+        webContext = { actionId: web.data.kind, workspaceName: web.data.request.draft.workspace_name, expectedRevision: web.data.request.expected_revision }
         admissionCleanup = admission.cleanup
       } else {
         const mutationRequest = web.data.request
@@ -665,6 +720,12 @@ export class SecureServiceRouter implements SecureSessionHandler {
         const adapter = this.options.mutations?.[mutation] as Mutation | undefined
         if (!adapter) throw coded("Workspace operation is unavailable", "capability_unavailable")
         parsedRequest = mutationRequest
+        webContext = {
+          actionId: web.data.kind,
+          workspaceId: selected.workspace.id,
+          workspaceName: selected.workspace.name,
+          expectedRevision: mutationRequest.expected_revision,
+        }
         switch (web.data.kind) {
           case "workspace.notes.add":
             execution = adapter({
@@ -679,11 +740,19 @@ export class SecureServiceRouter implements SecureSessionHandler {
               expected_notes_revision: web.data.request.expected_notes_revision,
             })
             break
+          case "workspace.rename":
+            execution = adapter({
+              workspace: selected.workspace.name,
+              new_name: web.data.request.new_name,
+              options: {},
+            })
+            break
           default:
             execution = adapter({ workspace: selected.workspace.name })
         }
       }
     } else {
+      if (context.mode === "browser") throw coded("Invalid browser operation request", "invalid_request")
       const body = requestBody
       if (typeof body?.mutation !== "string") throw coded("Invalid operation request", "invalid_request")
       mutation = body.mutation
@@ -703,12 +772,16 @@ export class SecureServiceRouter implements SecureSessionHandler {
     }
     let operation
     try {
-      operation = await this.options.operations.submit({ clientId: context.principalId, endpoint: mutation, idempotencyKey: request.idempotency_key, request: parsedRequest, execution })
+      operation = await this.options.operations.submit({ clientId: context.principalId, endpoint: mutation, idempotencyKey: request.idempotency_key, request: parsedRequest, execution, ...(webContext ? { webContext } : {}) })
     } catch (error) {
       await admissionCleanup?.().catch(() => undefined)
       throw error
     }
-    return web.success || context.mode === "browser" ? projectWebOperation(operation) : operation
+    return web.success || context.mode === "browser"
+      ? webContext
+        ? projectWebOperationSummary(operation, webContext, this.options.operations.cancellationView?.(operation.operation_id))
+        : projectWebOperation(operation)
+      : operation
   }
 
   private getOperation(context: SecureSessionContext, body?: Record<string, unknown>): unknown {
@@ -717,7 +790,10 @@ export class SecureServiceRouter implements SecureSessionHandler {
     if (!this.options.operations) throw coded("Operation reads are unavailable", "capability_unavailable")
     const operation = this.options.operations.getForClient(parsed.data.operation_id, context.principalId)
     if (!operation) throw coded("Operation not found", "not_found")
-    return context.mode === "browser" ? projectWebOperation(operation) : operation
+    if (context.mode !== "browser") return operation
+    const webContext = this.options.operations.webContextForClient(parsed.data.operation_id, context.principalId)
+    if (!webContext) throw coded("Operation browser context is unavailable", "not_found")
+    return projectWebOperationSummary(operation, webContext, this.options.operations.cancellationView?.(operation.operation_id))
   }
 
   private async cancelOperation(context: SecureSessionContext, body?: Record<string, unknown>): Promise<unknown> {

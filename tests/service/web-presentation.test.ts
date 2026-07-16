@@ -21,9 +21,10 @@ describe("web signal presentation", () => {
   test("browser lifecycle presentation keeps destructive intent explicit and replaceable", () => {
     for (const seam of [
       "showArchivedWorkspaces",
-      "showRemoveConfirmation",
-      "showDirtyRemovalFailure",
-      "showForceRemoveConfirmation",
+      "confirmWorkspaceDescriptor",
+      "createWorkspaceActionRegistry",
+      "confirmedForceNames",
+      "workspaceActionRegistryCache",
       "reconcileAuthoritativeState",
       "workspaceSuccessorOrder",
       "confirmation.value === workspace.name",
@@ -34,10 +35,12 @@ describe("web signal presentation", () => {
       "workspace.force-remove",
     ]) expect(webAppSource, seam).toContain(seam)
 
-    expect(webAppSource).toMatch(/cancel\.focus\(\)/)
-    expect(webAppSource).toMatch(/const target = lifecycleTarget\(workspace\)[\s\S]*runWorkspaceLifecycle\("workspace\.remove", target\)/)
+    expect(webAppSource).toMatch(/keep\.focus\(\)/)
+    expect(webAppSource).toMatch(/"workspace\.remove": async \(\) => \{[\s\S]*runWorkspaceLifecycle\("workspace\.remove", lifecycleTarget\(workspace\)\)/)
     expect(webAppSource).toMatch(/expected_revision: workspace\.expectedRevision/)
-    expect(webAppSource).toMatch(/snapshot\.revision !== target\.expectedRevision/)
+    expect(webAppSource).not.toContain("showDirtyRemovalFailure")
+    expect(webAppSource).not.toContain("showForceRemoveConfirmation")
+    expect(webAppSource).toContain("confirmation.value === workspace.name")
     expect(webAppSource).toMatch(/if \(error instanceof ApiRequestError && error\.code === "conflict"\)[\s\S]*await reconcileAuthoritativeState\(\)[\s\S]*return/)
     expect(webAppSource).not.toMatch(/workspace\.(?:remove|force-remove)[\s\S]{0,500}(?:retry|replay)/i)
     expect(webAppSource).not.toMatch(/(?:split|match|includes)\([^\n]*Dirty worktrees/i)
