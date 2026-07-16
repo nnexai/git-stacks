@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-16T20:01:36.694Z",
+  "timestamp": "2026-07-16T20:36:21.747Z",
   "phase": "126",
   "phase_name": "web-workflow-and-forge-source-parity",
   "phase_dir": ".planning/phases/126-web-workflow-and-forge-source-parity",
@@ -17,15 +17,15 @@
     },
     {
       "id": 2,
-      "name": "Plan 06 TUI implementation checkpoint",
+      "name": "Plan 06 reviewed TUI repair implementation",
       "status": "in_progress",
-      "progress": "Implementation and summary are committed on codex/phase126-06 through d182db26, but independent review found five high-severity contract gaps and the branch must not be merged yet."
+      "progress": "RED tests and repairs are committed on codex/phase126-06 through 61b8e786. Focused TUI tests, TUI/client/service typechecks, TUI build, dependency gate, and architecture gate pass. The full isolated TUI suite still fails because stale App integration fixtures throw from fetchWorkspaceActionInventory and expect the forbidden legacy fallback; update those fixtures and independently re-review before merge."
     },
     {
       "id": 3,
-      "name": "Plan 07 web review repair checkpoint",
+      "name": "Plan 07 scope-menu focus repair",
       "status": "in_progress",
-      "progress": "Six original authority/security findings are repaired on codex/phase126-07-review-fix through bf3009c7; independent re-review found one residual focus-restoration warning before merge."
+      "progress": "Repairs are committed on codex/phase126-07-review-fix through 17ec414b, but second independent re-review found two blockers: hidden scope-menu items cannot be restored without reopening the menu, and helper-only tests do not exercise production scope-menu/modal/restore wiring. One warning also requires rejecting disabled/inert/CSS-hidden targets and verifying focus before suppressing fallback."
     },
     {
       "id": 4,
@@ -37,72 +37,82 @@
   "remaining_tasks": [
     {
       "id": 5,
-      "name": "Repair and re-review Plan 06 findings on codex/phase126-06",
+      "name": "Update Plan 06 App integration fixtures for authoritative inventory and rerun the full isolated TUI suite",
       "status": "not_started"
     },
     {
       "id": 6,
-      "name": "Repair and re-review Plan 07 scope-menu focus warning on codex/phase126-07-review-fix",
+      "name": "Independently re-review the complete Plan 06 repair and fix any surviving findings",
       "status": "not_started"
     },
     {
       "id": 7,
-      "name": "Cherry-pick the reviewed Plan 06 and Plan 07 commit sets onto main and run post-merge gates",
+      "name": "Repair Plan 07 production-wired scope-menu restoration and unusable-target fallback with real DOM/controller tests",
       "status": "not_started"
     },
     {
       "id": 8,
-      "name": "Execute Phase 126 Plan 08 conformance, full gates, and Phase 127 handoff",
+      "name": "Independently re-review Plan 07 until clean",
       "status": "not_started"
     },
     {
       "id": 9,
-      "name": "Discuss, plan, execute, and verify Phase 127, then stop before tag/push/publish/release for manual verification",
+      "name": "Cherry-pick only the clean reviewed Plan 06 and Plan 07 commit sets onto main and run post-merge gates",
+      "status": "not_started"
+    },
+    {
+      "id": 10,
+      "name": "Execute Phase 126 Plan 08 conformance, full gates, and Phase 127 handoff",
       "status": "not_started"
     }
   ],
   "blockers": [
     {
-      "description": "Plan 06 canonical inventory loading/failure currently exposes an enabled legacy action menu, bypassing service authority.",
+      "description": "Plan 06 full npm run test:tui is not green because stale App integration fixtures intentionally throw during canonical inventory loading and still expect the prohibited enabled legacy fallback.",
       "type": "technical",
-      "workaround": "Render an explicit loading/error state with no authoritative actions until the canonical inventory succeeds."
+      "workaround": "Update only the stale integration fixtures to provide authoritative action inventories, retain explicit loading/error fail-closed tests, rerun the full isolated TUI suite, then independently re-review."
     },
     {
-      "description": "Plan 06 canonical Merge bypasses its required confirmation and canonical rendering drops existing Edit/Clean/Run/Issue/Commands actions.",
+      "description": "Plan 07 captures a concrete scope-menu item but hides its ancestor menu before the overlay; current usability checks reject the hidden item, so Notes/confirmation cannot restore the actual invoking control.",
       "type": "technical",
-      "workaround": "Use shared registry confirmation/callback policy and preserve adapted legacy-only actions without making them an authority fallback."
+      "workaround": "Use a production-wired restoration target/callback that can reopen the originating menu, restore aria-expanded, validate connectivity/usability, and focus the concrete item; fall back when it no longer exists."
     },
     {
-      "description": "Plan 06 submit-unknown can trap the operation view, terminal reviewed-create failures do not restore editable review, duplicate v shortcuts misroute Pin/Unpin, and note rejection promises are unhandled.",
+      "description": "Plan 07 helper-only tests do not execute the actual scope-menu listener, canonical action callback, modal/controller, or restoreOverlayFocus wiring, so they can pass while production wiring is broken.",
       "type": "technical",
-      "workaround": "Add RED tests for every review path, repair through shared trackers/coordinator, and independently re-review."
+      "workaround": "Add integration-level DOM/controller coverage through the same coordinator API production invokes, including Notes/confirmation, removed-item fallback, and Rename-cancel followed by unrelated Create."
     },
     {
-      "description": "Plan 07 scope-menu overlays restore focus to the terminal rather than the invoking scope control.",
+      "description": "Plan 07 focus usability accepts disabled, inert, CSS-hidden, or focus-failing targets and returns before terminal/visible-control fallback.",
       "type": "technical",
-      "workaround": "Capture the concrete scope-menu invoker before row.run(), add placement-specific coverage, then re-review."
+      "workaround": "Reject unusable targets, revalidate inside the animation-frame callback, verify focus actually moved, and execute fallback otherwise."
     }
   ],
   "async_jobs": [],
   "human_actions_pending": [],
   "decisions": [
     {
-      "decision": "Stop at the clean review boundary after committing GSD 1.7.0 instead of starting Plan 126-08.",
-      "rationale": "The user requested a restart so subsequent work uses the updated workflows end-to-end.",
+      "decision": "Use the two existing isolated repair worktrees rather than redispatching Plan 06 from scratch.",
+      "rationale": "The safe-resume gate found committed implementation on codex/phase126-06 with no summary on main; redispatch risked duplicate and conflicting work.",
       "phase": "126"
     },
     {
-      "decision": "Do not merge either Plan 06 or Plan 07 branch until its independent review findings are repaired.",
-      "rationale": "Green branch tests did not cover the TUI authority bypasses and web focus placement gap.",
+      "decision": "Do not merge either repair branch until its full relevant suite passes and an independent review is clean.",
+      "rationale": "Repeated review found real authority and focus-lifecycle failures after locally green focused tests.",
       "phase": "126"
     },
     {
-      "decision": "Retain the milestone release boundary: no tag, push, publish, or release before the user's Phase 127 manual verification.",
-      "rationale": "This is an explicit user constraint and hosted/manual evidence must remain honest.",
+      "decision": "Pause before another repair cycle because the orchestrator context crossed the workflow's POOR threshold.",
+      "rationale": "Fresh-session resumption is safer than continuing a multi-cycle repair/re-review loop under degraded context.",
+      "phase": "126"
+    },
+    {
+      "decision": "Retain the milestone release boundary: no tag, push, publish, release, or release-candidate claim before Phase 127 manual verification.",
+      "rationale": "This remains an explicit project constraint and deterministic tests cannot impersonate live human approval.",
       "phase": "127"
     }
   ],
   "uncommitted_files": [],
-  "next_action": "Resume with $gsd-resume-work, acknowledge the blocking constraints, then repair Plan 06 in /tmp/git-stacks-126-06 before touching Plan 08.",
-  "context_notes": "Main is clean at 0837a1ed. /tmp/git-stacks-126-06 is clean at d182db26 on codex/phase126-06. /tmp/git-stacks-126-07-review-fix is clean at bf3009c7 on codex/phase126-07-review-fix. Neither branch is merged. Plan 126-08 and Phase 127 have not started. No background processes or async jobs remain."
+  "next_action": "Resume with /gsd-resume-work, acknowledge every blocking constraint, then update the stale Plan 06 App integration fixtures in /tmp/git-stacks-126-06 and rerun npm run test:tui before independent re-review. In parallel, repair the production-wired Plan 07 scope-menu restoration blockers in /tmp/git-stacks-126-07-review-fix. Do not start Plan 08 or merge either branch first.",
+  "context_notes": "Main is at 9e095470 on main. /tmp/git-stacks-126-06 is clean at 61b8e786 on codex/phase126-06. /tmp/git-stacks-126-07-review-fix is clean at 17ec414b on codex/phase126-07-review-fix. Neither branch is merged. Plan 08 has not started. No background agents, servers, watchers, async jobs, or external jobs remain. Editor diagnostics shown during the session largely reflect isolated-worktree dependency/type-environment resolution and are not substitutes for executed package gates; rerun standard gates after integration on main."
 }
