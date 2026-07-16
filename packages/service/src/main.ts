@@ -16,7 +16,7 @@ import { getWorkspaceCreationCatalog } from "@git-stacks/core/workspace-creation
 import { setWorkspacePins } from "@git-stacks/core/workspace-pins"
 import { setWorkspacePriorities } from "@git-stacks/core/workspace-priorities"
 import { readWebShortcutSettings, updateWebShortcutSettings } from "@git-stacks/core/web-shortcuts"
-import { readGlobalConfig, readWorkspace } from "@git-stacks/core/config"
+import { listTemplatesUncached, listWorkspacesUncached, readGlobalConfig, readRegistry, readWorkspace } from "@git-stacks/core/config"
 import { getTasksDir } from "@git-stacks/core/paths"
 import { getWorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
 import { getWorkspaceNotesSnapshot } from "@git-stacks/core/notes"
@@ -29,6 +29,7 @@ import type { SnapshotAdapter } from "./snapshot-adapter"
 import type { WebTerminalManager } from "./web/terminal-manager"
 import { createDynamicEnvironmentStore, type DynamicEnvironmentStore } from "./policy/dynamic-environment"
 import type { SecureServiceRouterOptions } from "./secure/router"
+import { ForgeSourceReviewAuthority } from "./policy/forge-source-review"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
@@ -441,6 +442,17 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
         })
       : undefined
     const workspaceCreationCatalog = options.workspaceCreationCatalog ?? (() => ({ ...getWorkspaceCreationCatalog(), client_model: CLIENT_MODEL_LIMITS }))
+    const forgeSourceReview = new ForgeSourceReviewAuthority({
+      catalog: async () => ({
+        revision: snapshot.buildCatalog
+          ? (await snapshot.buildCatalog()).revision
+          : await snapshot.currentRevision(),
+        registry: readRegistry(),
+        templates: listTemplatesUncached(),
+        config: readGlobalConfig(),
+        existing_workspace_names: listWorkspacesUncached().map(({ name }) => name),
+      }),
+    })
     let descriptor: ServiceDescriptor | undefined
     const writeRotatedLaunch = (mode: "browser" | "tui", launch: import("./security/session-authority.js").LaunchToken) => {
       if (!descriptor) return
@@ -474,6 +486,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       workspaceFileStatus,
       workspaceNotes: (workspaceName, limit) => getWorkspaceNotesSnapshot(workspaceName, { limit }),
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
+      forgeSourceReview,
       workspaceCreationCatalog,
       publishSignal,
       ...(workspaceLifecycle ? {

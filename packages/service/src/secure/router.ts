@@ -10,6 +10,7 @@ import {
   WebShortcutSettingsSchema,
   WebOperationMutationSchema,
   WebFileStatusRequestSchema,
+  WebForgeResolveRequestSchema,
   WebNotesListRequestSchema,
   WebPinsSchema,
   WebPrioritiesSchema,
@@ -63,6 +64,7 @@ import type { createWorkspaceLifecycleCoordinator } from "../policy/workspace-li
 import type { WorkspaceLifecycleAdmission } from "../policy/workspace-lifecycle-admission.js"
 import type { DynamicEnvironmentStore } from "../policy/dynamic-environment.js"
 import { deriveWorkspaceActionInventory } from "../policy/workspace-actions.js"
+import type { ForgeSourceReviewAuthority } from "../policy/forge-source-review.js"
 
 type DynamicEnvironmentParseResult =
   | { success: true; data: DynamicEnvironmentRefresh }
@@ -85,6 +87,7 @@ export interface SecureServiceRouterOptions {
   workspaceNotes?: (workspace: string, limit: number) => WorkspaceNotesSnapshot | Promise<WorkspaceNotesSnapshot>
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
+  forgeSourceReview?: Pick<ForgeSourceReviewAuthority, "resolve">
   publishSignal?: (signal: Signal) => Promise<void>
   dismissSignal?: (dismissal: SignalDismissal) => Promise<void>
   signalProjection?: () => Promise<{ signals: Signal[]; dismissed: string[]; sequence: string }>
@@ -127,6 +130,7 @@ const methodScopes: Record<string, SecureScope> = {
   "workspace.actions": "snapshot.read",
   "workspace.notes.list": "snapshot.read",
   "workspace.files.inspect": "snapshot.read",
+  "forge.source.resolve": "operation.write",
   "core.edit-target": "snapshot.read",
   "snapshot.all": "snapshot.read",
   "web.snapshot": "snapshot.read",
@@ -243,6 +247,12 @@ export class SecureServiceRouter implements SecureSessionHandler {
       case "workspace.actions": return this.workspaceActions(body)
       case "workspace.notes.list": return this.workspaceNotes(body)
       case "workspace.files.inspect": return this.workspaceFiles(body)
+      case "forge.source.resolve": {
+        const parsed = WebForgeResolveRequestSchema.safeParse(body)
+        if (!parsed.success) throw coded("Invalid forge source URL", "invalid_request")
+        if (!this.options.forgeSourceReview) throw coded("Forge source review is unavailable", "capability_unavailable")
+        return this.options.forgeSourceReview.resolve({ principalId: context.principalId, url: parsed.data.url })
+      }
       case "core.edit-target": {
         if (!this.options.core) throw coded("Core state is unavailable", "capability_unavailable")
         const parsed = EditTargetRequestSchema.safeParse(body)

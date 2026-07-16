@@ -48,9 +48,10 @@ function createAuthority(input: {
   revision?: () => string
 } = {}) {
   const calls: unknown[] = []
+  let defaultSequence = 1
   const authority = new ForgeSourceReviewAuthority({
     now: input.now ?? (() => Date.parse("2026-07-16T12:00:00.000Z")),
-    randomBytes: input.random ?? ((size) => new Uint8Array(size).fill(7)),
+    randomBytes: input.random ?? ((size) => new Uint8Array(size).fill(defaultSequence++)),
     catalog: async () => ({ ...catalog, revision: input.revision?.() ?? catalog.revision }),
     resolve: async (request) => {
       calls.push(request)

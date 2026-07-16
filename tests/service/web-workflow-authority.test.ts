@@ -163,4 +163,25 @@ describe("secure web workflow authority", () => {
       .rejects.toMatchObject({ code: "not_found" })
     expect(cancelCalls).toBe(1)
   })
+
+  test("binds forge resolution to the authenticated principal and operation scope", async () => {
+    const calls: unknown[] = []
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      forgeSourceReview: {
+        resolve: async (input) => {
+          calls.push(input)
+          return { resolved: false, failure: { code: "change_not_found", recovery: "change_source", message: "The change could not be found with the current account." } }
+        },
+      },
+    })
+    const body = { url: "https://github.com/acme/api/pull/42" }
+    await router.request(context(["operation.write"]), request("forge.source.resolve", body))
+    expect(calls).toEqual([{ principalId: "principal-a", url: body.url }])
+    await expect(router.request(context(["snapshot.read"]), request("forge.source.resolve", body)))
+      .rejects.toMatchObject({ code: "unauthorized" })
+    await expect(router.request(context(["operation.write"]), request("forge.source.resolve", { ...body, token: "secret" })))
+      .rejects.toMatchObject({ code: "invalid_request" })
+    expect(calls).toHaveLength(1)
+  })
 })
