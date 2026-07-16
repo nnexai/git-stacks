@@ -164,6 +164,27 @@ function validateRegistry(bindings: WebShortcutEffectiveBinding[]): void {
   }
 }
 
+function validateMutationOwnership(
+  current: GlobalConfig,
+  candidate: GlobalConfig,
+  mutation: WebShortcutMutationIntent,
+): void {
+  const owners = new Map<string, WebShortcutActionId>()
+  for (const row of effectiveBindings(current, mutation.platform)) {
+    if (row.action_id === mutation.action_id) continue
+    for (const value of [...(row.primary ? [row.primary] : []), ...row.aliases]) {
+      owners.set(bindingKey(value), row.action_id)
+    }
+  }
+
+  const edited = effectiveBindings(candidate, mutation.platform)
+    .find((row) => row.action_id === mutation.action_id)!
+  for (const value of [...(edited.primary ? [edited.primary] : []), ...edited.aliases]) {
+    const owner = owners.get(bindingKey(value))
+    if (owner) throw new WebShortcutConflictError(mutation.action_id, owner)
+  }
+}
+
 function settings(config: GlobalConfig, platform: WebShortcutPlatform): WebShortcutSettings {
   const bindings = effectiveBindings(config, platform)
   validateRegistry(bindings)
@@ -220,6 +241,7 @@ export function updateWebShortcutSettings(
   const next = dependencies.updateGlobalConfig((current) => {
     if (webShortcutRevision(current) !== mutation.expected_revision) throw new WebShortcutStaleRevisionError()
     const candidate = applyMutation(current, mutation)
+    validateMutationOwnership(current, candidate, mutation)
     validateRegistry(effectiveBindings(candidate, "macos"))
     validateRegistry(effectiveBindings(candidate, "linux"))
     return candidate

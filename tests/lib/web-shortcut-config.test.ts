@@ -157,4 +157,54 @@ describe("authoritative web shortcut configuration", () => {
     })).toThrow(WebShortcutConflictError)
     expect(state.raw()).toBe(before)
   })
+
+  test("attributes primary and alias conflicts to the pre-existing other action in both registry directions", () => {
+    const expectConflict = (
+      state: ReturnType<typeof authority>,
+      mutation: Omit<WebShortcutMutationIntent, "expected_revision">,
+      owner: WebShortcutMutationIntent["action_id"],
+    ) => {
+      const current = state.read(mutation.platform)
+      const writesBefore = state.writes()
+      try {
+        state.update({ ...mutation, expected_revision: current.revision } as WebShortcutMutationIntent)
+        throw new Error("Expected shortcut conflict")
+      } catch (error) {
+        expect(error).toBeInstanceOf(WebShortcutConflictError)
+        expect(error).toMatchObject({ actionId: mutation.action_id, conflictActionId: owner })
+      }
+      expect(state.writes()).toBe(writesBefore)
+    }
+
+    expectConflict(authority(), {
+      platform: "linux", action_id: "workspace.switch", intent: "set-primary",
+      binding: binding("KeyP", { ctrl: true, alt: true, shift: true }),
+    }, "commands.open")
+    expectConflict(authority(), {
+      platform: "linux", action_id: "commands.open", intent: "set-primary",
+      binding: binding("KeyK", { ctrl: true, alt: true, shift: true }),
+    }, "workspace.switch")
+
+    const earlierAliasOwner = authority()
+    let earlier = earlierAliasOwner.read("linux")
+    earlierAliasOwner.update({
+      platform: "linux", action_id: "workspace.switch", expected_revision: earlier.revision,
+      intent: "set-aliases", aliases: [binding("KeyO", { ctrl: true, alt: true })],
+    })
+    expectConflict(earlierAliasOwner, {
+      platform: "linux", action_id: "commands.open", intent: "set-primary",
+      binding: binding("KeyO", { ctrl: true, alt: true }),
+    }, "workspace.switch")
+
+    const laterAliasOwner = authority()
+    let later = laterAliasOwner.read("linux")
+    laterAliasOwner.update({
+      platform: "linux", action_id: "commands.open", expected_revision: later.revision,
+      intent: "set-aliases", aliases: [binding("KeyO", { ctrl: true, alt: true })],
+    })
+    expectConflict(laterAliasOwner, {
+      platform: "linux", action_id: "workspace.switch", intent: "set-primary",
+      binding: binding("KeyO", { ctrl: true, alt: true }),
+    }, "commands.open")
+  })
 })

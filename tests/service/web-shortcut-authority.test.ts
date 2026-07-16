@@ -127,6 +127,21 @@ describe("secure web shortcut authority", () => {
     }
   })
 
+  test("projects the pre-existing shortcut owner in either conflict direction", async () => {
+    for (const [edited, owner] of [
+      ["workspace.switch", "commands.open"],
+      ["commands.open", "workspace.switch"],
+    ] as const) {
+      const router = new SecureServiceRouter({
+        snapshot: snapshot(),
+        updateWebShortcutSettings: () => { throw new WebShortcutConflictError(edited, owner) },
+      })
+      await expect(router.request(context(["operation.write"]), request("shortcuts.set", {
+        platform: "linux", action_id: edited, expected_revision: "7", intent: "unbind",
+      }))).rejects.toMatchObject({ code: "conflict", message: `Shortcut conflicts with ${owner}` })
+    }
+  })
+
   test("composes the core reader and updater as narrow managed-service capabilities", () => {
     const composition = createWebShortcutRuntimeComposition()
     expect(Object.keys(composition).sort()).toEqual(["readWebShortcutSettings", "updateWebShortcutSettings"])
