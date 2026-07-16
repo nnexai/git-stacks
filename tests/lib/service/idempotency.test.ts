@@ -102,7 +102,8 @@ describe("workspace mutation adapters", () => {
     expect(Object.keys(adapters).sort()).toEqual([
       "repository.delete", "template.clone", "template.delete", "template.write", "workspace.clean", "workspace.close",
       "workspace.command.run", "workspace.create", "workspace.issue.open", "workspace.labels.set", "workspace.merge",
-      "workspace.open", "workspace.push", "workspace.remove", "workspace.rename", "workspace.sync",
+      "workspace.notes.add", "workspace.notes.clear", "workspace.open", "workspace.pull", "workspace.push",
+      "workspace.remove", "workspace.rename", "workspace.sync",
     ])
     const reports: string[] = []
     const operation = adapters["workspace.open"]({ workspace: "demo", options: { captured: true } })

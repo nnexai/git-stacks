@@ -12,6 +12,7 @@ import {
   TimestampSchema,
   WorkspaceLifecycleMutationSchema,
   WorkspaceSnapshotSchema,
+  utf8BoundedString,
   type WorkspaceLifecycleMutation,
 } from "@git-stacks/protocol"
 
@@ -83,6 +84,17 @@ export const WorkspaceIssueRequestSchema = z.strictObject({
   workspace: z.string().min(1),
   tracker: z.enum(["github", "gitlab", "gitea", "jira"]),
 })
+export const WorkspaceNotesAddRequestSchema = z.strictObject({
+  workspace: z.string().min(1),
+  expected_notes_revision: RevisionSchema,
+  text: utf8BoundedString(4096, 1).refine((text) => text.trim().length > 0, {
+    message: "Workspace notes cannot be blank",
+  }),
+})
+export const WorkspaceNotesClearRequestSchema = z.strictObject({
+  workspace: z.string().min(1),
+  expected_notes_revision: RevisionSchema,
+})
 export const TemplateWriteRequestSchema = z.strictObject({ template: TemplateSchema })
 export const TemplateCloneRequestSchema = z.strictObject({
   template: z.string().min(1),
@@ -112,7 +124,10 @@ export const CoreMutationSchemas = {
   "workspace.remove": WorkspaceMutationRequestSchema,
   "workspace.merge": WorkspaceMutationRequestSchema,
   "workspace.sync": WorkspaceMutationRequestSchema,
+  "workspace.pull": WorkspaceMutationRequestSchema,
   "workspace.push": WorkspaceMutationRequestSchema,
+  "workspace.notes.add": WorkspaceNotesAddRequestSchema,
+  "workspace.notes.clear": WorkspaceNotesClearRequestSchema,
   "workspace.rename": WorkspaceRenameRequestSchema,
   "workspace.labels.set": WorkspaceLabelsRequestSchema,
   "workspace.command.run": WorkspaceCommandRequestSchema,

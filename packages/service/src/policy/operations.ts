@@ -20,7 +20,18 @@ import {
   mergeWorkspace,
   removeWorkspace,
 } from "@git-stacks/core/workspace-lifecycle"
-import { pushWorkspace, syncWorkspace } from "@git-stacks/core/workspace-git"
+import {
+  pullWorkspace as pullWorkspaceDirect,
+  pushWorkspace,
+  syncWorkspace,
+  type PullResult,
+  type PullRow,
+} from "@git-stacks/core/workspace-git"
+import {
+  addWorkspaceNote as addWorkspaceNoteDirect,
+  clearWorkspaceNotes as clearWorkspaceNotesDirect,
+  getWorkspaceNotesSnapshot as getWorkspaceNotesSnapshotDirect,
+} from "@git-stacks/core/notes"
 import { createWorkspaceFromRequest, planWorkspaceCreation, type WorkspaceCreationRequest } from "@git-stacks/core/workspace-creation"
 import {
   deleteTemplate,
@@ -63,6 +74,8 @@ export type OperationProgressInput = Omit<OperationProgress, "stage"> & { stage?
 export interface OperationExecution {
   steps: OperationStep[]
   result?: Record<string, unknown>
+  /** Rebuild authoritative read models after every terminal outcome. */
+  finalize?: () => void | Promise<void>
 }
 
 export interface SubmitOperationInput {
@@ -464,12 +477,44 @@ type WorkspaceFunction = (workspace: string, options: any, progress?: (message: 
 export type CoreMutationAdapter = (request: any, signal?: AbortSignal) => OperationExecution
 export type CoreMutationAdapters = Record<CoreMutationName, CoreMutationAdapter> & { "workspace.create": WorkspaceCreateMutation }
 
+type SafePullReason = "missing" | "dirty" | "branch_mismatch" | "fetch_failed" | "pull_failed" | "unknown"
+
+function safePullReason(reason: string): SafePullReason {
+  if (/path missing|task_path missing/i.test(reason)) return "missing"
+  if (/dirty/i.test(reason)) return "dirty"
+  if (/branch mismatch|current branch/i.test(reason)) return "branch_mismatch"
+  if (/fetch/i.test(reason)) return "fetch_failed"
+  if (/pull|fast.forward|diverg/i.test(reason)) return "pull_failed"
+  return "unknown"
+}
+
+function safePullRow(row: PullRow): Omit<PullRow, "detail"> & { reason?: SafePullReason } {
+  return {
+    repo: row.repo,
+    status: row.status,
+    ...(row.status === "failed" || row.status === "skipped" ? { reason: safePullReason(row.detail) } : {}),
+  }
+}
+
+function safePullResult(outcome: PullResult): Record<string, unknown> {
+  return {
+    pulled: outcome.pulled.map(({ repo, commits }) => ({ repo, commits })),
+    skipped: outcome.skipped.map(({ repo, reason }) => ({ repo, reason: safePullReason(reason) })),
+    failed: outcome.failed.map(({ repo, reason }) => ({ repo, reason: safePullReason(reason) })),
+  }
+}
+
 export function createWorkspaceMutationAdapters(dependencies: {
   openWorkspace?: WorkspaceFunction
   closeWorkspace?: WorkspaceFunction
   createWorkspace?: typeof createWorkspaceFromRequest
   planWorkspace?: typeof planWorkspaceCreation
   listWorkspaces?: typeof listWorkspacesUncached
+  pullWorkspace?: typeof pullWorkspaceDirect
+  addWorkspaceNote?: typeof addWorkspaceNoteDirect
+  clearWorkspaceNotes?: typeof clearWorkspaceNotesDirect
+  getWorkspaceNotesSnapshot?: typeof getWorkspaceNotesSnapshotDirect
+  refreshWorkspace?: (workspace: string) => void | Promise<void>
 } = {}): CoreMutationAdapters {
   const adapt = (name: "open" | "close", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
     steps: [{
@@ -567,6 +612,29 @@ export function createWorkspaceMutationAdapters(dependencies: {
         },
       }], result }
     },
+    "workspace.pull": (request: CoreMutationRequest<"workspace.pull">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
+      return {
+        steps: [{
+          name: "workspace.pull", stage: "executing", message: "Pulling workspace",
+          run: async (report, cancellation) => {
+            cancellation?.commit()
+            let progressQueue = Promise.resolve()
+            const outcome = await (dependencies.pullWorkspace ?? pullWorkspaceDirect)(request.workspace, (row) => {
+              const safe = safePullRow(row)
+              progressQueue = progressQueue
+                .then(() => report({ message: `${safe.repo}: ${safe.status}`, data: { kind: "pull", ...safe } }))
+                .then(() => undefined)
+            })
+            await progressQueue
+            Object.assign(result, safePullResult(outcome))
+            if (!outcome.ok) throw new Error("Workspace pull failed")
+          },
+        }],
+        result,
+        finalize: dependencies.refreshWorkspace ? () => dependencies.refreshWorkspace!(request.workspace) : undefined,
+      }
+    },
     "workspace.push": (request: CoreMutationRequest<"workspace.push">) => {
       const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
       return { steps: [{
@@ -581,6 +649,50 @@ export function createWorkspaceMutationAdapters(dependencies: {
           if (!outcome.ok) throw new Error(outcome.error ?? "Workspace push failed")
         },
       }], result }
+    },
+    "workspace.notes.add": (request: CoreMutationRequest<"workspace.notes.add">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
+      return {
+        steps: [{
+          name: "workspace.notes.add", stage: "executing", message: "Adding workspace note",
+          run: async (_report, cancellation) => {
+            cancellation?.commit()
+            await (dependencies.addWorkspaceNote ?? addWorkspaceNoteDirect)(request.workspace, request.text, {
+              expectedRevision: request.expected_notes_revision,
+            })
+            const notes = await (dependencies.getWorkspaceNotesSnapshot ?? getWorkspaceNotesSnapshotDirect)(request.workspace, { limit: 50 })
+            Object.assign(result, {
+              notes_revision: notes.revision,
+              note_count: notes.count,
+              notes: notes.records,
+            })
+          },
+        }],
+        result,
+        finalize: dependencies.refreshWorkspace ? () => dependencies.refreshWorkspace!(request.workspace) : undefined,
+      }
+    },
+    "workspace.notes.clear": (request: CoreMutationRequest<"workspace.notes.clear">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
+      return {
+        steps: [{
+          name: "workspace.notes.clear", stage: "executing", message: "Clearing workspace notes",
+          run: async (_report, cancellation) => {
+            cancellation?.commit()
+            await (dependencies.clearWorkspaceNotes ?? clearWorkspaceNotesDirect)(request.workspace, {
+              expectedRevision: request.expected_notes_revision,
+            })
+            const notes = await (dependencies.getWorkspaceNotesSnapshot ?? getWorkspaceNotesSnapshotDirect)(request.workspace, { limit: 50 })
+            Object.assign(result, {
+              notes_revision: notes.revision,
+              note_count: notes.count,
+              notes: notes.records,
+            })
+          },
+        }],
+        result,
+        finalize: dependencies.refreshWorkspace ? () => dependencies.refreshWorkspace!(request.workspace) : undefined,
+      }
     },
     "workspace.labels.set": (request: CoreMutationRequest<"workspace.labels.set">) => ({
       steps: [{ name: "workspace.labels.set", stage: "executing", message: "Updating workspace labels", run: async () => {
