@@ -35,6 +35,9 @@ describe("web signal presentation", () => {
     ]) expect(webAppSource, seam).toContain(seam)
 
     expect(webAppSource).toMatch(/cancel\.focus\(\)/)
+    expect(webAppSource).toMatch(/const target = lifecycleTarget\(workspace\)[\s\S]*runWorkspaceLifecycle\("workspace\.remove", target\)/)
+    expect(webAppSource).toMatch(/expected_revision: workspace\.expectedRevision/)
+    expect(webAppSource).toMatch(/snapshot\.revision !== target\.expectedRevision/)
     expect(webAppSource).toMatch(/if \(error instanceof ApiRequestError && error\.code === "conflict"\)[\s\S]*await reconcileAuthoritativeState\(\)[\s\S]*return/)
     expect(webAppSource).not.toMatch(/workspace\.(?:remove|force-remove)[\s\S]{0,500}(?:retry|replay)/i)
     expect(webAppSource).not.toMatch(/(?:split|match|includes)\([^\n]*Dirty worktrees/i)

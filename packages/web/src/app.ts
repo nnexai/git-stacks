@@ -878,7 +878,11 @@ function modal(title: string): { body: HTMLElement; close: () => void } {
 }
 
 type LifecycleKind = "workspace.archive" | "workspace.unarchive" | "workspace.remove" | "workspace.force-remove"
-type LifecycleTarget = { id: string; name: string }
+type LifecycleTarget = { id: string; name: string; expectedRevision: string }
+
+function lifecycleTarget(workspace: Pick<Workspace, "id" | "name">): LifecycleTarget {
+  return { id: workspace.id, name: workspace.name, expectedRevision: snapshot.revision }
+}
 
 const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
 
@@ -902,7 +906,7 @@ async function submitWorkspaceLifecycle(
     const operation = await api<WebOperation>("operation.submit", {
       kind,
       workspace_id: workspace.id,
-      expected_revision: snapshot.revision,
+      expected_revision: workspace.expectedRevision,
       ...(kind === "workspace.force-remove" ? { confirmation_name: confirmationName } : {}),
     }, {
       scope: "operation.write",
@@ -946,10 +950,11 @@ async function runWorkspaceLifecycle(
 }
 
 async function archiveWorkspace(workspace: Workspace): Promise<void> {
-  const operation = await runWorkspaceLifecycle("workspace.archive", workspace)
+  const target = lifecycleTarget(workspace)
+  const operation = await runWorkspaceLifecycle("workspace.archive", target)
   if (operation?.state !== "succeeded") return
   actionToast(`${workspace.name} archived. Its terminals were stopped.`, "Undo", () => {
-    void unarchiveWorkspace({ id: workspace.id, name: workspace.name })
+    void unarchiveWorkspace(lifecycleTarget(workspace))
   })
 }
 
@@ -970,7 +975,7 @@ function showArchivedWorkspaces(): void {
       identity.append(element("strong", "", workspace.name), element("span", "", relativeTime(workspace.activity_at) || workspace.activity_at))
       const unarchive = button("Unarchive")
       unarchive.addEventListener("click", async () => {
-        const operation = await runWorkspaceLifecycle("workspace.unarchive", workspace)
+        const operation = await runWorkspaceLifecycle("workspace.unarchive", lifecycleTarget(workspace))
         if (operation?.state !== "succeeded") return
         view.close()
         toast(`${workspace.name} unarchived. Stopped terminals were not recreated.`)
@@ -983,6 +988,7 @@ function showArchivedWorkspaces(): void {
 }
 
 function showRemoveConfirmation(workspace: Workspace): void {
+  const target = lifecycleTarget(workspace)
   const view = modal(`Remove ${workspace.name}?`)
   view.body.append(
     element("p", "lifecycle-warning", `Remove ${workspace.name} permanently. This cannot be undone.`),
@@ -997,7 +1003,7 @@ function showRemoveConfirmation(workspace: Workspace): void {
   cancel.addEventListener("click", view.close)
   remove.addEventListener("click", async () => {
     view.close()
-    const operation = await runWorkspaceLifecycle("workspace.remove", workspace)
+    const operation = await runWorkspaceLifecycle("workspace.remove", target)
     const details = operation?.state === "failed" ? operation.error?.lifecycle : undefined
     if (details?.kind === "workspace_dirty" && details.terminals_stopped && details.force_allowed) {
       const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
@@ -1031,6 +1037,7 @@ async function showForceRemoveConfirmation(requestedWorkspace: Workspace): Promi
   await refreshSnapshot()
   const workspace = snapshot.workspaces.find(({ id }) => id === requestedWorkspace.id)
   if (!workspace) { toast("Workspace no longer exists.", true); return }
+  const target = lifecycleTarget(workspace)
   const view = modal(`Force Remove ${workspace.name}?`)
   view.body.append(element("p", "lifecycle-warning", "This irreversibly deletes dirty worktrees and the workspace resources listed in the previous confirmation."))
   const confirmation = element("input")
@@ -1046,13 +1053,13 @@ async function showForceRemoveConfirmation(requestedWorkspace: Workspace): Promi
     if (!(confirmation.value === workspace.name)) return
     await refreshSnapshot()
     const current = snapshot.workspaces.find(({ id }) => id === workspace.id)
-    if (!current || current.name !== workspace.name || confirmation.value !== current.name) {
+    if (!current || current.name !== workspace.name || confirmation.value !== current.name || snapshot.revision !== target.expectedRevision) {
       view.close()
-      toast("Workspace identity changed. Start Force Remove again from a fresh dirty-worktree result.", true)
+      toast("Workspace state changed. Start Force Remove again from a fresh dirty-worktree result.", true)
       return
     }
     view.close()
-    await runWorkspaceLifecycle("workspace.force-remove", current, confirmation.value)
+    await runWorkspaceLifecycle("workspace.force-remove", target, confirmation.value)
   })
   actions.append(cancel, force)
   view.body.append(confirmation, actions)
