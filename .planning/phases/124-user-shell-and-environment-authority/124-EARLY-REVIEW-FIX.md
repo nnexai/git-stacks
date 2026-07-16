@@ -36,3 +36,25 @@ Second-pass focused verification:
 - `bunx tsc --noEmit -p packages/service/tsconfig.json`
 
 The two timing-sensitive real-PTY streaming tests passed independently; in one long aggregate run they timed out after earlier real-PTY cases. No failure involved the new initialization or process-group assertions, and the milestone host fixture/full gates remain the authoritative aggregate check.
+
+## Third adversarial repair pass
+
+The final two reviewer blockers are repaired:
+
+- Bash and zsh no longer depend on the profile-visible `builtin` dispatcher for post-init overlay application, readiness, or command sourcing. The service writes a mode-0600 private source containing grammar-level assignments and nested `case` verification, and the final readiness redirection is reachable only when every authoritative value matches. Command sourcing uses the shell's direct dot form. The spawn environment pre-seeds every authoritative value so reassignment preserves its exported attribute. Fish continues through its reserved `builtin` dispatcher, which cannot be replaced by a profile function and reaches the real `set` and `source` builtins even when their ordinary names are shadowed.
+- The Bash adversarial fixture now defines the exact reviewer poison `function builtin { return 91; }`; the Bash/zsh/fish fixtures retain their family-specific export/source/printf poisoning. A separate readonly-value fixture proves that a failed authoritative assignment cannot create readiness merely through a later redirection.
+- If command-PTY initialization fails and TERM/KILL cannot prove both leader settlement and process-group disappearance, the logical terminal no longer emits `onExit`. It retains the active child and stays retryable until an explicit close projects `cleanup_failed`. The permanent-group fixture proves that no `ended` state or exit code is fabricated after the leader alone exits.
+- The PTY test factory now supports multiple exit subscribers like node-pty, keeping leader-exit and process-group-disappearance assertions independent.
+
+Third-pass focused verification:
+
+- `bun test tests/service/web-terminal.test.ts -t "hostile profile|readiness only|command PTY group|does not logically finish|retries TERM"` — pass.
+- `bun test tests/lib/user-shell-adapter.test.ts tests/architecture/shell-hosted-matrix.test.mjs` — 14 pass.
+- `bunx tsc --noEmit -p packages/core/tsconfig.json` — pass.
+- `bunx tsc --noEmit -p packages/service/tsconfig.json` — pass.
+- `bun run test:deps` — package architecture pass.
+
+Local host notes:
+
+- The complete `web-terminal.test.ts` run passed 21 tests; its two already-documented late real-PTY streaming cases timed out after the preceding PTY cases and each passed when rerun independently.
+- The host fixture's direct node-pty helper returned empty PTY output for local Bash/fish/SSH PTY assertions, while its non-PTY shell and real process-tree cancellation assertions passed. The isolated Bash case reproduces unchanged on the pre-repair `main` worktree, so this is not introduced by either repair. Local zsh remains capability-skipped.
