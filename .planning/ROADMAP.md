@@ -27,10 +27,41 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 **Goal:** Make active-workspace cleanup reversible by default and destructive removal explicit, terminal-aware, and consistent across clients.
 **Depends on:** Nothing
 **Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, REMOVE-01, REMOVE-02, REMOVE-03, REMOVE-04, REMOVE-05
+**Plans:** 8 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 123-01-PLAN.md — Core archive persistence and typed staged removal authority
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 123-02-PLAN.md — Aggregate catalog, strict lifecycle schemas, and shared successor ordering
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 123-03-PLAN.md — Target terminal admission and confirmed real-exit shutdown
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 123-04-PLAN.md — Revision-bound lifecycle coordinator and honest progress
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 123-05-PLAN.md — Secure router/client adapters and shared runtime composition
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 123-06-PLAN.md — Web archive, remove, force, and reconciliation surface
+- [ ] 123-07-PLAN.md — TUI archive, remove, force, and reconciliation surface
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 123-08-PLAN.md — Full gates, autonomous fixture evidence, and Phase 127 milestone-end live UAT handoff
 
 **Success criteria:**
 
-1. Archiving from web or TUI atomically writes `archived`/`archived_at`, removes the workspace from all normal projections and navigation, and leaves worktrees, files, notes, pins, and live terminal processes intact.
+1. Archiving from web or TUI first stops and confirms every service-owned workspace terminal, then atomically writes `archived`/`archived_at` and removes the workspace from all normal projections and navigation while leaving repositories, worktrees, workspace files, notes, configuration, and pin state intact; any unconfirmed terminal exit leaves persisted archive state unchanged.
 2. A minimal web/TUI archived list is newest-first by relevant activity/archive time, shows that time, supports unarchive, and does not expose the normal detailed workspace surface.
 3. Confirmed Remove closes every owned terminal before applying the existing dirty-worktree guard; a close failure deletes nothing and a dirty-worktree failure names the blocking repositories.
 4. Successful Remove deletes managed worktrees, the workspace directory, and YAML definition, then reconciles client selection, signals, terminal tabs, counts, and progress without touching unrelated state.
@@ -105,7 +136,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 ## Scope control
 
 - Archive is reversible state; Remove is confirmed destruction. Stale detection may suggest either but never performs them automatically.
-- Terminal sessions are stateful and are not duplicated or cloned. Archive preserves them; Remove closes them before deletion.
+- Terminal sessions are stateful and are not duplicated or cloned. Archive and Remove stop and confirm them before persisted mutation; only a current typed dirty-worktree block may expose exact-name Force Remove in web or TUI.
 - User-shell compatibility applies only to user-authored commands, hooks, and interactive terminals. Internal process execution remains argv-based or deliberately deterministic.
 - The shortcut registry must treat browser, operating-system, terminal-emulator, xterm, shell, TUI, AltGraph, IME, and layout collisions as acceptance constraints, not documentation footnotes.
 - The first candidate begins again at `rc.1`; a final release remains outside automatic milestone execution.

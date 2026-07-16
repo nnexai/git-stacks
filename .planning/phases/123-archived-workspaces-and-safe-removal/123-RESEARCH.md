@@ -3,6 +3,7 @@
 **Researched:** 2026-07-16
 **Domain:** Revisioned workspace lifecycle, service-owned PTY shutdown, destructive Git/filesystem safety, and web/TUI reconciliation
 **Confidence:** HIGH
+**Planning reconciliation:** `123-CONTEXT.md` originally superseded the old terminal-preservation and unrestricted-force wording; during planning, `.planning/ROADMAP.md`, `.planning/REQUIREMENTS.md`, and `.planning/STATE.md` were reconciled and now align with confirmed terminal shutdown plus dirty-only exact-name Force Remove.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -43,7 +44,7 @@ None — discussion stayed within the Phase 123 boundary.
 | ARCH-01 | Persist `archived: true` and `archived_at`; omitted fields mean active. | Paired optional schema fields, atomic `updateWorkspace`, and backward-compatible read behavior. [VERIFIED: `packages/core/src/config.ts`] |
 | ARCH-02 | Web and TUI archive/unarchive through shared core/service operations. | Stable-ID revision-bound mutation contract and shared service lifecycle coordinator. [VERIFIED: `packages/service/src/policy/operations.ts`, `packages/service/src/secure/router.ts`] |
 | ARCH-03 | Exclude archived workspaces from normal lists, counts, pins, switching, attention, and selection. | Partition active versus archived definitions before expensive projection; filter signal presentation and preserve archived pin metadata. [VERIFIED: `packages/service/src/policy/snapshot.ts`, `packages/core/src/workspace-pins.ts`] |
-| ARCH-04 | Preserve workspace resources across archive/unarchive. | Preserve repositories, worktrees, directory, YAML, notes, config, pin, and priority fields. The locked CONTEXT supersedes only the terminal-preservation clause: terminals must stop and are not recreated by unarchive. [VERIFIED: `123-CONTEXT.md`] |
+| ARCH-04 | Preserve workspace resources across archive/unarchive. | Preserve repositories, worktrees, directory, YAML, notes, config, pin, and priority fields. CONTEXT originally superseded the terminal-preservation clause; the reconciled requirement now states that terminals stop and are not recreated by unarchive. [VERIFIED: `123-CONTEXT.md`, `.planning/REQUIREMENTS.md`] |
 | ARCH-05 | Separate minimal archived surface in web and TUI. | Add one minimal archived-summary projection and one singleton client surface per client. [VERIFIED: `packages/protocol/src/web.ts`, `packages/tui/src/types.ts`] |
 | ARCH-06 | Sort archived newest-first by relevant activity/archive time, show time, empty state, no detail expansion. | Compute one server-owned `activity_at` summary as `max(last_opened ?? created, archived_at)` and return it already sorted. [VERIFIED: `packages/core/src/config.ts`, `packages/core/src/workspace-ops.ts`] |
 | REMOVE-01 | Consistently named Remove with explicit confirmation of all deleted resource classes. | Reuse client dialog/modal primitives but replace generic confirmation copy with a lifecycle-specific deletion inventory. [VERIFIED: `packages/tui/src/ConfirmDialog.tsx`, `packages/web/src/app.ts`] |
@@ -57,7 +58,7 @@ None — discussion stayed within the Phase 123 boundary.
 
 Phase 123 should be implemented as one revision-bound, workspace-scoped lifecycle pipeline, not as four client actions that happen to call related functions. The existing architecture already has the correct ownership split: core owns YAML, Git, and filesystem mutation; the service owns operations, snapshots, event reconciliation, and PTYs; web and TUI are projections and intent senders. [VERIFIED: `packages/core/README.md`, `packages/service/README.md`, `packages/web/README.md`, `packages/tui/README.md`]
 
-The locked discussion changes the most important original assumption: archive must stop and confirm every service-owned workspace terminal before writing archive state. This supersedes the terminal-preservation phrase in ARCH-04, the Phase 123 roadmap success criterion, and the older STATE decision, while preserving all non-terminal workspace resources and metadata. [VERIFIED: `123-CONTEXT.md`, `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`]
+The locked discussion originally changed the most important assumption: archive must stop and confirm every service-owned workspace terminal before writing archive state, and Force Remove is available only after a current dirty-worktree failure with exact-name confirmation. CONTEXT initially superseded the old terminal-preservation wording; during planning, ROADMAP, REQUIREMENTS, and STATE were reconciled and now align with that terminal-shutdown and dirty-only force contract while preserving all non-terminal workspace resources and metadata. [VERIFIED: `123-CONTEXT.md`, `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/STATE.md`]
 
 The highest-risk implementation seam is terminal shutdown. `WebTerminalManager.close()` currently sets a session to `ended` after the SIGKILL wait even when that second wait times out, and a concurrent `terminal.create` can start a new PTY after enumeration but before archive/remove mutation. A per-workspace service coordinator must block new terminal creation, await one shared close promise for every matching session across principals, verify actual exit/removal, retain the block through core mutation and snapshot reconciliation, and then release it. [VERIFIED: `packages/service/src/web/terminal-manager.ts`, `packages/service/src/secure/router.ts`]
 
@@ -378,9 +379,9 @@ After all source files are updated, no external database, cloud service, OS regi
 ## Common Pitfalls
 
 ### Pitfall 1: Context/requirements contradiction
-**What goes wrong:** A plan preserves terminal processes because ARCH-04 and ROADMAP still say so. [VERIFIED: planning files]
+**What goes wrong:** A plan follows a pre-reconciliation copy of ARCH-04 or ROADMAP and preserves terminal processes. [VERIFIED: planning history]
 **Why it happens:** The user changed the decision during discuss-phase. [VERIFIED: `123-CONTEXT.md`]
-**How to avoid:** Copy the supersession into every plan objective and test archive by proving PTYs exit before YAML changes. [VERIFIED: locked decision]
+**How to avoid:** Use the reconciled CONTEXT, ROADMAP, REQUIREMENTS, and STATE contract and test archive by proving PTYs exit before YAML changes. [VERIFIED: locked decision and current planning artifacts]
 **Warning signs:** Tests expect reattachment to an archived workspace or unarchive to revive old terminal IDs. [VERIFIED: derived acceptance constraint]
 
 ### Pitfall 2: Terminal creation TOCTOU
@@ -447,7 +448,7 @@ After all source files are updated, no external database, cloud service, OS regi
 | Terminal close assumes success after a bounded kill sequence. [VERIFIED: terminal manager] | Exit-confirmed close promise plus workspace admission gate. [VERIFIED: locked safety requirement] | Makes “terminal stopped before mutation” testable and real. |
 | Snapshot array represents all usable workspaces. [VERIFIED: snapshot builder] | Aggregate catalog partitions active full projections from archived minimal summaries. [VERIFIED: archive requirements] | Enforces exclusion/minimality and supports all-archived state. |
 
-**Deprecated/outdated:** The terminal-preservation wording in ARCH-04, ROADMAP Phase 123 success criterion 1, ROADMAP scope control, and STATE archive decision is superseded for this phase by `123-CONTEXT.md`. [VERIFIED: planning files]
+**Deprecated/outdated history:** `123-CONTEXT.md` originally superseded terminal-preservation and unrestricted-force wording. Planning then reconciled ARCH-04, ROADMAP Phase 123 success criteria/scope control, and STATE; the current artifacts now align on confirmed terminal shutdown and dirty-only exact-name Force Remove. [VERIFIED: current planning files]
 
 ## Assumptions Log
 
@@ -563,7 +564,7 @@ Security enforcement is enabled because `.planning/config.json` does not set `se
 ### Primary (HIGH confidence)
 
 - `.planning/phases/123-archived-workspaces-and-safe-removal/123-CONTEXT.md` — locked behavior, safety, concurrency, and UI constraints. [VERIFIED: project source]
-- `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/STATE.md` — requirement traceability and superseded archive wording. [VERIFIED: project source]
+- `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md`, `.planning/STATE.md` — reconciled requirement traceability for terminal shutdown and dirty-only exact-name Force Remove. [VERIFIED: project source]
 - `packages/core/src/config.ts`, `workspace-lifecycle.ts`, `workspace-status.ts`, `workspace-pins.ts`, `workspace-ops.ts`, `git.ts` — persistence and destructive lifecycle behavior. [VERIFIED: codebase]
 - `packages/protocol/src/service.ts`, `packages/protocol/src/web.ts`, `packages/protocol/src/secure.ts` — revisions, operations, errors, web models, and transport bounds. [VERIFIED: codebase]
 - `packages/service/src/policy/{snapshot,core-state,core-contract,operations}.ts`, `packages/service/src/web/{terminal-manager,projection}.ts`, `packages/service/src/secure/router.ts`, `packages/service/src/main.ts` — service authority and identified race/failure seams. [VERIFIED: codebase]
