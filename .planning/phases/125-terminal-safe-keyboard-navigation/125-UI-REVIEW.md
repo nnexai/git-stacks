@@ -1,9 +1,10 @@
 # Phase 125 — UI Review
 
-**Audited:** 2026-07-16
+**Audited:** 2026-07-16 (final independent re-audit after repairs through `96554191` and `fd12f7f6`)
 **Baseline:** `125-UI-SPEC.md`
-**Screenshots:** Not captured — no dev server responded on ports 3000, 5173, or 8080; live visual and physical-keyboard judgment remains a Phase 127 pre-tag UAT item
-**Executable evidence:** `web-keyboard-overlays` and `web-keyboard-navigation` passed (22 tests)
+**Status:** Passed — automated UI contract complete; no blocker or source-level warning remains, with live Phase 127 evidence pending
+**Screenshots:** Not captured — no dev server responded on ports 3000, 5173, or 8080
+**Executable evidence:** `web-keyboard-overlays`, `web-keyboard-navigation`, and `web-shortcut-authority` passed (41 tests); `@git-stacks/web` typecheck and production web build passed
 
 ---
 
@@ -11,48 +12,45 @@
 
 | Pillar | Score | Key Finding |
 |--------|-------|-------------|
-| 1. Copywriting | 4/4 | Search, empty, loading, conflict, save, and attention copy matches the approved contract and stays user-facing. |
-| 2. Visuals | 3/4 | The intended modal hierarchy and active-row treatment are present, but narrow-toolbar visibility cannot be established from the string-based harness. |
-| 3. Color | 2/4 | Token use is disciplined, but the filled accent CTA and one light-theme warning treatment miss normal-text AA contrast. |
-| 4. Typography | 2/4 | Overlay labels and metadata follow the contract, while Phase 125 action buttons inherit an undeclared browser-default size instead of the specified 14px control role. |
-| 5. Spacing | 2/4 | Modal/list spacing is mostly coherent, but one new control breaks the 4px scale and the 320px topbar has no proven non-overflow layout. |
-| 6. Experience Design | 1/4 | Repeated Enter/click can start the same configured command more than once, and listbox results become individual Tab stops despite the active-descendant contract. |
+| 1. Copywriting | 4/4 | Search, empty, loading, conflict, recovery, save, and attention copy remains specific, actionable, and free of internal IDs. |
+| 2. Visuals | 3/4 | Modal hierarchy, active rows, busy state, and compact-toolbar geometry are implemented; rendered 320px/375px judgment remains a Phase 127 checkpoint. |
+| 3. Color | 4/4 | The repaired accent and warning pairs exceed 4.5:1 while retaining semantic token use and non-color labels. |
+| 4. Typography | 4/4 | Global actions, bare `Unbound` binding controls, labels, metadata, and key caps use the declared size/weight roles. |
+| 5. Spacing | 4/4 | Alias controls, binding controls, and key caps now use scale-aligned 4px/8px geometry. |
+| 6. Experience Design | 3/4 | One-shot activation, active-descendant Tab behavior, focus, replacement, stale recovery, and owner conflicts are executable; real xterm/physical-keyboard behavior remains Phase 127 UAT. |
 
-**Overall: 14/24**
-
----
-
-## Severity-Ranked Findings
-
-### BLOCKER
-
-1. **Configured-command selection has no one-shot or busy latch.** `mountFuzzyOverlay()` calls `select()` for every Enter keydown without rejecting `event.repeat`, and each result remains clickable (`packages/web/src/overlay-controller.ts:241-269`). The app starts `createTerminal(command.id)` and closes the overlay only after the asynchronous create succeeds (`packages/web/src/app.ts:1271-1277`). A held Enter key or rapid double click can therefore issue multiple terminal-create service operations. Add a synchronous selection latch before invoking the callback, consume repeated Enter without selecting, mark the result region busy/disabled, and make pointer activation use the same latch.
-
-### WARNING — High
-
-2. **The active-descendant listbox also puts every result in the Tab order.** Results are native buttons with `role="option"` (`packages/web/src/overlay-controller.ts:241-251`), and the dialog trap includes every enabled button (`packages/web/src/overlay-controller.ts:55,84-95`). With many results, Tab walks every option even though the UI-SPEC requires the search input to retain DOM focus and result navigation to stay on `aria-activedescendant`. Render non-tabbable options or set `tabIndex = -1`; retain pointer activation and keep Tab limited to dialog controls.
-
-3. **Narrow toolbar discoverability is asserted by CSS presence, not by a layout that guarantees visibility.** The 50px topbar keeps brand, Signals, five toolbar controls, and `Archived` on one non-wrapping flex row (`packages/web/src/app.ts:500`; `packages/web/src/app.css:25-31`). At 640px only `.wide` labels collapse; the brand and full `Archived` label remain and no 320px fallback exists (`packages/web/src/app.css:216-217`). The page itself clips overflow. Add a compact breakpoint that collapses non-critical labels/brand treatment or gives the toolbar an explicit safe layout, then verify 320px and 375px screenshots in Phase 127.
-
-4. **Filled accent and light warning text do not meet normal-text AA contrast.** `#fff` on `#3584e4` is approximately 3.77:1, affecting the primary `Customize shortcuts` CTA through `.button.primary`; light-theme `#a95d00` on `#f2f2f4` is approximately 4.42:1 for 13px shortcut error copy (`packages/web/src/app.css:10-14,18,33,200-203`). Adjust the filled-action and warning token pair to at least 4.5:1 while preserving the approved semantic roles.
-
-### WARNING — Medium
-
-5. **Phase 125 control typography is not pinned to the declared 14px/650 role.** Global buttons inherit the page font without a size or weight, and the new toolbar/settings actions use `.button` (`packages/web/src/app.css:22,31`; `packages/web/src/overlay-controller.ts:508-518,539-543`). In a normal browser this resolves to a 16px regular default, outside the UI-SPEC's four-size/two-weight contract. Set the control role explicitly and keep key caps at 11px/650.
-
-6. **Help always focuses `Customize shortcuts`.** `mountShortcutHelp()` makes the primary CTA the initial and repeated focus target (`packages/web/src/overlay-controller.ts:336-347`), while the UI-SPEC calls for invoker-aware focus and a safe close/content action when no prior invoker exists. Pass the invoking control/focus context into the renderer and choose the initial target according to the contract.
-
-### WARNING — Low
-
-7. **The alias-removal control breaks the declared 4px spacing scale.** `.shortcut-remove` introduces `3px 6px` padding (`packages/web/src/app.css:196`). Use a declared-scale combination such as `4px 8px` and confirm the resulting touch/click target remains adequate.
+**Overall: 22/24**
 
 ---
 
-## Top 3 Priority Fixes
+## Prior Finding Resolution
 
-1. **Make configured-command activation one-shot** — prevents duplicate terminal/service creation from held Enter or rapid pointer activation.
-2. **Remove result options from the Tab sequence** — restores the specified combobox/listbox active-descendant interaction and keeps large result sets navigable.
-3. **Prove and repair the 320px/375px toolbar layout** — ensures `Next attention` and `Keyboard shortcuts` remain visibly reachable rather than merely present in the DOM.
+| Prior finding | Resolution | Evidence |
+|---------------|------------|----------|
+| Configured-command Enter/click could submit more than once | **Resolved** | Selection latches synchronously, marks the list busy, disables pointer rows, ignores repeated Enter, and unlocks after settlement (`packages/web/src/overlay-controller.ts:209-234,272-307`). The deferred-promise test sends Enter, repeated Enter, another Enter, and click and observes one callback (`tests/service/web-keyboard-overlays.test.ts:257`). |
+| Listbox options were Tab stops | **Resolved** | Every option receives `tabindex="-1"`; the dialog selector excludes `-1`, while input focus retains `aria-activedescendant` (`packages/web/src/overlay-controller.ts:57,85-99,236-288`). The harness proves Tab moves from the combobox to the named close control (`tests/service/web-keyboard-overlays.test.ts:251`). |
+| 320px/375px toolbar could clip | **Resolved in source; live check retained** | At 400px and below, brand copy collapses, Signals and all five toolbar actions become 32px controls, gaps shrink, and labels remain in `aria-label`/`title` (`packages/web/src/app.css:217-218`; `packages/web/src/app.ts:502`). The fixed compact footprint is approximately 257px including topbar padding/gaps, leaving 63px at 320px and 118px at 375px. Screenshot judgment remains Phase 127. |
+| Filled accent and light warning text missed AA | **Resolved** | `#ffffff` on `#1c71d8` is 4.769:1; light `#995400` on `#f2f2f4` is 5.185:1 and on `#ffffff` is 5.797:1 (`packages/web/src/app.css:10-19`). The test computes WCAG relative luminance instead of asserting token strings (`tests/service/web-keyboard-overlays.test.ts:599-619`). |
+| Phase 125 controls lacked 14px/650 typography | **Resolved** | `.button` and `.shortcut-binding-button` now both pin 14px/650/1.3, while nested key caps retain 11px/650 (`packages/web/src/app.css:31,192-194`; `tests/service/web-keyboard-overlays.test.ts:616-618`). |
+| Help always focused `Customize shortcuts` | **Resolved** | Help chooses `Close help` when there is no invoker and the first content action when invoked from a valid prior focus context (`packages/web/src/overlay-controller.ts:370-388`; `packages/web/src/app.ts:1293-1311`). Both paths are executable (`tests/service/web-keyboard-overlays.test.ts:357`). |
+| Alias removal used 3px/6px | **Resolved** | `.shortcut-remove` uses `4px 8px` and retains a 32px minimum height (`packages/web/src/app.css:196`; `tests/service/web-keyboard-overlays.test.ts:619`). |
+| Key-cap padding used off-scale 3px/5px | **Resolved** | Key caps now use scale-aligned `4px 8px` padding while retaining 11px/650 monospace text and 22px minimum geometry (`packages/web/src/app.css:192`; `tests/service/web-keyboard-overlays.test.ts:618`). |
+
+The related interaction repairs also hold: compatible shortcut surfaces replace each other while capture stays exclusive (`tests/service/web-keyboard-overlays.test.ts:198`); stale revisions reload authoritative settings before an explicit retry (`packages/web/src/navigation.ts:250-277`; `tests/service/web-keyboard-overlays.test.ts:439-470`); and a true owner collision keeps capture active, names the pre-existing owner inline, preserves bindings, and offers no retry loop (`packages/web/src/overlay-controller.ts:447-477`; `tests/service/web-keyboard-overlays.test.ts:473-504`).
+
+---
+
+## Final Finding Status
+
+No blocker, high, medium, or low automated UI finding remains. The final source and executable pass closed both prior cleanup warnings and verified that owner conflicts are distinct from stale revisions: owner collisions stay inline without a retry action, while only stale revisions enter the refresh-and-retry path.
+
+---
+
+## Remaining Phase 127 Verification Checkpoints
+
+1. **Capture desktop, 375px, and 320px browser screenshots** — confirm toolbar visibility, key-cap density, modal hierarchy, and theme rendering.
+2. **Exercise real xterm focus and Tab traversal** — confirm overlay open/replacement/close behavior and PTY pass-through in the actual browser surface.
+3. **Exercise physical non-US keyboard and IME/AltGraph input** — confirm the production event boundary matches the automated contract before tagging.
 
 ---
 
@@ -60,46 +58,50 @@
 
 ### Pillar 1: Copywriting (4/4)
 
-- Search inputs and zero/no-match states use the exact approved strings (`packages/web/src/app.ts:1208-1212,1250-1254`).
-- Shortcut loading, unsafe capture, conflict, saving, failure, and retry copy follows the contract and never exposes action IDs or service method names (`packages/web/src/overlay-controller.ts:370-381,423-456,520-533`).
-- Action naming remains sentence case and verb-object oriented. `Unbound` is explicitly rendered rather than leaving a blank binding cell (`packages/web/src/overlay-controller.ts:310-319`).
+- Workspace and command search inputs, zero states, and no-match states retain the approved strings (`packages/web/src/app.ts:1213-1217,1255-1259`).
+- Loading, unsafe capture, conflict, authoritative refresh, generic save failure, retry, saving, and success messages state the condition and recovery without service method names or stable IDs (`packages/web/src/overlay-controller.ts:411-423,431-477,480-535,598-606`).
+- Action labels remain sentence case and verb-object oriented; `Unbound` is always explicit (`packages/web/src/overlay-controller.ts:316-368`).
 
 ### Pillar 2: Visuals (3/4)
 
-- The singleton overlay retains the approved geometry and hierarchy: one backdrop, bordered panel, fixed header, scrollable body, and named close control (`packages/web/src/overlay-controller.ts:101-161`; `packages/web/src/app.css:154-160`).
-- Search results provide a two-line hierarchy, one accent-backed active row, muted metadata, truncation, and full-value title text (`packages/web/src/overlay-controller.ts:239-254`; `packages/web/src/app.css:175-184`).
-- Shortcut help/settings use grouped rows, key caps, capture highlighting, and inline state treatment (`packages/web/src/app.css:185-204`).
-- Visual score is capped because no rendered screenshot was available and the narrow-toolbar structure has a credible clipping risk described above.
+- One modal frame retains the approved geometry, hierarchy, named close affordance, fixed header, and internally scrollable body (`packages/web/src/overlay-controller.ts:103-166`; `packages/web/src/app.css:154-160`).
+- Results preserve the two-line hierarchy, one accent-backed active row, muted metadata, truncation, and full-value title (`packages/web/src/overlay-controller.ts:236-290`; `packages/web/src/app.css:175-184`).
+- Busy selection is visually and semantically projected through `aria-busy`, disabled rows, and the existing disabled treatment (`packages/web/src/overlay-controller.ts:209-234`; `packages/web/src/app.css:37`).
+- The compact breakpoint has sufficient deterministic fixed-width geometry in source, but this pillar remains capped at 3 because no rendered screenshot was available.
 
-### Pillar 3: Color (2/4)
+### Pillar 3: Color (4/4)
 
-- Phase 125 uses the established semantic tokens instead of introducing arbitrary feature colors. Active selection uses accent, attention uses warning, and errors include text rather than relying on color alone (`packages/web/src/app.css:38,179,188,202-203`).
-- WARNING: the approved/implemented `--accent` plus `--accent-text` pair is only about 3.77:1, below 4.5:1 for the CTA's normal-size text (`packages/web/src/app.css:10-11,33`).
-- WARNING: the light-theme warning treatment is about 4.42:1 on the modal panel, narrowly below 4.5:1 for 13px text (`packages/web/src/app.css:18,200-203`).
+- The repaired token pairs exceed normal-text AA: accent/white 4.769:1, light warning/panel 5.185:1, light warning/panel-2 5.797:1, and dark warning/panel 9.749:1 (`packages/web/src/app.css:10-19`).
+- Accent remains reserved for active selection, primary action, and capture; warnings remain warning-colored and include explanatory text (`packages/web/src/app.css:33,38,179,188,199,202-203`).
+- The executable contrast test parses current CSS tokens and calculates sRGB relative luminance (`tests/service/web-keyboard-overlays.test.ts:599-619`).
 
-### Pillar 4: Typography (2/4)
+### Pillar 4: Typography (4/4)
 
-- Headings, result labels, metadata, key caps, and inline status copy use the specified 17/14/13/11px scale and regular/650 hierarchy (`packages/web/src/app.css:157,181-204`).
-- WARNING: the new toolbar and settings action buttons inherit an unspecified user-agent size/weight from `button { font: inherit; }`, rather than declaring the 14px/650 control role (`packages/web/src/app.css:22,31`).
+- The global Phase 125 action-control role now uses the declared 14px/650/1.3 values (`packages/web/src/app.css:31`).
+- Bare `Unbound` controls now explicitly use 14px/650/1.3, while nested key caps retain the declared 11px/650 monospace role (`packages/web/src/app.css:192-194`).
+- Headings, labels, body/status text, and metadata stay within the 17/14/13/11px and 650/400 contract (`packages/web/src/app.css:157,181-204`).
 
-### Pillar 5: Spacing (2/4)
+### Pillar 5: Spacing (4/4)
 
-- Result rows, empty states, modal body, groups, and binding controls predominantly follow the 4/8/16/24/32px scale (`packages/web/src/app.css:158,175-200`).
-- WARNING: `.shortcut-remove` uses undeclared 3px/6px padding (`packages/web/src/app.css:196`).
-- WARNING: the narrow toolbar has no wrap/overflow/collapse strategy beyond hiding `.wide`, so the specified discoverability at the smallest supported widths remains unproven (`packages/web/src/app.css:217`).
+- Result rows, modal body, group spacing, setting rows, and binding controls predominantly use the declared 4/8/16/24/32px scale (`packages/web/src/app.css:158,175-200`).
+- Alias removal, binding buttons, chord gaps, and key caps now use scale-aligned 4px/8px values (`packages/web/src/app.css:190-196`).
+- Key caps preserve usable minimum geometry and semibold metadata text after the spacing repair (`packages/web/src/app.css:192`).
 
-### Pillar 6: Experience Design (1/4)
+### Pillar 6: Experience Design (3/4)
 
-- BLOCKER: asynchronous command selection can be submitted multiple times before the overlay closes; the harness covers one Enter only and does not exercise `repeat` or double activation (`tests/service/web-keyboard-overlays.test.ts:196-220,231-251`).
-- WARNING: listbox options are tabbable buttons and the focus trap includes them, contradicting the input-retained active-descendant interaction (`packages/web/src/overlay-controller.ts:55,84-95,241-251`).
-- Positive evidence: the controller maintains one backdrop/listener, contains Escape/Tab, preserves the original return target, and blocks replacement of exclusive confirmations (`packages/web/src/overlay-controller.ts:70-170`; `tests/service/web-keyboard-overlays.test.ts:154-194`).
-- Positive evidence: authoritative settings expose loading/error/retry, conflict-safe capture, per-row busy/failure feedback, reset, unbind, aliases, and response-only state replacement (`packages/web/src/overlay-controller.ts:360-564`).
+- Async result activation is one-shot across held Enter, rapid Enter, and pointer activation; failure/settlement coherently unlocks the region (`packages/web/src/overlay-controller.ts:209-234,294-307`; `tests/service/web-keyboard-overlays.test.ts:257-294`).
+- Search input retains DOM focus and list navigation stays on `aria-activedescendant`; result options are removed from Tab order while pointer interaction remains available (`packages/web/src/overlay-controller.ts:236-312`; `tests/service/web-keyboard-overlays.test.ts:251-254`).
+- Compatible overlays replace in place, capture is dynamically exclusive, and help initial focus follows invoker context (`packages/web/src/overlay-controller.ts:103-175,370-388`).
+- Stale revisions refresh authority before explicit retry, while owner collisions preserve the prior state, keep capture active, name the actual owner, and render no retry action (`packages/web/src/navigation.ts:162-184,250-277`; `packages/web/src/overlay-controller.ts:447-477`; `tests/service/web-keyboard-overlays.test.ts:439-504`).
+- Automated evidence is comprehensive, but real xterm ownership, terminal focus restoration, physical non-US keys, composition/AltGraph, and narrow rendered layout remain Phase 127 human UAT; this boundary caps the score at 3 rather than representing those behaviors as visually approved.
 
 ---
 
 ## Evidence Boundary
 
-The native-DOM harness establishes structure, event routing, copy, service intents, and focus-controller behavior. It does not render real xterm, compute CSS layout, prove contrast under browser/theme rendering, or validate physical keyboard/IME behavior. Desktop/narrow screenshots, real focus traversal, xterm pass-through, and human visual approval remain explicitly deferred to Phase 127 before tagging.
+The native-DOM harness establishes structure, event routing, one-shot mutation behavior, focus-controller policy, copy, and service intents. The CSS pass establishes token values and deterministic compact minimum geometry. It does not render real xterm, compute browser layout, validate physical keyboard/IME behavior, or supply human visual judgment.
+
+Phase 127 must therefore retain desktop and 320px/375px screenshots, real Tab traversal, xterm pass-through, terminal focus restoration, and physical keyboard/IME checks before tagging. Those are verification checkpoints, not unresolved Phase 125 blocker/high defects.
 
 No `components.json` exists and the UI-SPEC lists no third-party blocks, so the registry safety audit is not applicable.
 
@@ -115,5 +117,8 @@ No `components.json` exists and the UI-SPEC lists no third-party blocks, so the 
 - `packages/web/src/app.css`
 - `packages/web/src/overlay-controller.ts`
 - `packages/web/src/navigation.ts`
+- `packages/protocol/src/web.ts`
+- `packages/service/src/secure/router.ts`
 - `tests/service/web-keyboard-overlays.test.ts`
 - `tests/service/web-keyboard-navigation.test.ts`
+- `tests/service/web-shortcut-authority.test.ts`

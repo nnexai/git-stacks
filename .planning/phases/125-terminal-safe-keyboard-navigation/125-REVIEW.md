@@ -1,18 +1,22 @@
 ---
 phase: 125-terminal-safe-keyboard-navigation
 reviewed: 2026-07-16T16:00:59Z
+re_reviewed: 2026-07-16T16:29:08Z
 depth: deep
-files_reviewed: 22
+files_reviewed: 25
 files_reviewed_list:
   - packages/client/src/attention.ts
   - packages/client/src/fuzzy.ts
   - packages/client/src/index.ts
+  - packages/client/src/secure-session.ts
   - packages/client/src/shortcuts.ts
   - packages/core/src/config.ts
   - packages/core/src/web-shortcuts.ts
+  - packages/protocol/src/secure.ts
   - packages/protocol/src/web.ts
   - packages/service/src/main.ts
   - packages/service/src/secure/router.ts
+  - packages/service/src/security/session-authority.ts
   - packages/web/src/app.css
   - packages/web/src/app.ts
   - packages/web/src/navigation.ts
@@ -27,25 +31,47 @@ files_reviewed_list:
   - tests/service/web-shortcut-authority.test.ts
   - tests/service/web-shortcut-contract.test.ts
 findings:
-  critical: 4
+  critical: 0
   warning: 0
   info: 0
-  total: 4
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 125: Code Review Report
 
 **Reviewed:** 2026-07-16T16:00:59Z  
+**Re-reviewed:** 2026-07-16T16:29:08Z
 **Depth:** deep  
-**Files Reviewed:** 22  
-**Status:** issues_found
+**Files Reviewed:** 25
+**Status:** clean
 
 ## Summary
 
-The core persistence path is narrow, leased, strict, and browser-state-free, and the pure matcher/fuzzy/attention helpers are generally well separated. The integrated keyboard/UI path still has four correctness failures that violate locked Phase 125 behavior: compatible overlays cannot replace one another through shortcuts, repeated Enter can create multiple terminals, browser shortcut state can be rolled back by out-of-order responses and cannot recover from a stale revision, and conflict errors can identify the wrong owner. The current tests remain green because the app-level wiring is asserted mostly through source strings while helper modules are exercised in isolation.
+All four original blockers and the CR-03-R1 re-review finding are resolved. Overlay replacement and exclusivity compose correctly, async command activation is one-shot while pending, authoritative settings operations reject stale responses, stale revisions alone reload/rebase, owner collisions preserve prior authoritative state without reload or retry, and core/service/browser layers retain the actual conflict owner through a strict bounded transport contract.
 
-## Narrative Findings (AI reviewer)
+## Independent Re-review
+
+| Finding | Result | Resolution evidence |
+|---|---|---|
+| CR-01 | Resolved | `shortcutAvailability()` now delegates to `overlayAwareActionAvailability()`, which blocks only exclusive surfaces or unregistered navigation actions. `createSingletonOverlayController.open()` replaces a non-exclusive active surface without focus restoration and preserves the original return target. The executable overlay test proves workspace-to-commands replacement leaves one backdrop and capture exclusivity blocks replacement. |
+| CR-02 | Resolved | `mountFuzzyOverlay()` takes a synchronous `selecting` latch before invoking the callback, consumes repeated Enter without selection, disables pointer options while pending, and exposes the promise to the harness. `showLauncher()` now returns the `createTerminal()` promise. The delayed-promise test proves repeated Enter, a second non-repeat Enter, and pointer activation produce one selection until completion. |
+| CR-03 | Resolved | Monotonic coordinator generations prevent older loads and mutations from replacing newer state. The router now emits distinct `shortcut_revision_conflict` and `shortcut_binding_conflict` codes with strictly validated typed details; the secure session validates details before emission and the RPC client preserves them. Browser classification requires a matching code/details pair. Stale revisions reload and expose only a rebased retry, while owner collisions perform no reload, preserve prior authoritative state, expose no retry, keep captured input active, and render the friendly owner label inline. |
+| CR-04 | Resolved | Core mutation validation now builds the pre-mutation owner map excluding the edited action, then attributes every conflicting candidate primary/alias to that existing owner before complete-registry validation. Core tests cover both action-order directions and primary/alias ownership; router tests verify the projected owner message. |
+
+### CR-03-R1: Binding-owner conflicts are misclassified as stale revisions and can retry forever
+
+**Files:** `packages/service/src/secure/router.ts:617-628`, `packages/web/src/app.ts:49-54`, `packages/web/src/navigation.ts:173-184`, `packages/web/src/navigation.ts:250-277`, `packages/web/src/overlay-controller.ts:447-461`
+
+**Original severity:** Critical
+
+**Resolution:** Resolved by `fd12f7f6`. `WebShortcutErrorDetailsSchema` is a strict discriminated union whose owner field is the canonical eight-action enum. The router emits distinct codes and typed details, the secure session re-validates and allowlists those details, the RPC client preserves them, and `classifyWebShortcutMutationConflict()` fails closed on malformed or code/detail-mismatched input. The coordinator reloads/rebases only `stale_revision`; `binding_owner_conflict` immediately raises a typed owner error without loading or creating a retry. The settings surface maps the canonical owner ID to its friendly action label, retains capture/exclusivity for captured chords, preserves the prior authoritative registry, and renders no `Retry saving shortcut` control. Focused tests passed 62/62, and an independent RPC probe preserved code, details, and message end to end.
+
+**Issue:** The service deliberately exposes both `WebShortcutStaleRevisionError` and `WebShortcutConflictError` as code `conflict`, while the browser's `isConflict` predicate checks only that code. The settings coordinator reloads authoritative state and changes only `expected_revision` for every such failure. If the mutation's requested chord is now owned by another action, retrying sends the same conflicting chord, receives the same owner conflict, reloads, and offers the same retry again. The service's correctly attributed `Shortcut conflicts with {owner}` message is discarded, capture is cleared, and the UI shows stale-settings copy instead of the required inline named-owner conflict.
+
+**Implemented repair contract:** The secure service maps `WebShortcutStaleRevisionError` to `shortcut_revision_conflict` plus `{ kind: "stale_revision" }`, and `WebShortcutConflictError` to `shortcut_binding_conflict` plus `{ kind: "binding_owner_conflict", owner_action_id }`. Only the first class reloads and rebases. The second performs no unnecessary reload because the core rejected the write atomically at the matching revision; it preserves the current authoritative registry, provides no retry mutation, and renders the validated owner inline.
+
+## Original Findings (2026-07-16T16:00:59Z)
 
 ## Critical Issues
 
