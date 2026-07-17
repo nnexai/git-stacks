@@ -2,6 +2,7 @@
 import { describe, test, expect, mock, afterAll, beforeEach } from "bun:test"
 import {
   WEB_WORKSPACE_ACTION_IDS,
+  type WebForgeResolveResponse,
   type WebOperation,
   type WebOperationMutation,
   type WebWorkspaceAction,
@@ -74,7 +75,66 @@ const completedSyncOperation: WebOperation = {
   finished_at: "2026-07-14T00:00:01.000Z",
   result: { snapshot_changed: true, revision: "2" },
 }
-const submitWebOperationMock = mock(async (_mutation: WebOperationMutation) => completedSyncOperation)
+const reviewedOperationId = "op_reviewed1234567890"
+const reviewedAcceptedOperation: WebOperation = {
+  operation_id: reviewedOperationId,
+  state: "accepted",
+  accepted_at: "2026-07-16T00:00:00.000Z",
+}
+const reviewedFailedOperation: WebOperation = {
+  operation_id: reviewedOperationId,
+  state: "failed",
+  accepted_at: "2026-07-16T00:00:00.000Z",
+  started_at: "2026-07-16T00:00:00.000Z",
+  finished_at: "2026-07-16T00:00:01.000Z",
+  error: {
+    code: "branch_conflict",
+    message: "Change the reviewed branch and retry.",
+    forge: { kind: "forge_failure", reason: "branch_conflict", recovery: "change_branch" },
+  },
+}
+const forgeResolution: Extract<WebForgeResolveResponse, { resolved: true }> = {
+  resolved: true,
+  token: `review_${"a".repeat(43)}`,
+  expires_at: "2026-07-17T01:00:00.000Z",
+  revision: "1",
+  source: {
+    provider: "github",
+    change_kind: "pull_request",
+    change_number: 42,
+    web_url: "https://github.com/acme/sync-repo/pull/42",
+    host: "github.com",
+    target_repository: "acme/sync-repo",
+    source_repository: "contrib/sync-repo",
+    source_branch: "feature/reviewed",
+    target_branch: "main",
+    head_sha: "a".repeat(40),
+    cross_repository: true,
+    confidence: "provider",
+  },
+  terminology: { provider: "github", change: "Pull request", source_branch: "Head branch", target_branch: "Base branch" },
+  candidates: {
+    templates: [{ name: "review", repositories: [{ repository_id: syncWorkspaceId, name: "sync-repo", mode: "worktree", matched_source: true }] }],
+    source_repositories: [{ repository_id: syncWorkspaceId, name: "sync-repo", mode: "worktree", matched_source: true }],
+  },
+  draft: {
+    workspace_name: "review-ws",
+    template_name: "review",
+    matched_source_repository_id: syncWorkspaceId,
+    repositories: [{ repository_id: syncWorkspaceId, included: true, branch: { base_branch: "main", workspace_branch: "feature/reviewed" } }],
+  },
+}
+let reviewedFetchFailures = 0
+const submitWebOperationMock = mock(async (mutation: WebOperationMutation) => mutation.kind === "workspace.create.reviewed" ? reviewedAcceptedOperation : completedSyncOperation)
+const fetchWebOperationMock = mock(async (operationId: string) => {
+  if (operationId !== reviewedOperationId) return completedSyncOperation
+  if (reviewedFetchFailures > 0) {
+    reviewedFetchFailures -= 1
+    throw new Error("review observation transport failed")
+  }
+  return reviewedFailedOperation
+})
+let coreRefreshError: Error | undefined
 
 // Seed YAML fixtures before App is imported (Pitfall 4: hooks load data at mount time)
 write(configDir, "config.yml", "workspace_root: /tmp/integ-sync-root\n")
@@ -209,8 +269,13 @@ mock.module("@git-stacks/core/lifecycle", () => makeLifecycleMock({
   runHooksCaptured: mock(async () => {}),
 }))
 
+const fetchCoreStateMock = mock(async () => {
+  if (coreRefreshError) throw coreRefreshError
+  return makeDashboardCoreState([syncWsFixture as any], [], registryFixture as any)
+})
+
 mock.module("@git-stacks/service/client", () => ({
-  fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
+  fetchCoreState: fetchCoreStateMock,
   fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
   dismissSignal: mock(async () => {}),
   subscribeServiceEvents: mock(async () => "0"),
@@ -235,8 +300,9 @@ mock.module("@git-stacks/service/client", () => ({
 mock.module("../../../packages/tui/src/official-service", () => ({
   officialService: {
     fetchWorkspaceActionInventory: mock(async () => syncActionInventory),
+    resolveForgeSourceReview: mock(async () => forgeResolution),
     submitWebOperation: submitWebOperationMock,
-    fetchWebOperation: mock(async () => completedSyncOperation),
+    fetchWebOperation: fetchWebOperationMock,
     cancelWebOperation: mock(async () => ({
       operation_id: completedSyncOperation.operation_id,
       outcome: "already-finished" as const,
@@ -254,7 +320,11 @@ setCoreStateFactoryForTests(() => makeDashboardCoreState([syncWsFixture as any],
 const renderOpts = { kittyKeyboard: true }
 
 beforeEach(() => {
+  coreRefreshError = undefined
+  reviewedFetchFailures = 0
   submitWebOperationMock.mockClear()
+  fetchWebOperationMock.mockClear()
+  fetchCoreStateMock.mockClear()
 })
 
 afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })
@@ -296,6 +366,82 @@ describe("integration: sync progress flow", () => {
       request: { workspace_id: syncWorkspaceId, expected_revision: "1" },
     })
     expect(captureCharFrame()).not.toContain("[y]")
+  })
+
+  test("rejected foreground core refresh enters refresh-failed and stays locked until retry succeeds", async () => {
+    coreRefreshError = new Error("authoritative core refresh failed")
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />,
+      renderOpts,
+    )
+    await renderOnce()
+
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("s")
+    await Bun.sleep(20)
+    await renderOnce()
+
+    expect(fetchCoreStateMock).toHaveBeenCalledTimes(1)
+    expect(captureCharFrame()).toContain("Authoritative refresh failed")
+    expect(captureCharFrame()).toContain("[r] Retry refresh")
+    expect(captureCharFrame()).not.toContain("[Enter/Esc] Back")
+    mockInput.pressEscape()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Workspace operation")
+
+    coreRefreshError = undefined
+    mockInput.pressKey("r")
+    await Bun.sleep(20)
+    await renderOnce()
+    expect(fetchCoreStateMock).toHaveBeenCalledTimes(2)
+    expect(captureCharFrame()).toContain("[Enter/Esc] Back")
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("sync-ws")
+    expect(captureCharFrame()).not.toContain("Workspace operation")
+  })
+
+  test("reviewed create reconnects by known ID and remains locked through rejected reconciliation", async () => {
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />,
+      renderOpts,
+    )
+    await renderOnce()
+
+    mockInput.pressKey("u")
+    await Bun.sleep(1)
+    await renderOnce()
+    await mockInput.typeText("https://github.com/acme/sync-repo/pull/42")
+    mockInput.pressEnter()
+    await Bun.sleep(20)
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Review workspace")
+
+    reviewedFetchFailures = 1
+    coreRefreshError = new Error("review reconciliation failed")
+    mockInput.pressKey("c")
+    await Bun.sleep(350)
+    await renderOnce()
+
+    expect(submitWebOperationMock).toHaveBeenCalledWith(expect.objectContaining({ kind: "workspace.create.reviewed" }))
+    expect(fetchWebOperationMock.mock.calls.map(([operationId]) => operationId)).toEqual([
+      reviewedOperationId,
+      reviewedOperationId,
+    ])
+    expect(fetchCoreStateMock).toHaveBeenCalled()
+    expect(captureCharFrame()).toContain("Creating review-ws")
+    expect(captureCharFrame()).toContain("Authoritative refresh failed")
+    expect(captureCharFrame()).not.toContain("Change the reviewed branch and retry.")
+    mockInput.pressKey("u")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Creating review-ws")
+
+    coreRefreshError = undefined
+    await Bun.sleep(300)
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Review workspace")
+    expect(captureCharFrame()).toContain("Change the reviewed branch and retry.")
   })
 
   test("completed canonical Sync remains visible until Back returns to the list", async () => {

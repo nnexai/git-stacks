@@ -61,7 +61,7 @@ coverage:
         status: pass
     human_judgment: false
 duration: 2h 45m
-completed: 2026-07-16
+completed: 2026-07-17
 status: complete
 ---
 
@@ -72,8 +72,8 @@ status: complete
 ## Performance
 
 - **Duration:** 2h 45m
-- **Completed:** 2026-07-16
-- **Tasks:** 3 plus reviewed repair and full-suite closure
+- **Completed:** 2026-07-17
+- **Tasks:** 3 plus reviewed repair and final recovery closure
 - **Commits:** 7 implementation/test commits, 3 prior review-repair commits, and this fixture-closure commit
 
 ## Accomplishments
@@ -149,12 +149,15 @@ Two independent reviews found authority, race, recovery, and constrained-layout 
 - Forge review now exposes inclusion for every selected-template repository and branch mapping for every included worktree repository. Row identity survives typed rejection, and real stacked rendering is exercised at widths 79, 55, and 40.
 - Notes responses are generation-, workspace-, and revision-keyed. Add/Clear reject absent, failed, mismatched, stale, or unavailable transport prerequisites while preserving editable draft/confirmation state; successful mutation refreshes before accepting the new authoritative response.
 - `WorkspaceOperationView` uses one shared recoverable-Back predicate for rendering and key handling, so refresh-failed is retry-only.
+- The final reviewed recovery repair separates non-throwing passive reloads from throwing foreground reconciliation for core state and signals. Operation and reviewed-create recovery now stay locked across rejected authoritative refreshes, reconnect only by the known operation ID, and show the refresh failure while retrying.
+- Notes rendering is additionally gated by the current workspace ID and authoritative revision, so selecting workspace B cannot retain workspace A's response while B's notes are absent or loading.
 - Final runtime verification used an isolated real managed service: canonical unavailable actions remained non-actionable; rapid Enter added one note and refreshed the authoritative count; rapid `y` cleared once; a real GitHub PR rendered editable two-repository review rows at 79/55/40 columns; toggling the second repository restored its row; and rapid `y` removed one isolated workspace once.
 
-## Final Verification After Second Repair
+## Final Verification After Recovery Repair
 
-- `npm run test:tui` — pass; all OpenTUI files isolated by the repository runner. Existing non-failing `TerminalConsoleCache` listener warnings remain.
-- Focused OpenTUI — ActionMenu 7/7, WorkspaceParity 16/16, ForgeSourceReview 6/6, action-menu integration 12/12, lifecycle archive/remove 7/7.
+- `npm run test:tui` — pass from `/tmp/git-stacks-126-06`; all OpenTUI files were isolated by the repository runner. Existing non-failing `TerminalConsoleCache` listener warnings remain.
+- Final focused recovery files — ForgeSourceReview plus sync-progress integration 11/11, including rejected foreground refresh, same-ID reviewed-create reconnect, visible locked refresh failure, and recovery after authoritative refresh succeeds.
+- Focused OpenTUI coverage also remains green for ActionMenu 7/7, WorkspaceParity 16/16, action-menu integration, lifecycle archive/remove, and the cross-workspace note-isolation regression.
 - `npx vitest run tests/lib/client-workspace-actions.test.ts tests/lib/service/workspace-action-authority.test.ts tests/service/web-workflow-authority.test.ts` — 22/22 pass.
 - TUI, client, and service workspace typechecks — pass.
 - `npm run tui:build` — pass.
@@ -163,8 +166,8 @@ Two independent reviews found authority, race, recovery, and constrained-layout 
 
 ## Next Phase Readiness
 
-The eight verified Plan 06 review fixes are implemented and locally verified. The branch is ready for independent re-review only; do not merge until that review is clean, and this summary does not claim review or release approval.
+The reviewed Plan 06 authority fixes, foreground-refresh propagation, locked recovery presentation, and cross-workspace note isolation are implemented and locally verified. The branch is ready for final inline integration inspection; this summary does not claim human review or release approval.
 
 ---
 *Phase: 126-web-workflow-and-forge-source-parity*
-*Completed: 2026-07-16*
+*Completed: 2026-07-17*

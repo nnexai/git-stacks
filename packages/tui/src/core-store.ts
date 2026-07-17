@@ -51,7 +51,7 @@ function startEventRefresh(): void {
   })()
 }
 
-export function reloadCoreState(): Promise<void> {
+function requestCoreState(propagateFailure: boolean): Promise<void> {
   const requestGeneration = ++generation
   setLoading(true)
   const request = fetchCoreState().then((next) => {
@@ -61,12 +61,21 @@ export function reloadCoreState(): Promise<void> {
   }).catch((caught) => {
     if (requestGeneration !== generation) return
     setError(caught instanceof Error ? caught.message : String(caught))
+    if (propagateFailure) throw caught
   }).finally(() => {
     if (requestGeneration === generation) setLoading(false)
     if (active === request) active = undefined
   })
   active = request
   return request
+}
+
+export function reloadCoreState(): Promise<void> {
+  return requestCoreState(false)
+}
+
+export function refreshCoreState(): Promise<void> {
+  return requestCoreState(true)
 }
 
 export function useCoreState() {
@@ -76,7 +85,7 @@ export function useCoreState() {
   }
   if (!state() && !active) void reloadCoreState()
   startEventRefresh()
-  return { state, loading, error, reload: reloadCoreState }
+  return { state, loading, error, reload: reloadCoreState, refresh: refreshCoreState }
 }
 
 export function resetCoreStateForTests(): void {

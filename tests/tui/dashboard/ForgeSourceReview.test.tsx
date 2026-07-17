@@ -93,10 +93,12 @@ describe("ForgeSourceReviewDialog", () => {
     expect(appSource).toContain("Reconnecting to ${operationId}")
     expect(appSource).toContain("forgeReview.observeOperation(operation)")
     const observeIndex = appSource.indexOf("forgeReview.observeOperation(operation)")
-    const refreshIndex = appSource.indexOf("await reload()", observeIndex)
+    const coreRefreshIndex = appSource.indexOf("await core.refresh()", observeIndex)
+    const signalRefreshIndex = appSource.indexOf("await refreshSignals()", coreRefreshIndex)
     const recoveryIndex = appSource.indexOf('setView({ view: "forge-source-review" })', observeIndex)
-    expect(refreshIndex).toBeGreaterThan(observeIndex)
-    expect(recoveryIndex).toBeGreaterThan(refreshIndex)
+    expect(coreRefreshIndex).toBeGreaterThan(observeIndex)
+    expect(signalRefreshIndex).toBeGreaterThan(coreRefreshIndex)
+    expect(recoveryIndex).toBeGreaterThan(signalRefreshIndex)
   })
 
   test("failed and cancelled reviewed operations restore editable Review when recoverable", async () => {

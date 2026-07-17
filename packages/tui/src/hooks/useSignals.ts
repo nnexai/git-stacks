@@ -37,11 +37,12 @@ export function useSignals() {
     setTick((value) => value + 1)
   }
 
-  async function reloadSignals() {
+  async function requestSignals(propagateFailure: boolean) {
     active?.abort()
-    active = new AbortController()
+    const controller = new AbortController()
+    active = controller
     try {
-      const projection = await fetchSignalProjection(active.signal)
+      const projection = await fetchSignalProjection(controller.signal)
       if (disposed) return
       if (BigInt(projection.sequence) < BigInt(sequence())) return
       projected = new SignalState()
@@ -53,9 +54,14 @@ export function useSignals() {
       renderProjection()
       setSequence(projection.sequence)
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) setSignalMap(new Map())
+      const aborted = error instanceof DOMException && error.name === "AbortError"
+      if (!aborted) setSignalMap(new Map())
+      if (propagateFailure) throw error
     }
   }
+
+  const reloadSignals = () => requestSignals(false)
+  const refreshSignals = () => requestSignals(true)
 
   async function dismiss(signalId: string) {
     locallyDismissed.add(signalId)
@@ -88,5 +94,5 @@ export function useSignals() {
   })
   onCleanup(() => { disposed = true; active?.abort(); unsubscribe() })
 
-  return { signalMap, tick, sequence, dismiss, reloadSignals }
+  return { signalMap, tick, sequence, dismiss, reloadSignals, refreshSignals }
 }

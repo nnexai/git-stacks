@@ -87,7 +87,9 @@ const wsFixture = {
 }
 let workspaceSettings: Record<string, unknown> = {}
 let workspaceCommands: Record<string, string> = {}
+let additionalWorkspaceFixtures: any[] = []
 const workspaceFixture = () => ({ ...wsFixture, settings: workspaceSettings, commands: workspaceCommands })
+const activeWorkspaceFixtures = () => wsRemoved ? [] : [workspaceFixture(), ...additionalWorkspaceFixtures]
 
 // Inline registry fixture
 const registryFixture = [
@@ -118,6 +120,16 @@ const removeWorkspaceMock = mock(async (name: string) => {
   try { unlinkSync(`${configDir}/workspaces/${name}.yml`) } catch {}
   return { ok: true }
 })
+const fetchWorkspaceNotesProjectionMock = mock(async (request: { workspace_id: string; expected_revision: string }) => ({
+  workspace_id: request.workspace_id,
+  revision: request.expected_revision,
+  notes_revision: "notes-1",
+  count: request.workspace_id === workspaceId ? 1 : 0,
+  records: request.workspace_id === workspaceId
+    ? [{ text: "A-only authoritative note", created_at: "2026-07-16T12:00:00.000Z" }]
+    : [],
+}))
+
 const workspaceLifecycleMutationMock = mock(async (request: {
   kind: string
   workspace_id: string
@@ -237,7 +249,7 @@ mock.module("../../../packages/tui/src/editor-handoff", () => ({
 }))
 
 mock.module("@git-stacks/service/client", () => ({
-  fetchCoreState: mock(async () => makeDashboardCoreState(wsRemoved ? [] : [workspaceFixture() as any], [templateFixture as any], registryFixture as any)),
+  fetchCoreState: mock(async () => makeDashboardCoreState(activeWorkspaceFixtures() as any, [templateFixture as any], registryFixture as any)),
   fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
   dismissSignal: mock(async () => {}),
   subscribeServiceEvents: mock(async () => "0"),
@@ -271,6 +283,7 @@ mock.module("@git-stacks/service/client", () => ({
 mock.module("../../../packages/tui/src/official-service", () => ({
   officialService: {
     fetchWorkspaceActionInventory: mock(async () => workspaceActionInventory),
+    fetchWorkspaceNotesProjection: fetchWorkspaceNotesProjectionMock,
     runWorkspaceLifecycleMutation: workspaceLifecycleMutationMock,
   },
 }))
@@ -294,7 +307,7 @@ write(configDir, "config.yml", `workspace_root: /tmp/integ-action-ws-root
 const { testRender } = await import("@opentui/solid")
 const { default: App } = await import("../../../packages/tui/src/App")
 const { setCoreStateFactoryForTests } = await import("../../../packages/tui/src/core-store")
-setCoreStateFactoryForTests(() => makeDashboardCoreState(wsRemoved ? [] : [workspaceFixture() as any], [templateFixture as any], registryFixture as any))
+setCoreStateFactoryForTests(() => makeDashboardCoreState(activeWorkspaceFixtures() as any, [templateFixture as any], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }
 
@@ -306,12 +319,14 @@ beforeEach(() => {
   wsRemoved = false
   workspaceSettings = {}
   workspaceCommands = {}
+  additionalWorkspaceFixtures = []
   listRegistryEntriesMock.mockClear()
   registryValidateMock.mockClear()
   editRegistryYamlMock.mockClear()
   openWorkspaceIssueMock.mockClear()
   runManualCommandMock.mockClear()
   workspaceLifecycleMutationMock.mockClear()
+  fetchWorkspaceNotesProjectionMock.mockClear()
   process.env.EDITOR = "true"
   write(configDir, "workspaces/test-ws.yml", `name: test-ws
 branch: feature/test
@@ -344,6 +359,44 @@ describe("integration: action menu dispatch", () => {
     expect(frame).toContain("Sync workspace")
     expect(frame).toContain("View notes")
     expect(frame).toContain("Archive workspace")
+  })
+
+  test("workspace detail never renders workspace A notes after selecting workspace B", async () => {
+    additionalWorkspaceFixtures = [{
+      name: "zzz-ws",
+      schema_version: "1" as const,
+      branch: "feature/zzz",
+      created: "2026-01-16T00:00:00.000Z",
+      repos: [],
+    }]
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />,
+      renderOpts,
+    )
+    activeRenderer = renderer
+    await renderOnce()
+
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("t")
+    await Bun.sleep(10)
+    await renderOnce()
+    expect(fetchWorkspaceNotesProjectionMock).toHaveBeenCalledWith({
+      workspace_id: workspaceId,
+      expected_revision: "1",
+    })
+    expect(captureCharFrame()).toContain("A-only authoritative note")
+
+    mockInput.pressEscape()
+    await renderOnce()
+    mockInput.pressEscape()
+    await renderOnce()
+    mockInput.pressArrow("down")
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(frame).toContain("zzz-ws")
+    expect(frame).not.toContain("A-only authoritative note")
   })
 
   test("selecting Remove confirms through the lifecycle service and deletes workspace YAML", async () => {

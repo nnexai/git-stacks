@@ -60,7 +60,7 @@ export function CreateProgressView(props: Props) {
             </box>
           )}
         </For>
-        <Show when={props.done && !!props.summary.text}>
+        <Show when={!!props.summary.text}>
           <text fg={props.summary.color}>{"\n"}  {props.summary.text}</text>
         </Show>
       </box>

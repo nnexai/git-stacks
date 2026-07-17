@@ -247,7 +247,7 @@ export default function App() {
   const { entries, loading, reload } = useWorkspaces()
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
-  const { signalMap, tick, dismiss, reloadSignals } = useSignals()
+  const { signalMap, tick, dismiss, reloadSignals, refreshSignals } = useSignals()
   const core = useCoreState()
   const [refreshFlash, setRefreshFlash] = createSignal("")
 
@@ -423,6 +423,16 @@ export default function App() {
     const entry = currentEntry()
     return entry ? { workspaceId: entry.workspaceId, workspaceName: entry.workspace.name } : undefined
   })
+  const selectedNotesResponse = createMemo(() => {
+    const entry = currentEntry()
+    const response = notesResponse()
+    const revision = core.state()?.revision
+    return entry && response && revision
+      && response.workspace_id === entry.workspaceId
+      && response.revision === revision
+      ? response
+      : undefined
+  })
   const fileStatus = useWorkspaceFileStatus(selectedFileTarget, () => core.state()?.revision)
   const selectedIssueCandidates = createMemo(() => buildIssueCandidates(selectedWorkspace()))
   const selectedManualCommands = createMemo(() => {
@@ -579,8 +589,8 @@ export default function App() {
   }
 
   async function reconcileLifecycleState(): Promise<void> {
-    await reload()
-    await reloadSignals()
+    await core.refresh()
+    await refreshSignals()
     setSelected(new Set<string>())
     tabCursor.workspaces[1](0)
   }
@@ -827,7 +837,7 @@ export default function App() {
       submit: async (intent) => summarize(await officialService.submitWebOperation(intent)),
       get: async (operationId) => summarize(await officialService.fetchWebOperation(operationId)),
       cancel: (operationId) => officialService.cancelWebOperation(operationId),
-      refresh: async () => { await reload(); await reloadSignals() },
+      refresh: async () => { await core.refresh(); await refreshSignals() },
       reconcile: () => { setSelected(new Set<string>()) },
     })
     setView({ view: "workspace-operation" })
@@ -888,8 +898,8 @@ export default function App() {
 
     for (;;) {
       try {
-        await reload()
-        await reloadSignals()
+        await core.refresh()
+        await refreshSignals()
         break
       } catch {
         setCreateSummary({ text: "Authoritative refresh failed. Reconnecting before recovery…", color: "red" })
@@ -965,7 +975,7 @@ export default function App() {
         ? { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision, text: text ?? "" }
         : { workspace_id: v.workspaceId, expected_revision: revision, expected_notes_revision: response.notes_revision }
       await waitForWebOperation(await officialService.submitWebOperation({ kind, request } as WebOperationMutation))
-      await reload()
+      await core.refresh()
       const authoritativeRevision = core.state()?.revision
       if (!authoritativeRevision) throw new Error("Workspace note mutation did not reconcile an authoritative revision")
       await loadWorkspaceNotes(entry, authoritativeRevision)
@@ -2456,7 +2466,7 @@ export default function App() {
                   signals={currentEntry() ? (signalMap().get(currentEntry()!.workspace.name) ?? []) : []}
                   tick={tick()}
                   fileStatus={fileStatus.state()}
-                  notes={notesResponse()}
+                  notes={selectedNotesResponse()}
                   scrollRequest={detailScrollRequest()}
                   config={core.state()?.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }}
                   templates={templateEntries()}
