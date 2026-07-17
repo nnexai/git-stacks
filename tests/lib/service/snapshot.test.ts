@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@test/api"
 import type { Workspace } from "../../../packages/core/src/config"
 import * as Protocol from "../../../packages/protocol/src/service"
-import { CoreWorkspaceSchema } from "../../../packages/service/src/policy/core-contract"
+import { CoreStateSchema, CoreWorkspaceSchema } from "../../../packages/service/src/policy/core-contract"
 import {
   SnapshotBusyError,
   createSnapshotBuilder,
@@ -24,6 +24,19 @@ const workspace = (name = "alpha"): Workspace & { id: string } => ({
     task_path: "/tasks/alpha/git-stacks",
   }],
 })
+
+function cardinalityWorkspace(index: number, archived: boolean): Workspace & { id: string } {
+  const suffix = String(index).padStart(2, "0")
+  return {
+    ...workspace(`${archived ? "archived" : "active"}-${suffix}`),
+    id: `${archived ? "20000000" : "10000000"}-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    ...(archived ? {
+      created: "2026-06-01T00:00:00.000Z",
+      archived: true as const,
+      archived_at: new Date(Date.UTC(2026, 6, index, 12)).toISOString(),
+    } : {}),
+  }
+}
 
 class MemoryStore implements SnapshotRevisionStore {
   state: { digest: string; revision: string } | null = null
@@ -97,6 +110,38 @@ describe("authoritative service snapshots", () => {
       activity_at: archived.archived_at,
     }])
     expect(CoreWorkspaceSchema.parse({ definition: active, projection: activeResponse.workspace }).projection.activity_at).toBe(active.last_opened)
+  })
+
+  test("preserves complete larger active and archived catalogs for trusted CoreState consumers", async () => {
+    const active = Array.from({ length: 17 }, (_, index) => cardinalityWorkspace(index + 1, false))
+    const archived = Array.from({ length: 18 }, (_, index) => cardinalityWorkspace(index + 1, true))
+    const definitions = [...active, ...archived].reverse()
+    const definitionsByName = new Map(definitions.map((entry) => [entry.name, entry]))
+    const builder = createSnapshotBuilder(dependencies({
+      listWorkspaceNames: () => definitions.map(({ name }) => name),
+      ensureWorkspaceIdentity: (name: string) => definitionsByName.get(name)!,
+    })) as ReturnType<typeof createSnapshotBuilder> & { buildCatalog(): Promise<unknown> }
+
+    const catalog = Protocol.WorkspaceCatalogSchema.parse(await builder.buildCatalog())
+    expect(catalog.workspaces.map(({ workspace: entry }) => entry.name)).toEqual(active.map(({ name }) => name))
+    expect(catalog.archived_workspaces.map(({ name }) => name)).toEqual([...archived].reverse().map(({ name }) => name))
+
+    const coreState = CoreStateSchema.parse({
+      revision: catalog.revision,
+      generated_at: catalog.generated_at,
+      config: {},
+      workspaces: catalog.workspaces.map(({ workspace: projection }) => ({
+        definition: definitionsByName.get(projection.name),
+        projection,
+      })),
+      archived_workspaces: catalog.archived_workspaces,
+      templates: [],
+      repositories: [],
+    })
+    expect(coreState.workspaces).toHaveLength(17)
+    expect(coreState.archived_workspaces).toHaveLength(18)
+    expect(coreState.workspaces.map(({ definition }) => definition.name)).toEqual(active.map(({ name }) => name))
+    expect(coreState.archived_workspaces.map(({ name }) => name)).toEqual([...archived].reverse().map(({ name }) => name))
   })
 
   test("catalog revision advances through active, all-archived, and archive-only changes", async () => {

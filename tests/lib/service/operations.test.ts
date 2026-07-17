@@ -10,7 +10,7 @@ import {
   type OperationStep,
 } from "../../../packages/service/src/policy/operations"
 import type { Operation, ServiceEvent } from "../../../packages/protocol/src/service"
-import { WorkspaceLifecycleMutationSchema } from "../../../packages/protocol/src/service"
+import { CLIENT_MODEL_LIMITS, WorkspaceLifecycleMutationSchema } from "../../../packages/protocol/src/service"
 import { WorkspaceLifecycleMutationSchemas } from "../../../packages/service/src/policy/core-contract"
 import { CoreMutationSchemas } from "../../../packages/service/src/policy/core-contract"
 
@@ -346,6 +346,43 @@ describe("workspace lifecycle operation contract", () => {
     )
     expect(WorkspaceLifecycleMutationSchemas["workspace.archive"].safeParse({ ...archive, confirmation_name: "demo" }).success).toBe(false)
     expect(WorkspaceLifecycleMutationSchemas["workspace.force-remove"].safeParse(archive).success).toBe(false)
+  })
+})
+
+describe("Workspace creation admission", () => {
+  test("keeps the client model at sixteen and rejects workspace seventeen before mutation", async () => {
+    const request = {
+      name: "workspace-17",
+      branch: "feature/workspace-17",
+      source: { kind: "repositories" as const, repositories: ["app"] },
+    }
+    const planWorkspace = mock(async () => ({
+      ok: true as const,
+      plan: {
+        request,
+        inputs: { wsName: request.name, branch: request.branch, repos: [] },
+      },
+    }))
+    const createWorkspace = mock(async () => ({ ok: true as const }))
+    const current = Array.from({ length: CLIENT_MODEL_LIMITS.workspaces }, (_, index) => ({
+      id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      name: `workspace-${String(index + 1).padStart(2, "0")}`,
+      schema_version: "1" as const,
+      branch: `feature/${index + 1}`,
+      created: "2026-07-17T12:00:00.000Z",
+      repos: [],
+    }))
+    const adapters = createWorkspaceMutationAdapters({
+      planWorkspace: planWorkspace as never,
+      listWorkspaces: (() => current) as never,
+      createWorkspace: createWorkspace as never,
+    })
+
+    expect(CLIENT_MODEL_LIMITS.workspaces).toBe(16)
+    await expect(adapters["workspace.create"](request).steps[0]!.run(async () => undefined))
+      .rejects.toThrow("capacity_exceeded: workspaces")
+    expect(planWorkspace).toHaveBeenCalledTimes(1)
+    expect(createWorkspace).not.toHaveBeenCalled()
   })
 })
 

@@ -671,23 +671,23 @@ describe("Phase 127 evidence classification, deduplication, and cautions", () =>
     ])
   })
 
-  test("supports zero, one, and many workspaces under one atomic response shape", () => {
+  test("classifies complete candidate and incomplete sets larger than sixteen", () => {
     const empty = classify([])
-    const oneWorkspace = quietWorkspace({
-      id: uuid(10),
-      name: "one",
+    const candidateWorkspaces = Array.from({ length: 17 }, (_, index) => quietWorkspace({
+      id: uuid(100 + index),
+      name: `candidate-${String(index).padStart(2, "0")}`,
       last_opened: PHASE127_TIMES.beforeCutoff,
-    })
-    const twoWorkspace = quietWorkspace({
-      id: uuid(11),
-      name: "two",
-      last_opened: "2026-05-01T00:00:00.000Z",
-    })
-    const one = classify([policyInput(oneWorkspace)])
-    const many = classify([
-      policyInput(oneWorkspace),
-      policyInput(twoWorkspace),
-      policyInput(quietWorkspace({ id: uuid(12), name: "omitted" })),
+    }))
+    const incompleteWorkspaces = Array.from({ length: 18 }, (_, index) => quietWorkspace({
+      id: uuid(200 + index),
+      name: `incomplete-${String(index).padStart(2, "0")}`,
+      created: "not-an-activity",
+      last_opened: undefined,
+    }))
+    const response = classify([
+      ...candidateWorkspaces.map((workspace) => policyInput(workspace)),
+      ...incompleteWorkspaces.map((workspace) => policyInput(workspace)),
+      policyInput(quietWorkspace({ id: uuid(300), name: "omitted" })),
     ])
 
     expect(empty).toEqual({
@@ -697,11 +697,15 @@ describe("Phase 127 evidence classification, deduplication, and cautions", () =>
       candidates: [],
       incomplete: [],
     })
-    expect(one.candidates).toHaveLength(1)
-    expect(many.candidates.map((row) => row.workspace_id)).toEqual([
-      twoWorkspace.id,
-      oneWorkspace.id,
-    ])
+    expect(response.candidates).toHaveLength(17)
+    expect(response.incomplete).toHaveLength(18)
+    expect(new Set(response.candidates.map(({ workspace_id }) => workspace_id))).toEqual(
+      new Set(candidateWorkspaces.map(({ id }) => id)),
+    )
+    expect(new Set(response.incomplete.map(({ workspace_id }) => workspace_id))).toEqual(
+      new Set(incompleteWorkspaces.map(({ id }) => id)),
+    )
+    expect(response.candidates.some(({ workspace_id }) => response.incomplete.some((row) => row.workspace_id === workspace_id))).toBe(false)
   })
 })
 

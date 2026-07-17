@@ -222,8 +222,8 @@ export type ArchivedWorkspaceSummary = z.infer<typeof ArchivedWorkspaceSummarySc
 export const WorkspaceCatalogSchema = z.strictObject({
   revision: RevisionSchema,
   generated_at: TimestampSchema,
-  workspaces: z.array(WorkspaceSnapshotResponseSchema).max(CLIENT_MODEL_LIMITS.workspaces),
-  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema).max(CLIENT_MODEL_LIMITS.workspaces),
+  workspaces: z.array(WorkspaceSnapshotResponseSchema),
+  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema),
 })
 export type WorkspaceCatalog = z.infer<typeof WorkspaceCatalogSchema>
 

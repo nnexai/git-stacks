@@ -273,7 +273,7 @@ describe("Phase 127 stale workspace runtime protocol contract", () => {
     ])
   })
 
-  test("round-trips one atomic response for zero, one, and maximum bounded rows", () => {
+  test("round-trips one atomic response for zero, one, and more than sixteen rows per section", () => {
     const schema = runtimeExport("WebStaleWorkspaceResponseSchema")
     const empty = makeStaleResponse({ candidates: [], incomplete: [] })
     expect(schema.parse(empty)).toEqual(empty)
@@ -281,11 +281,11 @@ describe("Phase 127 stale workspace runtime protocol contract", () => {
     const one = makeStaleResponse()
     expect(schema.parse(one)).toEqual(one)
 
-    const maximum = makeStaleResponse({
-      candidates: Array.from({ length: LIMITS.workspaces }, (_, index) => candidate(index + 1)),
-      incomplete: Array.from({ length: LIMITS.workspaces }, (_, index) => incomplete(index + 1)),
+    const enlarged = makeStaleResponse({
+      candidates: Array.from({ length: LIMITS.workspaces + 1 }, (_, index) => candidate(index + 1)),
+      incomplete: Array.from({ length: LIMITS.workspaces + 2 }, (_, index) => incomplete(index + 1)),
     })
-    expect(schema.parse(maximum)).toEqual(maximum)
+    expect(schema.parse(enlarged)).toEqual(enlarged)
   })
 
   test("rejects extra keys at the response, candidate, incomplete, reason, unknown, and caution levels", () => {
@@ -454,7 +454,7 @@ describe("Phase 127 stale workspace runtime protocol contract", () => {
     ])
   })
 
-  test("enforces every candidate, incomplete, reason, unknown, and caution collection bound", () => {
+  test("retains per-row evidence bounds after removing full-response cardinality caps", () => {
     const responseSchema = runtimeExport("WebStaleWorkspaceResponseSchema")
     const candidateSchema = runtimeExport("WebStaleWorkspaceCandidateSchema")
     const incompleteSchema = runtimeExport("WebStaleWorkspaceIncompleteSchema")
@@ -478,11 +478,11 @@ describe("Phase 127 stale workspace runtime protocol contract", () => {
     expect(responseSchema.safeParse(makeStaleResponse({
       candidates: Array.from({ length: LIMITS.workspaces + 1 }, (_, index) => candidate(index + 1)),
       incomplete: [],
-    })).success).toBe(false)
+    })).success).toBe(true)
     expect(responseSchema.safeParse(makeStaleResponse({
       candidates: [],
       incomplete: Array.from({ length: LIMITS.workspaces + 1 }, (_, index) => incomplete(index + 1)),
-    })).success).toBe(false)
+    })).success).toBe(true)
     expect(candidateSchema.safeParse(makeCandidateRow({
       confirmed_reasons: [...reasons, makeConfirmedReason({
         code: "remote_branch_deleted",

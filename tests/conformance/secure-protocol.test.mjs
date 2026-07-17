@@ -2,10 +2,14 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  SECURE_FRAME_HEADER_BYTES,
   SECURE_LIMITS,
   SecureFrameDecoder,
   SecureFrameQueue,
   SecureProtocolError,
+  SecureResponseSchema,
+  WebSnapshotSchema,
+  WebStaleWorkspaceResponseSchema,
   decodeCanonical,
   encodeCanonical,
   encodeSecureFrame,
@@ -33,7 +37,23 @@ test("canonical control encoding rejects alternate ordering and non-finite value
   assert.throws(() => encodeCanonical({ value: Number.NaN }), SecureProtocolError)
 })
 
-test("secure frame limits are checked before buffering payload bytes", () => {
+test("secure frame limits accept exact payloads and reject overflow before buffering", () => {
+  const exactControl = encodeSecureFrame({
+    kind: "response",
+    flags: 0,
+    streamId: 1,
+    sequence: 0n,
+    payload: new Uint8Array(SECURE_LIMITS.controlFrameBytes),
+  })
+  assert.equal(exactControl.byteLength, SECURE_FRAME_HEADER_BYTES + SECURE_LIMITS.controlFrameBytes)
+
+  assert.throws(() => encodeSecureFrame({
+    kind: "response",
+    flags: 0,
+    streamId: 1,
+    sequence: 0n,
+    payload: new Uint8Array(SECURE_LIMITS.controlFrameBytes + 1),
+  }), (error) => error.code === "frame_too_large")
   assert.throws(() => encodeSecureFrame({
     kind: "terminal_data",
     flags: 0,
@@ -42,13 +62,72 @@ test("secure frame limits are checked before buffering payload bytes", () => {
     payload: new Uint8Array(SECURE_LIMITS.terminalFrameBytes + 1),
   }), /exceeds limit/)
 
-  const maliciousHeader = new Uint8Array(24)
-  const view = new DataView(maliciousHeader.buffer)
-  view.setUint32(0, 0x47533200)
-  view.setUint8(4, 2)
-  view.setUint8(5, 10)
-  view.setUint32(20, SECURE_LIMITS.terminalFrameBytes + 1)
-  assert.throws(() => new SecureFrameDecoder().push(maliciousHeader), /exceeds limit/)
+  for (const [kind, limit] of [[7, SECURE_LIMITS.controlFrameBytes], [10, SECURE_LIMITS.terminalFrameBytes]]) {
+    const maliciousHeader = new Uint8Array(SECURE_FRAME_HEADER_BYTES)
+    const view = new DataView(maliciousHeader.buffer)
+    view.setUint32(0, 0x47533200)
+    view.setUint8(4, 2)
+    view.setUint8(5, kind)
+    view.setUint32(20, limit + 1)
+    assert.throws(() => new SecureFrameDecoder().push(maliciousHeader), (error) => error.code === "frame_too_large")
+  }
+})
+
+test("representative enlarged read responses remain below the one MiB control frame bound", () => {
+  const uuid = (family, index) => `${family}0000000-0000-4000-8000-${String(index).padStart(12, "0")}`
+  const snapshot = WebSnapshotSchema.parse({
+    protocol: "web-v1",
+    revision: "21",
+    generated_at: "2026-07-17T12:00:00.000Z",
+    pinned_workspace_ids: Array.from({ length: 17 }, (_, index) => uuid("1", index + 1)),
+    workspaces: Array.from({ length: 17 }, (_, index) => ({
+      id: uuid("1", index + 1),
+      name: `workspace-${String(index + 1).padStart(2, "0")}`,
+      activity_at: "2026-07-17T11:00:00.000Z",
+      branch: `feature/${index + 1}`,
+      priority: index,
+      labels: [],
+      repositories: [],
+      commands: [],
+      file_status: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0 },
+    })),
+    archived_workspaces: Array.from({ length: 18 }, (_, index) => ({
+      id: uuid("2", index + 1),
+      name: `archived-${String(index + 1).padStart(2, "0")}`,
+      activity_at: "2026-07-16T11:00:00.000Z",
+    })),
+  })
+  const stale = WebStaleWorkspaceResponseSchema.parse({
+    revision: "21",
+    checked_at: "2026-07-17T12:00:00.000Z",
+    threshold_days: 30,
+    candidates: Array.from({ length: 17 }, (_, index) => ({
+      workspace_id: uuid("3", index + 1),
+      workspace_name: `candidate-${String(index + 1).padStart(2, "0")}`,
+      activity_at: "2026-06-01T00:00:00.000Z",
+      confirmed_reasons: [{ code: "inactive", occurred_at: "2026-06-01T00:00:00.000Z" }],
+      unknown_evidence: [],
+      cautions: [],
+    })),
+    incomplete: Array.from({ length: 18 }, (_, index) => ({
+      workspace_id: uuid("4", index + 1),
+      workspace_name: `incomplete-${String(index + 1).padStart(2, "0")}`,
+      activity_at: null,
+      unknown_evidence: [{ code: "activity_unavailable", observed_at: "2026-07-17T12:00:00.000Z" }],
+      cautions: [],
+    })),
+  })
+
+  for (const body of [snapshot, stale]) {
+    const response = SecureResponseSchema.parse({
+      id: "90000000-0000-4000-8000-000000000001",
+      ok: true,
+      body,
+    })
+    const payload = encodeCanonical(response)
+    assert.ok(payload.byteLength < SECURE_LIMITS.controlFrameBytes)
+    assert.doesNotThrow(() => encodeSecureFrame({ kind: "response", flags: 0, streamId: 1, sequence: 0n, payload }))
+  }
 })
 
 test("secure writer rejects bounded-queue overflow before retaining unbounded output", async () => {

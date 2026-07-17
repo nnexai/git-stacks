@@ -255,14 +255,14 @@ export const WebTerminalRenameSchema = z.discriminatedUnion("mode", [
 ])
 export const WebTerminalIdSchema = z.string().regex(/^term_[A-Za-z0-9_-]{16,}$/)
 export const WebPinsSchema = z.strictObject({
-  workspace_ids: z.array(EntityIdSchema).max(16).refine((ids) => new Set(ids).size === ids.length),
+  workspace_ids: z.array(EntityIdSchema).refine((ids) => new Set(ids).size === ids.length),
   expected_revision: RevisionSchema,
 })
 export const WebPrioritiesSchema = z.strictObject({
   priorities: z.array(z.strictObject({
     workspace_id: EntityIdSchema,
     priority: z.number().int().min(-2147483648).max(2147483647),
-  })).max(16).refine((entries) => new Set(entries.map(({ workspace_id }) => workspace_id)).size === entries.length),
+  })).refine((entries) => new Set(entries.map(({ workspace_id }) => workspace_id)).size === entries.length),
   expected_revision: RevisionSchema,
 })
 export const WebWorkspaceMutationSchema = z.strictObject({
@@ -326,9 +326,9 @@ export const WebSnapshotSchema = z.strictObject({
   protocol: z.literal(WEB_PROTOCOL),
   revision: RevisionSchema,
   generated_at: TimestampSchema,
-  pinned_workspace_ids: z.array(EntityIdSchema).max(16),
+  pinned_workspace_ids: z.array(EntityIdSchema),
   workspaces: z.array(WebWorkspaceSchema),
-  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema).max(16),
+  archived_workspaces: z.array(ArchivedWorkspaceSummarySchema),
 })
 export type WebSnapshot = z.infer<typeof WebSnapshotSchema>
 
@@ -535,8 +535,8 @@ export const WebStaleWorkspaceResponseSchema = z.strictObject({
   revision: RevisionSchema,
   checked_at: TimestampSchema,
   threshold_days: z.literal(30),
-  candidates: z.array(WebStaleWorkspaceCandidateSchema).max(WEB_STALE_WORKSPACE_LIMITS.workspaces),
-  incomplete: z.array(WebStaleWorkspaceIncompleteSchema).max(WEB_STALE_WORKSPACE_LIMITS.workspaces),
+  candidates: z.array(WebStaleWorkspaceCandidateSchema),
+  incomplete: z.array(WebStaleWorkspaceIncompleteSchema),
 }).superRefine(({ candidates, incomplete }, context) => {
   const candidateIds = new Set<string>()
   for (const [index, candidate] of candidates.entries()) {

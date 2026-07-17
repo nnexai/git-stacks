@@ -1,6 +1,13 @@
 import { describe, expect, test } from "@test/api"
 
-import { WEB_WORKSPACE_ACTION_IDS, WebFileStatusResponseSchema, WebNotesResponseSchema, WebWorkspaceActionInventorySchema } from "../../packages/protocol/src/web"
+import {
+  WEB_WORKSPACE_ACTION_IDS,
+  WebFileStatusResponseSchema,
+  WebNotesResponseSchema,
+  WebPinsSchema,
+  WebPrioritiesSchema,
+  WebWorkspaceActionInventorySchema,
+} from "../../packages/protocol/src/web"
 import { SecureServiceRouter } from "../../packages/service/src/secure/router"
 import type { SnapshotAdapter } from "../../packages/service/src/snapshot-adapter"
 
@@ -26,6 +33,24 @@ const workspace = {
       mode: "worktree" as const, ahead: 0, behind: 1, additions: 0, removals: 0, remote: "available" as const, degraded: false,
     }],
   },
+}
+
+function authorityWorkspaceId(index: number): string {
+  return `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`
+}
+
+function authorityWorkspaces(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...workspace,
+    workspace: {
+      ...workspace.workspace,
+      id: authorityWorkspaceId(index + 1),
+      name: `workspace-${String(index + 1).padStart(2, "0")}`,
+      branch: `feature/${index + 1}`,
+      repositories: [],
+      status: [],
+    },
+  }))
 }
 
 function snapshot(): SnapshotAdapter {
@@ -78,6 +103,60 @@ describe("secure web workflow authority", () => {
         .rejects.toMatchObject({ code: "unauthorized" })
     }
     expect(await router.request(context(["snapshot.read"], "principal-a", "tui"), request("core.state", undefined))).toEqual(raw)
+  })
+
+  test("accepts complete seventeen-workspace pin and priority mutations while retaining authority checks", async () => {
+    const rows = authorityWorkspaces(17)
+    const ids = rows.map(({ workspace: entry }) => entry.id)
+    const priorities = ids.map((workspace_id, index) => ({ workspace_id, priority: 17 - index }))
+    const pinCalls: string[][] = []
+    const priorityCalls: Array<Array<{ workspace_id: string; priority: number }>> = []
+    const largeSnapshot: SnapshotAdapter = {
+      buildAll: async () => rows,
+      buildWorkspace: async () => rows[0]!,
+      buildCatalog: async () => ({ revision: "7", generated_at: generatedAt, workspaces: rows, archived_workspaces: [] }),
+    }
+    const router = new SecureServiceRouter({
+      snapshot: largeSnapshot,
+      setWorkspacePins: async (value) => { pinCalls.push([...value]) },
+      setWorkspacePriorities: async (value) => { priorityCalls.push(value.map((entry) => ({ ...entry }))) },
+    })
+    const pinBody = { workspace_ids: ids, expected_revision: "7" }
+    const priorityBody = { priorities, expected_revision: "7" }
+
+    expect(WebPinsSchema.parse(pinBody)).toEqual(pinBody)
+    expect(WebPrioritiesSchema.parse(priorityBody)).toEqual(priorityBody)
+    expect(await router.request(context(["operation.write"]), request("workspace.pins.set", pinBody))).toEqual({ workspace_ids: ids })
+    expect(await router.request(context(["operation.write"]), request("workspace.priorities.set", priorityBody))).toEqual({ priorities })
+    expect(pinCalls).toEqual([ids])
+    expect(priorityCalls).toEqual([priorities])
+
+    expect(WebPinsSchema.safeParse({ workspace_ids: [ids[0], ids[0]], expected_revision: "7" }).success).toBe(false)
+    expect(WebPrioritiesSchema.safeParse({ priorities: [priorities[0], priorities[0]], expected_revision: "7" }).success).toBe(false)
+    for (const [method, body] of [
+      ["workspace.pins.set", { workspace_ids: [ids[0], ids[0]], expected_revision: "7" }],
+      ["workspace.priorities.set", { priorities: [priorities[0], priorities[0]], expected_revision: "7" }],
+    ] as const) {
+      await expect(router.request(context(["operation.write"]), request(method, body)))
+        .rejects.toMatchObject({ code: "invalid_request" })
+    }
+    for (const [method, body] of [
+      ["workspace.pins.set", { workspace_ids: ids, expected_revision: "6" }],
+      ["workspace.priorities.set", { priorities, expected_revision: "6" }],
+    ] as const) {
+      await expect(router.request(context(["operation.write"]), request(method, body)))
+        .rejects.toMatchObject({ code: "conflict" })
+    }
+    const unknown = authorityWorkspaceId(99)
+    for (const [method, body] of [
+      ["workspace.pins.set", { workspace_ids: [...ids, unknown], expected_revision: "7" }],
+      ["workspace.priorities.set", { priorities: [...priorities, { workspace_id: unknown, priority: 0 }], expected_revision: "7" }],
+    ] as const) {
+      await expect(router.request(context(["operation.write"]), request(method, body)))
+        .rejects.toMatchObject({ code: "not_found" })
+    }
+    expect(pinCalls).toEqual([ids])
+    expect(priorityCalls).toEqual([priorities])
   })
 
   test("exposes a complete service-derived action inventory under snapshot scope", async () => {

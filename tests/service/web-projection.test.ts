@@ -5,6 +5,10 @@ import { projectWebOperation, projectWebSnapshot, projectWebTerminalSignals } fr
 const workspaceId = "11111111-1111-4111-8111-111111111111"
 const repositoryId = "22222222-2222-4222-8222-222222222222"
 
+function projectionId(family: string, index: number): string {
+  return `${family}0000000-0000-4000-8000-${String(index).padStart(12, "0")}`
+}
+
 describe("browser-safe service projection", () => {
   test("PHASE123_RED web lifecycle contract", () => {
     const active = [{
@@ -39,6 +43,62 @@ describe("browser-safe service projection", () => {
       archived_workspaces: [],
     })
     expect(empty).toMatchObject({ revision: "13", workspaces: [], archived_workspaces: [] })
+  })
+
+  test("preserves larger active, pinned, and archived projections without disclosure", () => {
+    const active = Array.from({ length: 17 }, (_, index) => {
+      const suffix = String(17 - index).padStart(2, "0")
+      const id = projectionId("1", 17 - index)
+      const repoId = projectionId("2", 17 - index)
+      return {
+        protocol: "v1" as const,
+        request_id: "req_abcdefghijklmnop",
+        ok: true as const,
+        revision: "21",
+        generated_at: "2026-07-17T12:00:00.000Z",
+        workspace: {
+          id,
+          name: `workspace-${suffix}`,
+          activity_at: `2026-07-${suffix}T11:00:00.000Z`,
+          branch: `feature/${suffix}`,
+          labels: [],
+          pinned: true,
+          priority: 17 - index,
+          repositories: [{ id: repoId, name: `repo-${suffix}`, mode: "worktree" as const, path: `/secret/workspace-${suffix}` }],
+          status: [],
+          file_status: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0 },
+          launch: {
+            commands: [`SECRET_COMMAND_${suffix}`],
+            environment: { TOKEN: `SECRET_ENV_${suffix}` },
+            redacted: ["TOKEN"],
+            references: { TOKEN: `vault:${suffix}` },
+            cwd: `/secret/cwd-${suffix}`,
+            named: [],
+          },
+        },
+      }
+    }) satisfies WorkspaceSnapshotResponse[]
+    const archived = Array.from({ length: 18 }, (_, index) => ({
+      id: projectionId("5", 18 - index),
+      name: `archived-${String(18 - index).padStart(2, "0")}`,
+      activity_at: new Date(Date.UTC(2026, 6, 18 - index, 10)).toISOString(),
+    }))
+    const projected = projectWebSnapshot({
+      revision: "21",
+      generated_at: "2026-07-17T12:00:00.000Z",
+      workspaces: active,
+      archived_workspaces: archived,
+    })
+
+    expect(projected.workspaces.map(({ id }) => id)).toEqual(active.map(({ workspace }) => workspace.id))
+    expect(projected.pinned_workspace_ids).toEqual([...active]
+      .sort((left, right) => left.workspace.name.localeCompare(right.workspace.name))
+      .map(({ workspace }) => workspace.id))
+    expect(projected.archived_workspaces).toEqual(archived)
+    expect(projected.workspaces).toHaveLength(17)
+    expect(projected.pinned_workspace_ids).toHaveLength(17)
+    expect(projected.archived_workspaces).toHaveLength(18)
+    expect(JSON.stringify(projected)).not.toMatch(/\/secret|SECRET_|vault:/)
   })
 
   test("omits paths, commands, environment, secret references, ports, and launch details", () => {
