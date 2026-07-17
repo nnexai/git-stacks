@@ -6,6 +6,7 @@ import {
   applyHostileGlobalGitEnv,
   cleanup,
   createConfigFixture,
+  fakeGitLabProviderEnv,
   formatCliFailure,
   gitExecOptions,
   makeGitRepo,
@@ -268,6 +269,11 @@ describe("v0.18.0 release candidate smoke", () => {
 
   test("forge-source dry-run previews creation without writing workspace state", () => {
     setupForgeSourceFixture(baseDir, configDir)
+    const providerEnv = fakeGitLabProviderEnv(baseDir, {
+      targetPath: "org/api",
+      sourceBranch: "feature/review-42",
+      sourceSha: "a".repeat(40),
+    })
 
     const result = runCli(
       [
@@ -280,7 +286,7 @@ describe("v0.18.0 release candidate smoke", () => {
         "https://gitlab.example.com/org/api/-/merge_requests/42",
         "--dry-run",
       ],
-      { baseDir, configDir },
+      { baseDir, configDir, env: providerEnv },
     )
 
     expectSuccessful(result)

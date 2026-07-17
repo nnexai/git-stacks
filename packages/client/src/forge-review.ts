@@ -7,7 +7,7 @@ import {
   type WebForgeResolveRequest,
   type WebForgeResolveResponse,
   type WebForgeTerminology,
-  type WebOperationSummary,
+  type WebForgeErrorDetails,
   type WebReviewedWorkspaceCreateRequest,
   type WebReviewedWorkspaceDraft,
   type ForgeSourceIdentity,
@@ -50,6 +50,12 @@ export type ForgeReviewEdit =
   | { kind: "repository_included"; repositoryId: string; included: boolean }
   | { kind: "repository_branch"; repositoryId: string; workspaceBranch: string; baseBranch?: string }
 
+export type ForgeReviewOperationObservation = {
+  operation_id: string
+  state: "accepted" | "running" | "succeeded" | "failed" | "cancelled"
+  error?: { message: string; forge?: WebForgeErrorDetails }
+}
+
 export type ForgeReviewCoordinatorCallbacks = {
   resolve(request: WebForgeResolveRequest): Promise<WebForgeResolveResponse>
   create(request: WebReviewedWorkspaceCreateRequest): Promise<{ operationId: string }>
@@ -62,7 +68,7 @@ export type ForgeReviewCoordinator = {
   resolve(): Promise<unknown>
   edit(action: ForgeReviewEdit): void
   create(): Promise<unknown>
-  observeOperation(operation: WebOperationSummary): void
+  observeOperation(operation: ForgeReviewOperationObservation): void
   backToReview(): { status: "review" } | { status: "ignored" }
   reconcile(): void
 }
@@ -299,8 +305,9 @@ export function createForgeReviewCoordinator(
       if (current.phase !== "accepted" || operation.operation_id !== current.operationId) return
       if (operation.state !== "failed" && operation.state !== "cancelled") return
       const accepted = current
-      const failure = operation.error.forge
-        ? classifyForgeReviewFailure({ message: operation.error.message, details: operation.error.forge })
+      const message = operation.error?.message ?? "Reviewed workspace creation did not complete."
+      const failure = operation.error?.forge
+        ? classifyForgeReviewFailure({ message, details: operation.error.forge })
         : undefined
       if (!failure) {
         current = {
@@ -311,7 +318,7 @@ export function createForgeReviewCoordinator(
           validation: validateForgeReviewDraft(accepted.draft, accepted.anchor),
           operationId: operation.operation_id,
           outcome: operation.state,
-          message: operation.error.message,
+          message,
         }
         return
       }

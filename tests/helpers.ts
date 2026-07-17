@@ -855,6 +855,7 @@ export function makeGitMock(overrides: Record<string, unknown> = {}): Record<str
     fetchOrigin: mock(async () => {}),
     fetchSourceRef: mock(async () => {}),
     deleteRef: mock(async () => {}),
+    listRefsByPrefix: mock(async () => []),
     resolveRef: mock(async () => ({ ok: true, sha: "0000000" })),
     pullFFOnly: mock(async () => ({ ok: true })),
     checkRemoteTrackingRef: mock(async () => false),

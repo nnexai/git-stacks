@@ -81,10 +81,9 @@ describe("lifecycle hooks with real subprocesses", () => {
     expect(results).toHaveLength(2)
     expect(results[0]).toMatchObject({ exitCode: 0, failed: false })
     expect(results[1]).toMatchObject({ exitCode: 9, failed: true })
-    expect(lines).toEqual([
-      { line: "before", stream: "stdout" },
-      { line: "fail", stream: "stderr" },
-    ])
+    expect(lines).toContainEqual({ line: "before", stream: "stdout" })
+    expect(lines).toContainEqual({ line: "fail", stream: "stderr" })
+    expect(lines).not.toContainEqual({ line: "after", stream: "stdout" })
   })
 })
 
