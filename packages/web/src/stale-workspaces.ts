@@ -509,10 +509,12 @@ export function mountWebStaleWorkspaceOverlay(
   }
 
   controller.subscribe(render)
-  const ready = controller.open().finally(render)
+  const ready = controller.open().finally(() => {
+    render()
+    view.body.querySelector<HTMLButtonElement>("[data-stale-refresh]")?.focus()
+  })
   pending = ready
   render()
-  queueMicrotask(() => view.body.querySelector<HTMLButtonElement>("[data-stale-refresh]")?.focus())
   return {
     ready,
     idle: async () => pending,

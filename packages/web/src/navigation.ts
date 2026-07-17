@@ -1,5 +1,6 @@
 import {
   WEB_SHORTCUT_ACTION_METADATA,
+  matchScopedShortcutEvent,
   matchShortcutEvent,
   validateShortcutSettings,
   type ShortcutCategory,
@@ -414,7 +415,7 @@ export type WebActionRegistry = {
   dispatch(event: ShortcutKeyEvent, source: WebActionSource): WebActionDispatchResult
 }
 
-const repeatRefocusActions = new Set<WebShortcutActionId>(["workspace.switch", "commands.open"])
+const repeatRefocusActions = new Set<WebShortcutActionId>(["workspace.switch", "commands.open", "workspace.stale"])
 const settingsUnavailable: WebActionAvailability = {
   available: false,
   disabledReason: "Shortcut settings are not loaded.",
@@ -486,6 +487,23 @@ type BoundaryKeyEvent = ShortcutKeyEvent & {
 export type WebShortcutDispatcher = {
   handleDocument(event: BoundaryKeyEvent): WebActionDispatchResult
   handleXterm(event: BoundaryKeyEvent): boolean
+}
+
+/** The workspace.stale.refresh action is owned only by the active stale view. */
+export function dispatchStaleWorkspaceScopedShortcut(
+  event: KeyboardEvent,
+  refresh: () => void,
+): boolean {
+  const target = event.target as HTMLElement | null
+  if (target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
+    || target.getAttribute?.("contenteditable") === "true"
+    || target.classList?.contains("xterm"))) return false
+  const match = matchScopedShortcutEvent(event, "stale-view")
+  if (!match.handled || match.actionId !== "workspace.stale.refresh") return false
+  event.preventDefault()
+  event.stopPropagation()
+  refresh()
+  return true
 }
 
 export class WebShortcutConflictRecoveryError extends Error {

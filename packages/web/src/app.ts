@@ -3,11 +3,12 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
-import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createStaleWorkspaceActionRegistry, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
+import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebStaleWorkspaceResponse, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, dispatchStaleWorkspaceScopedShortcut, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { bindInPlaceOverlayRetry, createWebOverlayRuntime, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
+import { createWebStaleWorkspaceController, mountWebStaleWorkspaceOverlay } from "./stale-workspaces"
 
 if (window.top !== window) {
   document.documentElement.replaceChildren()
@@ -461,7 +462,7 @@ let shortcutSettings: WebShortcutSettings | undefined
 const shortcutPlatform: WebShortcutPlatform = /Mac(?:intosh| OS X)/i.test(navigator.userAgent) ? "macos" : "linux"
 const overlayShortcutActions = new Map<WebShortcutActionId, (invocation: WebActionInvocation) => void>()
 
-function registerOverlayShortcutAction(actionId: "workspace.switch" | "commands.open", callback: (invocation: WebActionInvocation) => void): void {
+function registerOverlayShortcutAction(actionId: "workspace.switch" | "commands.open" | "workspace.stale", callback: (invocation: WebActionInvocation) => void): void {
   overlayShortcutActions.set(actionId, callback)
 }
 
@@ -505,7 +506,7 @@ function hasResolvableAttention(): boolean {
 const actionRegistrations = Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((actionId) => [actionId, {
   availability: () => shortcutAvailability(actionId),
   callback: (invocation: WebActionInvocation) => {
-    if (actionId === "workspace.switch" || actionId === "commands.open") {
+    if (actionId === "workspace.switch" || actionId === "commands.open" || actionId === "workspace.stale") {
       overlayShortcutActions.get(actionId)?.(invocation)
     } else if (actionId === "workspace.new") {
       void showCreation()
@@ -555,8 +556,15 @@ registerOverlayShortcutAction("workspace.switch", (invocation) => {
   }
   showWorkspaceSwitcher()
 })
+registerOverlayShortcutAction("workspace.stale", (invocation) => {
+  if (invocation.kind === "refocus") {
+    if (overlayController.activeSurface() === "workspace.stale") overlayController.focusPrimary()
+    return
+  }
+  showStaleWorkspaces()
+})
 
-app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="feedback-region"><div class="operation-region" id="operations" aria-live="polite"></div><div class="toast-region" id="toasts" aria-live="polite"></div></div>`
+app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button toolbar-discovery" id="next-attention" type="button" aria-label="Next attention" title="Next attention"><span aria-hidden="true">!</span><span class="wide">Next attention</span></button><button class="button toolbar-discovery" id="keyboard-shortcuts" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span aria-hidden="true">⌨</span><span class="wide">Keyboard shortcuts</span></button><button class="button toolbar-compact" id="stale-workspaces" type="button" aria-label="Stale workspaces" title="Stale workspaces"><span aria-hidden="true">?</span><span class="wide">Stale workspaces</span></button><button class="button toolbar-compact" id="archived" type="button" aria-label="Archived workspaces"><span aria-hidden="true">▣</span><span class="wide">Archived</span></button><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="feedback-region"><div class="operation-region" id="operations" aria-live="polite"></div><div class="toast-region" id="toasts" aria-live="polite"></div></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
 const nav = document.querySelector<HTMLUListElement>("#nav")!
 const scope = document.querySelector<HTMLElement>("#scope")!
@@ -1309,7 +1317,7 @@ function connectionSummary(): string { return `${snapshot.workspaces.length} wor
 function renderAll(): void {
   renderNav(); renderScope(); renderSignals(); renderOperationCards(); statusNode.textContent = connectionSummary()
   document.querySelector("#next-attention")?.classList.toggle("attention", hasResolvableAttention())
-  for (const [selector, actionId] of [["#next-attention", "attention.next"], ["#launcher", "commands.open"], ["#create", "workspace.new"]] as const) {
+  for (const [selector, actionId] of [["#next-attention", "attention.next"], ["#launcher", "commands.open"], ["#create", "workspace.new"], ["#stale-workspaces", "workspace.stale"]] as const) {
     const control = document.querySelector<HTMLButtonElement>(selector)
     const availability = webActionRegistry.entry(actionId)?.availability
     if (!control || !availability) continue
@@ -1437,6 +1445,111 @@ async function archiveWorkspace(workspace: Workspace): Promise<void> {
 async function unarchiveWorkspace(workspace: LifecycleTarget): Promise<void> {
   const operation = await runWorkspaceLifecycle("workspace.unarchive", workspace)
   if (operation?.state === "succeeded") toast(`${workspace.name} unarchived. Stopped terminals were not recreated.`)
+}
+
+let staleWorkspaceController: ReturnType<typeof createWebStaleWorkspaceController> | undefined
+
+async function invokeStaleWorkspaceDescriptor(descriptor: WebWorkspaceAction): Promise<unknown> {
+  const workspace = snapshot.workspaces.find(({ id }) => id === descriptor.subject.workspace_id)
+  if (!workspace) throw new Error("Workspace is no longer available")
+  let outcome: unknown
+  const callbacks = workspaceActionCallbacks(workspace)
+  const terminal = async (): Promise<{ kind: "terminal" }> => ({ kind: "terminal" })
+  callbacks["workspace.open"] = async () => {
+    const submitted = await submitDurableWorkspaceAction("workspace.open", workspace, {
+      kind: "workspace.open",
+      request: { workspace_id: workspace.id, expected_revision: snapshot.revision },
+    })
+    const initial = await api<WebOperationSummary>("operation.get", { operation_id: submitted.operationId }, { scope: "snapshot.read" })
+    const completed = await observeLifecycleOperation(initial)
+    await reconcileAuthoritativeState()
+    if (completed.state !== "succeeded") throw new Error("Workspace open did not succeed")
+    const authoritative = snapshot.workspaces.find(({ id }) => id === workspace.id)
+    const repository = authoritative?.repositories[0]
+    if (!authoritative || !repository) throw new Error("Opened workspace has no available repository")
+    outcome = { kind: "succeeded", workspace_id: authoritative.id, repository_id: repository.id, revision: snapshot.revision }
+    return terminal()
+  }
+  callbacks["workspace.archive"] = async () => {
+    const operation = await runWorkspaceLifecycle("workspace.archive", lifecycleTarget(workspace))
+    outcome = operation?.state === "succeeded"
+      ? { kind: "operation", operation_id: operation.operation_id }
+      : operation?.state === "failed" || operation?.state === "cancelled"
+        ? operation.error.lifecycle
+        : undefined
+    return terminal()
+  }
+  callbacks["workspace.remove"] = async () => {
+    const operation = await runWorkspaceLifecycle("workspace.remove", lifecycleTarget(workspace))
+    outcome = operation?.state === "succeeded"
+      ? { kind: "operation", operation_id: operation.operation_id }
+      : operation?.state === "failed" || operation?.state === "cancelled"
+        ? operation.error.lifecycle
+        : undefined
+    return terminal()
+  }
+  callbacks["workspace.force-remove"] = async () => {
+    const confirmation = confirmedForceNames.get(workspace.id)
+    confirmedForceNames.delete(workspace.id)
+    if (confirmation !== workspace.name) throw new Error("Exact workspace confirmation is required")
+    const operation = await runWorkspaceLifecycle("workspace.force-remove", lifecycleTarget(workspace), confirmation)
+    outcome = operation?.state === "succeeded"
+      ? { kind: "operation", operation_id: operation.operation_id }
+      : operation?.state === "failed" || operation?.state === "cancelled"
+        ? operation.error.lifecycle
+        : undefined
+    return terminal()
+  }
+  const registry = createStaleWorkspaceActionRegistry([descriptor], callbacks, {
+    confirm: confirmWorkspaceDescriptor,
+    localAvailability: () => operationTracker.isLocked()
+      ? { available: false, reason: "Another workspace action is still reconciling." }
+      : { available: true },
+  })
+  const result = await registry.invoke(descriptor.action_id, "pointer")
+  if (result.status !== "submitted") {
+    throw new Error(result.status === "unavailable" ? result.reason : "Workspace action was not submitted")
+  }
+  return outcome
+}
+
+function showStaleWorkspaces(): void {
+  const opened = overlayController.open({
+    id: "workspace.stale",
+    title: "Stale Workspaces",
+    closeLabel: "Close stale workspaces",
+    returnTarget: overlayFocusCoordinator.takeReturnTarget(activeTerminalId),
+  })
+  if (opened.kind === "unavailable" || opened.kind === "refocused") return
+  staleWorkspaceController ??= createWebStaleWorkspaceController({
+    expectedRevision: () => snapshot.revision,
+    fetchEvaluation: ({ expected_revision, force_refresh }) => api<WebStaleWorkspaceResponse>(
+      "workspace.stale.evaluate",
+      { expected_revision, force_refresh },
+      { scope: "snapshot.read" },
+    ),
+    reloadAuthoritative: async () => { await refreshSnapshot(); return snapshot.revision },
+    fetchActionInventory: ({ workspace_id, expected_revision }) => api<WebWorkspaceAction[]>(
+      "workspace.actions",
+      { workspace_id, expected_revision },
+      { scope: "snapshot.read" },
+    ),
+    invokeCanonicalAction: ({ descriptor }) => invokeStaleWorkspaceDescriptor(descriptor),
+    reconcileAuthoritative: async () => { await reconcileAuthoritativeState(); return snapshot.revision },
+    onOpenSucceeded: (result) => {
+      const openedWorkspace = result as { workspace_id?: string; repository_id?: string }
+      if (!openedWorkspace.workspace_id || !openedWorkspace.repository_id) return
+      opened.view.close(false)
+      selectPair({ workspaceId: openedWorkspace.workspace_id, repositoryId: openedWorkspace.repository_id })
+      if (activeTerminalId) terminalViews.get(activeTerminalId)?.focusInput()
+      else findWorkspaceRow(document, openedWorkspace.workspace_id, openedWorkspace.repository_id)?.focus()
+    },
+  })
+  const mounted = mountWebStaleWorkspaceOverlay(opened.view, staleWorkspaceController)
+  opened.view.body.addEventListener("keydown", (event) => {
+    if (mounted.handleScopedKey(event)) return
+    dispatchStaleWorkspaceScopedShortcut(event, () => { void staleWorkspaceController?.refresh() })
+  })
 }
 
 function showArchivedWorkspaces(): void {
@@ -2255,6 +2368,10 @@ document.querySelector("#keyboard-shortcuts")!.addEventListener("click", showKey
 const createWorkspaceButton = document.querySelector<HTMLButtonElement>("#create")!
 createWorkspaceButton.addEventListener("click", () => {
   overlayFocusCoordinator.invokeFromElement(createWorkspaceButton, () => invokeRegisteredAction("workspace.new"))
+})
+const staleWorkspacesButton = document.querySelector<HTMLButtonElement>("#stale-workspaces")!
+staleWorkspacesButton.addEventListener("click", () => {
+  overlayFocusCoordinator.invokeFromElement(staleWorkspacesButton, () => invokeRegisteredAction("workspace.stale"))
 })
 document.querySelector("#archived")!.addEventListener("click", showArchivedWorkspaces)
 for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) control.addEventListener("click", () => {
