@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-04-PLAN.md
-last_updated: "2026-07-17T10:40:11.643Z"
+stopped_at: Completed 127-05-PLAN.md
+last_updated: "2026-07-17T11:15:34.429Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 04 stale workspace policy and volatile evaluation completed
+last_activity_desc: Phase 127 Plan 05 stale secure route and service composition completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 32
-  percent: 76
+  completed_plans: 33
+  percent: 79
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 5 of 14
+Plan: 6 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 04 stale workspace policy and volatile evaluation completed
+Last activity: 2026-07-17 — Phase 127 Plan 05 stale secure route and service composition completed
 
 ## Decisions
 
@@ -96,6 +96,10 @@ Last activity: 2026-07-17 — Phase 127 Plan 04 stale workspace policy and volat
 - [Phase 127]: Stale qualification requires confirmed evidence; unknown-only rows remain incomplete, cautions do not qualify or suppress, and ordering uses a transparent stable tuple without a score.
 - [Phase 127]: Only forge and remote-branch outcomes use the exact five-minute volatile cache; all local evidence is recomputed from each immutable revisioned read model.
 - [Phase 127]: Revision-first rejection, bounded fan-out, abort-safe per-key generations, and fixed sanitized remote outcomes preserve newest-write-wins without lifecycle authority.
+- [Phase 127]: Stale RPC rejects revision conflicts before note, evaluator, cache, clock, forge, remote, or worktree evidence access.
+- [Phase 127]: Repository identity and mode mismatches fail closed instead of becoming false missing-worktree evidence.
+- [Phase 127]: One managed service owns one injected stale evaluator and volatile cache; restart drops the cache naturally.
+- [Phase 127]: Stale responses cross client boundaries only through strict request/response parsing and an explicit nested browser allowlist.
 
 ## Validated Inputs
 
@@ -168,9 +172,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P02 | 35 min | 3 tasks | 7 files |
 | Phase 127 P03 | 10 min | 2 tasks | 3 files |
 | Phase 127 P04 | 19 min | 2 tasks | 4 files |
+| Phase 127 P05 | 27 min | 2 tasks | 6 files |
 
 ## Session
 
-**Last session:** 2026-07-17T10:40:11.629Z
-**Stopped at:** Completed 127-04-PLAN.md
+**Last session:** 2026-07-17T11:15:34.414Z
+**Stopped at:** Completed 127-05-PLAN.md
 **Resume file:** None
