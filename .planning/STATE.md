@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-08-PLAN.md
-last_updated: "2026-07-17T13:24:08.482Z"
+stopped_at: Completed 127-09-PLAN.md
+last_updated: "2026-07-17T14:01:45.092Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 08 OpenTUI stale workspace intelligence and canonical lifecycle integration completed
+last_activity_desc: Phase 127 Plan 09 deterministic stale workspace and pre-metadata RC verification completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 36
-  percent: 86
+  completed_plans: 37
+  percent: 88
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 9 of 14
+Plan: 10 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 08 OpenTUI stale workspace intelligence and canonical lifecycle integration completed
+Last activity: 2026-07-17 — Phase 127 Plan 09 deterministic stale workspace and pre-metadata RC verification completed
 
 ## Decisions
 
@@ -111,6 +111,8 @@ Last activity: 2026-07-17 — Phase 127 Plan 08 OpenTUI stale workspace intellig
 - [Phase 127]: Observe canonical Open through the shared durable operation tracker and recover only by accepted operation identity, never by replaying an ambiguous submit.
 - [Phase 127]: Show only canonical Archive and Remove descriptors in stale Workspace actions; reveal Force Remove only after typed dirty authority and a fresh exact-revision inventory.
 - [Phase 127]: After each lifecycle terminal result, refresh authoritative workspace state and then stale evidence once before restoring presentation.
+- [Phase 127]: A-EDGE-STALE-03 is deterministically closed only because runtime mutation sentinels and hostile read-only capability proofs are both green; hosted and human evidence remains pending.
+- [Phase 127]: Pre-metadata Node verification runs with Bun absent from PATH, while OpenTUI uses only the isolated `npm run test:tui` launcher; `npm test` and `release:check` remain Plan 127-11 work.
 
 ## Validated Inputs
 
@@ -187,9 +189,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P06 | 29m 57s | 3 tasks | 20 files |
 | Phase 127 P07 | 20min | 3 tasks | 6 files |
 | Phase 127 P08 | 50min | 3 tasks | 5 files |
+| Phase 127 P09 | 7min | 3 tasks | 4 files |
 
 ## Session
 
-**Last session:** 2026-07-17T13:22:16.673Z
-**Stopped at:** Completed 127-08-PLAN.md
+**Last session:** 2026-07-17T14:01:45.081Z
+**Stopped at:** Completed 127-09-PLAN.md
 **Resume file:** None

@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 8/14 plans executed
+**Plans:** 9/14 plans executed
 
 Plans:
 **Wave 0**
@@ -174,7 +174,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 127-09-PLAN.md — Close deterministic cross-client, architecture, ASVS, build, coverage, and pre-metadata regression gates.
+- [x] 127-09-PLAN.md — Close deterministic cross-client, architecture, ASVS, build, coverage, and pre-metadata regression gates.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
