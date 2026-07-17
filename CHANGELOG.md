@@ -8,6 +8,35 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.1] - 2026-07-17
+
+### Added
+
+- Browser and optional TUI clients now provide one revision-bound Stale Workspaces review surface. A workspace becomes a cleanup candidate only from confirmed merged/closed change status, repository-scoped missing remote branch, missing managed worktree, or activity strictly older than the fixed 30-day cutoff; unknown-only evaluations remain separate.
+- Read-only GitHub.com pull-request and GitLab.com merge-request status can contribute evidence when the workspace has validated persisted provenance. Provider failures stay sanitized and unknown; Gitea status, self-hosted status claims, provider search/inference, mutation, and background polling remain outside this candidate.
+- Canonical shortcut metadata now exposes the web stale-view entry and scoped refresh plus TUI entry, navigation, Open, action, refresh, and focus-return behavior, including responsive and too-small terminal layouts.
+
+### Changed
+
+- The prior web/TUI workflow parity work now shares revisioned service projections, service-owned action descriptors and confirmations, one-shot operations, and authoritative reconciliation for workspace review and lifecycle flows.
+- Configured commands, hooks, and service-owned PTYs preserve the login/interactive environment for configured Bash, zsh, or fish, including profile aliases, functions, runtime-manager `PATH` changes, and trusted volatile `PATH`/`SSH_AUTH_SOCK` refresh for future launches.
+- The root facade and all seven workspace packages now use exact lockstep version and internal ranges for `0.22.0-rc.1`; the default install continues to exclude the optional TUI, Bun, and OpenTUI.
+
+### Safety and migration
+
+- Stale evidence is advisory, supplies no confidence or deletion-safety score, and grants no mutation authority. Open still waits for authoritative success; Archive and Remove retain canonical behavior; Force Remove remains available only after a fresh typed dirty-worktree result, confirmed terminal shutdown, explicit force allowance, and fresh exact-revision inventory.
+- Failed or unavailable probes are not converted into evidence of absence, presence, or staleness. Network evidence uses only a five-minute volatile in-memory cache, and explicit Refresh bypasses it.
+- No YAML schema, identity model, threshold setting, database, ORM, browser storage, or persisted evidence cache was added. Existing schema-version-1 workspaces require no migration or user configuration.
+- Browser projections remain narrower than trusted service state, and the TUI consumes the trusted service contract rather than independently probing Git or providers.
+
+### Release Candidate
+
+This candidate closes the stale-workspace documentation and local validation boundary on top of the completed cross-client workflow parity work. Local deterministic validation does not claim hosted, authenticated-provider, live-service, physical-input, screenshot, interactive-TUI, human-approval, or release-authorization evidence.
+
+0.22.0-rc.1 / v0.22.0-rc.1; npm prerelease publication uses next
+
+---
+
 ## [0.21.0-rc.6] - 2026-07-15
 
 ### Fixed

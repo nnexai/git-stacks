@@ -164,6 +164,12 @@ git-stacks new review-123 --template full-stack --source https://gitlab.example.
 
 Forge-source workspace creation has early support across GitLab merge requests plus GitHub and Gitea pull request URL parsing. Provider auth, self-hosted instances, and fork refs can still require manual verification in your environment; the automated coverage is local and injected, not a live matrix across every forge host.
 
+### Stale workspace intelligence
+
+The browser client and optional TUI provide an advisory Stale Workspaces view with a fixed strict 30-day inactivity cutoff, repository-scoped local evidence, and read-only GitHub.com pull-request or GitLab.com merge-request status when validated source provenance exists. Confirmed candidates and incomplete unknown evidence remain separate, and cleanup never happens automatically. Open is the inspection path; Archive, Remove, and dirty-worktree Force Remove continue through their existing service-owned operations and confirmations.
+
+See [Stale Workspaces](docs/stale-workspaces.md) for policy, ranking, cache, shortcuts, responsive/TUI behavior, configured-shell compatibility, provider scope, migration, and security details. Release operators should also follow the validation-only [release candidate procedure](docs/releasing.md).
+
 ### Real File Sync
 
 Use `files.sync` for private files that need to appear as real files inside a workspace, especially when tools or agents reject external symlinks. Common examples include dotfiles, task specs, and agent configuration such as `.planning` notes or `.codex` skills and hooks.
