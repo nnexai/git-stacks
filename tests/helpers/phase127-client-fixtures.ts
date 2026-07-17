@@ -391,7 +391,7 @@ export const PHASE127_FORBIDDEN_RENDER_TEXT = Object.freeze([
   PHASE127_DISCLOSURE_CANARIES.stdout,
   PHASE127_DISCLOSURE_CANARIES.stderr,
   PHASE127_DISCLOSURE_CANARIES.rawError,
-  ...PHASE127_DISCLOSURE_CANARIES.argv,
+  PHASE127_DISCLOSURE_CANARIES.argv.join(" "),
   ...Object.values(PHASE127_DISCLOSURE_CANARIES.environment),
   "safe to delete",
   "safe to remove",

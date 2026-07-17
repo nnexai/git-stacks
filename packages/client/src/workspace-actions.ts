@@ -58,7 +58,7 @@ const labels: Record<WebWorkspaceActionId, string> = {
   "workspace.archive": "Archive workspace",
   "workspace.unarchive": "Unarchive workspace",
   "workspace.remove": "Remove workspace",
-  "workspace.force-remove": "Force remove workspace",
+  "workspace.force-remove": "Force Remove",
   "workspace.rename": "Rename workspace",
   "workspace.open": "Open workspace",
   "workspace.close": "Close workspace",

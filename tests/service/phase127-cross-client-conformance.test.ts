@@ -281,6 +281,40 @@ describe("Phase 127 shared stale presentation availability", () => {
 })
 
 describe("Phase 127 same-response cross-client presentation conformance", () => {
+  test("shared presentation preserves service order, fixed labels, exact timestamps, and neutral evidence groups", () => {
+    const { present } = sharedExports()
+    const presentation = present(PHASE127_CLIENT_RESPONSES.populated, {
+      now: Date.parse("2026-07-17T12:05:00.000Z"),
+    })
+    const expectedOrder = phase127WorkspaceOrder(PHASE127_CLIENT_RESPONSES.populated)
+    expect(presentation.candidates.map(({ workspaceId }) => workspaceId)).toEqual(expectedOrder.slice(0, 2))
+    expect(presentation.incomplete.map(({ workspaceId }) => workspaceId)).toEqual(expectedOrder.slice(2))
+    expect(presentation.checkedAt).toEqual({
+      iso: "2026-07-17T12:00:00.000Z",
+      exactUtc: "2026-07-17 12:00:00 UTC",
+      relative: "5m ago",
+    })
+    expect(presentation.candidates[0]?.confirmedReasons.map(({ label }) => label)).toEqual([
+      PHASE127_CLIENT_COPY.reasonLabels.merged,
+      "Remote branch missing in api",
+      PHASE127_CLIENT_COPY.reasonLabels.inactive,
+    ])
+    expect(presentation.candidates[0]?.unknownEvidence[0]?.label).toBe(
+      "Managed worktree status unknown for docs — service unavailable.",
+    )
+    expect(presentation.candidates[0]?.cautions.map(({ label }) => label)).toEqual([
+      PHASE127_CLIENT_COPY.cautionLabels.dirty_worktree,
+      PHASE127_CLIENT_COPY.cautionLabels.notes_present,
+    ])
+    expect(presentation).toMatchObject({
+      candidateCount: 2,
+      candidateCountLabel: "2 cleanup candidates",
+      incompleteCount: 1,
+      incompleteCountLabel: "1 incomplete evaluation",
+    })
+    expect(() => assertPhase127RendererTextSafe(JSON.stringify(presentation))).not.toThrow()
+  })
+
   test("preserves service candidate and incomplete order without renderer sorting, filtering, or scores", () => {
     const { presentation, web, tui } = conformanceModels()
     const expectedOrder = phase127WorkspaceOrder(PHASE127_CLIENT_RESPONSES.populated)
@@ -399,6 +433,58 @@ describe("Phase 127 same-response cross-client presentation conformance", () => 
 })
 
 describe("Phase 127 generation, conflict, and action reconciliation conformance", () => {
+  test("load coordination ignores superseded and mismatched results while reporting abort and ordinary errors", async () => {
+    const { createLoadCoordinator } = sharedExports()
+    const older = createDeferred<Phase127StaleResponse>()
+    const newer = createDeferred<Phase127StaleResponse>()
+    let calls = 0
+    const concurrent = createLoadCoordinator({
+      fetch: async () => (++calls === 1 ? older.promise : newer.promise),
+      reloadAuthoritative: async () => "7",
+    })
+    const oldLoad = concurrent.load({ expectedRevision: "7", forceRefresh: false })
+    const newLoad = concurrent.load({ expectedRevision: "7", forceRefresh: true })
+    newer.resolve(PHASE127_CLIENT_RESPONSES.populated)
+    await expect(newLoad).resolves.toEqual({ status: "accepted", response: PHASE127_CLIENT_RESPONSES.populated })
+    older.resolve(PHASE127_CLIENT_RESPONSES.populated)
+    await expect(oldLoad).resolves.toEqual({ status: "ignored", reason: "superseded" })
+
+    const mismatched = createLoadCoordinator({
+      fetch: async () => PHASE127_CLIENT_RESPONSES.refreshed,
+      reloadAuthoritative: async () => "8",
+    })
+    await expect(mismatched.load({ expectedRevision: "7", forceRefresh: false })).resolves.toEqual({
+      status: "ignored",
+      reason: "revision-mismatch",
+    })
+
+    const ordinaryError = new Error("ordinary failure")
+    const failed = createLoadCoordinator({
+      fetch: async () => { throw ordinaryError },
+      reloadAuthoritative: async () => "8",
+    })
+    await expect(failed.load({ expectedRevision: "7", forceRefresh: false })).resolves.toEqual({
+      status: "failed",
+      error: ordinaryError,
+    })
+
+    const controller = new AbortController()
+    const abortError = new Error("aborted")
+    controller.abort(abortError)
+    const aborted = createLoadCoordinator({
+      fetch: async (request) => {
+        expect(request.signal).toBe(controller.signal)
+        throw request.signal?.reason
+      },
+      reloadAuthoritative: async () => "8",
+    })
+    await expect(aborted.load({
+      expectedRevision: "7",
+      forceRefresh: true,
+      signal: controller.signal,
+    })).resolves.toEqual({ status: "failed", error: abortError })
+  })
+
   test("shared generation gate rejects late, mismatched, and post-exit responses", () => {
     const { createGate } = sharedExports()
     const gate = createGate()
@@ -474,7 +560,7 @@ describe("Phase 127 generation, conflict, and action reconciliation conformance"
       status: "submitted",
       operationId: PHASE127_LIFECYCLE_OUTCOMES.acceptedOperation.operation_id,
     })
-    expect(workspaceActionLabel("workspace.open")).toBe("Open")
+    expect(workspaceActionLabel("workspace.open")).toBe("Open workspace")
   })
 
   test("reconnect observes only the returned durable operation ID and terminal reconciliation never replays mutation intent", async () => {
