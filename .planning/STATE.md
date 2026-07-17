@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 126
 current_phase_name: Web Workflow and Forge-Source Parity
 status: in_progress
-stopped_at: Phase 126 repair review paused; Plans 06/07 unmerged, Plan 08 not started
-last_updated: "2026-07-16T20:47:01.000Z"
-last_activity: 2026-07-16
-last_activity_desc: Plan 06 repaired pending full-suite fixture closure; Plan 07 focus repair still blocked by review
+stopped_at: Phase 126 complete; stopped before Phase 127 per autonomous --to 126 boundary
+last_updated: "2026-07-17T04:06:32.000Z"
+last_activity: 2026-07-17
+last_activity_desc: Phase 126 completed with full local gates and Phase 127 live/hosted/manual handoff
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 28
-  completed_plans: 26
-  percent: 60
+  completed_plans: 28
+  percent: 80
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 126 — Web Workflow and Forge-Source Parity
-Plan: 6 of 8
-Status: Paused during repair review; Plans 06/07 unmerged
-Last activity: 2026-07-16 — Plan 06 repaired pending full-suite fixture closure; Plan 07 focus repair still blocked by review
+Plan: 8 of 8
+Status: Complete; autonomous run stopped before Phase 127
+Last activity: 2026-07-17 — Full local gates passed and Phase 127 live/hosted/manual handoff was preserved
 
 ## Decisions
 
@@ -76,6 +76,12 @@ Last activity: 2026-07-16 — Plan 06 repaired pending full-suite fixture closur
 - [Phase 125]: Compatible overlays replace in place while confirmations, editors, and active shortcut capture remain exclusive; async command activation is one-shot across keyboard and pointer input.
 - [Phase 125]: Shortcut-setting operations use monotonic generations; only typed stale revisions may reload and rebase, while typed binding-owner conflicts preserve authoritative state, retain capture, name the actual owner, and expose no retry loop.
 - [Phase 125]: Secure shortcut error details are a strict allowlisted union and are revalidated before transport; malformed or mismatched code/detail pairs fail closed.
+- [Phase 126]: Shared client action labels are canonical across web and TUI; renderers own placement/keys only and cannot create a second callback or copy table.
+- [Phase 126]: Missing, loading, failed, malformed, empty, or wrong-subject action inventories fail closed with no locally reconstructed action fallback.
+- [Phase 126]: Durable operations submit intent once, retain only the returned operation ID, reconnect without replay, and remain locked after terminal refresh failure until authoritative retry succeeds.
+- [Phase 126]: Notes are service-owned newest-first append-only records, and file status is a lazy path-free service projection with no client persistence or recomputation authority.
+- [Phase 126]: Forge creation is full URL Resolve → editable Review → explicit one-shot Create with immutable source anchors and service revalidation of token, revision, provider state, draft, and head SHA.
+- [Phase 126]: Deterministic local evidence is complete; authenticated hosts, hosted runners, live reconnect/cancel, physical input, screenshots, interactive OpenTUI, and human parity remain Phase 127 pre-tag work.
 
 ## Validated Inputs
 
@@ -130,7 +136,7 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 126 from the completed parity/forge preflight, then preserve the Phase 127 milestone-end checklist before any tag, push, publish, or release.
+- Stop here. When explicitly requested, begin Phase 127 using `126-PHASE127-HANDOFF.md`; retain its hosted/live/manual pre-tag gate and do not tag, push, publish, or release without separate authorization.
 
 ## Performance Metrics
 
@@ -147,6 +153,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-16T20:47:01.000Z
-**Stopped at:** Session resumed; next action is parallel Plan 06 fixture closure and Plan 07 production-wired focus repair
-**Resume file:** .planning/phases/126-web-workflow-and-forge-source-parity/.continue-here.md
+**Last session:** 2026-07-17T04:06:32.000Z
+**Stopped at:** Phase 126 complete; do not begin Phase 127 in this run
+**Resume file:** None — Phase 126 continuation was consumed

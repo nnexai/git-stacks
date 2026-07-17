@@ -19,7 +19,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 - [x] **Phase 123: Archived Workspaces and Safe Removal** — Add the persisted archive state and terminal-aware destructive removal contract across core, service, web, and TUI. (completed 2026-07-16)
 - [x] **Phase 124: User Shell and Environment Authority** — Run user-authored commands through supported configured shells and refresh allowlisted dynamic environment values safely. (completed 2026-07-16)
 - [x] **Phase 125: Terminal-Safe Keyboard Navigation** — Deliver configurable collision-aware shortcuts, singleton fuzzy overlays, terminal switching, and next-attention navigation. (completed 2026-07-16)
-- [ ] **Phase 126: Web Workflow and Forge-Source Parity** — Bring high-value lifecycle/Git/notes/status actions to web and create normal workspaces from PR/MR URLs.
+- [x] **Phase 126: Web Workflow and Forge-Source Parity** — Bring high-value lifecycle/Git/notes/status actions to web and create normal workspaces from PR/MR URLs. (completed 2026-07-17)
 - [ ] **Phase 127: Stale Workspace Intelligence and RC Closure** — Add explainable, non-destructive cleanup candidates and prepare the `v0.22.0-rc.1` release candidate.
 
 ## Phase 123: Archived Workspaces and Safe Removal
@@ -101,34 +101,34 @@ Plans:
 **Depends on:** Phases 123 and 125
 **Requirements:** PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, SOURCE-01, SOURCE-02, SOURCE-03, SOURCE-04
 
-**Plans:** 0/8 plans complete
+**Plans:** 8/8 plans complete
 
 Plans:
 **Wave 1**
 
-- [ ] 126-01-PLAN.md — Strict action, note, file, operation, and reviewed-source protocol contracts
+- [x] 126-01-PLAN.md — Strict action, note, file, operation, and reviewed-source protocol contracts
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 126-02-PLAN.md — Provider-backed GitHub/GitLab resolver and real-SHA source preparation
-- [ ] 126-03-PLAN.md — Canonical service action authority, Pull/notes adapters, and honest cancellation
+- [x] 126-02-PLAN.md — Provider-backed GitHub/GitLab resolver and real-SHA source preparation
+- [x] 126-03-PLAN.md — Canonical service action authority, Pull/notes adapters, and honest cancellation
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 126-04-PLAN.md — Secure projections/routes, review-token authority, and SHA-safe creation
+- [x] 126-04-PLAN.md — Secure projections/routes, review-token authority, and SHA-safe creation
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 126-05-PLAN.md — Shared action registry, operation tracker, and resolve-review state
+- [x] 126-05-PLAN.md — Shared action registry, operation tracker, and resolve-review state
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 126-06-PLAN.md — OpenTUI action/detail/operation/review parity
-- [ ] 126-07-PLAN.md — Web action/detail/operation/review parity
+- [x] 126-06-PLAN.md — OpenTUI action/detail/operation/review parity
+- [x] 126-07-PLAN.md — Web action/detail/operation/review parity
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 126-08-PLAN.md — Cross-client conformance, security/full gates, and Phase 127 handoff
+- [x] 126-08-PLAN.md — Cross-client conformance, security/full gates, and Phase 127 handoff
 
 **Success criteria:**
 
@@ -159,7 +159,7 @@ Plans:
 | 123 | Archived Workspaces and Safe Removal | 11 | Complete    |
 | 124 | User Shell and Environment Authority | 7 | Complete    |
 | 125 | Terminal-Safe Keyboard Navigation | 13 | Complete    |
-| 126 | Web Workflow and Forge-Source Parity | 9 | Not started |
+| 126 | Web Workflow and Forge-Source Parity | 9 | Complete    |
 | 127 | Stale Workspace Intelligence and RC Closure | 7 | Not started |
 
 ## Scope control

@@ -1,9 +1,9 @@
 ---
 phase: 126
 slug: web-workflow-and-forge-source-parity
-status: draft
+status: passed
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-07-16
 ---
 
@@ -59,15 +59,15 @@ created: 2026-07-16
 
 ## Wave 0 Required Files
 
-- [ ] `tests/service/web-workflow-contract.test.ts` — strict action/note/file/operation/source DTOs and hostile extras.
-- [ ] `tests/lib/forge-source-resolver.test.ts` — provider URL, argv, metadata, fork, matching, and real-SHA cases.
-- [ ] `tests/lib/service/workspace-action-authority.test.ts` — Pull/notes/availability/cancellation/refresh semantics.
-- [ ] `tests/service/web-safe-detail.test.ts` — path/credential/raw-output canaries and bounded projections.
-- [ ] `tests/service/forge-source-review.test.ts` — token/principal/revision/provider/fetch-SHA TOCTOU and rollback.
-- [ ] `tests/lib/client-workspace-actions.test.ts`, `client-operation-tracker.test.ts`, `client-forge-review.test.ts` — pure shared coordination.
-- [ ] `tests/tui/dashboard/WorkspaceParity.test.tsx`, `ForgeSourceReview.test.tsx` — OpenTUI parity and narrow layouts.
-- [ ] `tests/service/web-workspace-actions.test.ts`, `web-forge-review.test.ts` — DOM/action/overlay/responsive behavior.
-- [ ] `tests/architecture/phase126-client-authority.test.mjs` — no client authority, path/provider redaction, and action-inventory conformance.
+- [x] `tests/service/web-workflow-contract.test.ts` — strict action/note/file/operation/source DTOs and hostile extras.
+- [x] `tests/lib/forge-source-resolver.test.ts` — provider URL, argv, metadata, fork, matching, and real-SHA cases.
+- [x] `tests/lib/service/workspace-action-authority.test.ts` — Pull/notes/availability/cancellation/refresh semantics.
+- [x] `tests/service/web-safe-detail.test.ts` — path/credential/raw-output canaries and bounded projections.
+- [x] `tests/service/forge-source-review.test.ts` — token/principal/revision/provider/fetch-SHA TOCTOU and rollback.
+- [x] `tests/lib/client-workspace-actions.test.ts`, `client-operation-tracker.test.ts`, `client-forge-review.test.ts` — pure shared coordination.
+- [x] `tests/tui/dashboard/WorkspaceParity.test.tsx`, `ForgeSourceReview.test.tsx` — OpenTUI parity and narrow layouts.
+- [x] `tests/service/web-workspace-actions.test.ts`, `web-forge-review.test.ts` — DOM/action/overlay/responsive behavior.
+- [x] `tests/architecture/phase126-client-authority.test.mjs` — no client authority, path/provider redaction, and action-inventory conformance.
 
 Existing frameworks cover all tests; Wave 0 adds focused files only.
 
@@ -92,11 +92,11 @@ Phase 127 must exercise authenticated GitHub/GitLab hosts (including supported s
 
 ## Validation Sign-Off
 
-- [ ] Every PARITY-01..05 and SOURCE-01..04 row has behavioral RED evidence before implementation.
-- [ ] No three consecutive tasks lack an automated test command.
-- [ ] Strict DTO, no-client-authority, path/provider redaction, cancellation, and TOCTOU gates are executable.
-- [ ] Web and TUI inventories, copy/reasons, confirmation policy, and operation semantics conform.
-- [ ] Full test, coverage, build, type, dependency, and verify gates are green.
-- [ ] Phase 127 retains all live/hosted/manual verification before tagging.
+- [x] Every PARITY-01..05 and SOURCE-01..04 row has behavioral RED evidence before implementation.
+- [x] No three consecutive tasks lack an automated test command.
+- [x] Strict DTO, no-client-authority, path/provider redaction, cancellation, and TOCTOU gates are executable.
+- [x] Web and TUI inventories, copy/reasons, confirmation policy, and operation semantics conform.
+- [x] Full test, coverage, build, type, dependency, and verify gates are green.
+- [x] Phase 127 retains all live/hosted/manual verification before tagging.
 
-**Approval:** validation strategy is plan-ready; implementation evidence remains pending.
+**Approval:** passed 2026-07-17; deterministic implementation evidence is complete and live/hosted/manual approval remains in Phase 127.
