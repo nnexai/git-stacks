@@ -6,9 +6,9 @@ current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
 stopped_at: Resumed corrective Plan 127-12 regression and candidate refreeze
-last_updated: "2026-07-17T18:57:50Z"
+last_updated: "2026-07-17T19:05:06Z"
 last_activity: 2026-07-17
-last_activity_desc: Resumed post-fix regression and replacement exact-candidate preparation
+last_activity_desc: Replacement exact candidate frozen after cold web launch and complete post-fix regression
 progress:
   total_phases: 5
   completed_phases: 4
@@ -121,7 +121,7 @@ Last activity: 2026-07-17 — Phase 127 Plan 12 exact-candidate evidence ledger 
 - [Phase 127]: Only validated GitHub.com and GitLab.com provenance enables read-only change status; Gitea and self-hosted status remain deferred or not claimed.
 - [Phase 127]: Local RC success remains separate from hosted, authenticated, live, physical, screenshot, interactive, human, and release-authorization evidence.
 - [Phase 127]: Plan 127-12 freezes the clean post-Plan-11 metadata HEAD as the exact candidate SHA.
-- [Phase 127]: The immutable Plan 127-12 candidate is f7bdca75f2545664251e88b233693b67fd37ee5c, captured from the clean post-documentation HEAD before the ledger existed.
+- [Phase 127]: The replacement immutable Plan 127-12 candidate is 233d294913bd4cd37602f6ef72f53cb960fb12d7, captured clean after the post-freeze catalog, TUI lifecycle, and service-authentication repairs; it supersedes f7bdca75f2545664251e88b233693b67fd37ee5c and reuses none of that older source's approvals.
 - [Phase 127]: Local no-tag RC success remains deterministic-only evidence; all hosted, authenticated, live, physical, visual, interactive, and human rows stay exact-SHA PENDING until Plan 127-13 evidence exists.
 - [Phase 127]: The marker-delimited receipt JSON is the canonical immutable row/subcase authority; Plan 127-14 may reconcile only exact-SHA row-keyed approvals from Plan 127-13.
 - [Phase 127]: Self-hosted status remains NOT_CLAIMED, provider opt-outs retain reasons, and release authority remains NOT_AUTHORIZED despite green local validation.
@@ -208,6 +208,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-17T18:57:50Z
-**Stopped at:** Session resumed; proceeding solo with web auto-launch reproduction and full post-fix regression
+**Last session:** 2026-07-17T19:05:06Z
+**Stopped at:** Replacement exact candidate 233d294913bd4cd37602f6ef72f53cb960fb12d7 frozen; rebinding Plan 127-12 evidence
 **Resume file:** None

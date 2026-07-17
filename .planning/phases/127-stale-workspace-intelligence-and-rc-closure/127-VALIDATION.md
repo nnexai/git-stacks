@@ -5,7 +5,7 @@ status: awaiting-human-evidence
 nyquist_compliant: false
 approval: pending
 wave_0_complete: true
-candidate_sha: f7bdca75f2545664251e88b233693b67fd37ee5c
+candidate_sha: 233d294913bd4cd37602f6ef72f53cb960fb12d7
 created: 2026-07-17
 updated: 2026-07-17
 ---
@@ -18,35 +18,37 @@ updated: 2026-07-17
 
 | Field | Value |
 |---|---|
-| Candidate SHA | f7bdca75f2545664251e88b233693b67fd37ee5c |
+| Candidate SHA | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| Superseded candidate | f7bdca75f2545664251e88b233693b67fd37ee5c |
 | Candidate branch at freeze | planning/phase-127-revision-1 |
-| Captured UTC | 2026-07-17T14:50:55Z |
+| Captured UTC | 2026-07-17T19:05:06Z |
 | Version | 0.22.0-rc.1 |
 | Intended tag | v0.22.0-rc.1 |
 | npm channel | next |
-| Ledger commit | a2b22ce864d0db81a9808df5ca95cc600115c0db |
+| Ledger commit | 224fb0957d310f7d8115e778ee0532214ab34923 |
 | Validation status | awaiting-human-evidence |
 | Nyquist | false |
 | Approval | pending |
 | Release authority | NOT_AUTHORIZED |
 
-The candidate is the clean committed HEAD captured before `127-RECEIPTS.md` existed. The ledger commit is a descendant of that candidate; it does not replace the candidate SHA.
+The replacement candidate is the clean committed HEAD captured after all three post-freeze runtime repairs and before the receipt ledger was rebound. It supersedes `f7bdca75f2545664251e88b233693b67fd37ee5c`; none of that older candidate's deterministic or human approval is reused. The replacement ledger commit is a descendant of the candidate and does not replace the candidate SHA.
 
 ## Deterministic Evidence
 
 | Validation class | Result | Command or proof | Scope |
 |---|---|---|---|
+| Cold managed-service web auto-launch | PASS | fresh `npm run build:packages`; stop service; `node packages/cli/dist/index.js web` | Local one-command launch started the service and opened the secure packaged client without `LocalEnvironmentPreparationError`; does not satisfy hosted/manual rows |
 | Wave 0 focused fixture/test inventory | PASS | 11/11 required files exist | Plans 127-01 and 127-02; later exact-candidate release gate is green |
 | Stale schema, provider, remote, policy, web, and cross-client matrix | PASS | npm run release:check | Exact-candidate command output exists; detailed counts remain in 127-09-SUMMARY.md and 127-11-SUMMARY.md |
 | OpenTUI isolated renderer and interaction suites | PASS | npm run release:check | Deterministic Bun/OpenTUI tests only; INT-TUI remains PENDING |
 | Architecture, ASVS, package boundaries, builds, and type checks | PASS | npm run release:check | Exact-candidate local deterministic evidence |
 | Manifest, lockfile, changelog, guide, migration, shortcut, shell, and release metadata | PASS | npm run release:check | Exact 0.22.0-rc.1 / v0.22.0-rc.1 / next identity |
-| Repeated validation-only RC gate | PASS | npm run release:check | Exit 0 at 2026-07-17T14:54:15Z; no tag flag |
+| Repeated validation-only RC gate | PASS | npm run release:check | Exit 0 at 2026-07-17T19:03:46Z; no tag flag |
 | Tag-ref integrity | PASS | before/after tag-ref snapshot comparison | 41 refs; byte-identical; intended tag absent |
 | Planning-directory preservation | PASS | before/after phase-directory inventory plus clean-tree check | 5 directories; identical; no validation output remained |
 | A-EDGE-STALE-03 no-mutation edge | PASS | runtime mutation sentinels plus hostile capability tests | CLOSED_DETERMINISTIC; does not claim live/human evidence |
 
-The repeated exact-candidate command output exists and is represented by SHA-256 `d48efb3d413fe47724e0376b59c1e2e64912fab0f94b4cc2ed21b8f6ab3f0315` in the canonical receipt JSON. Raw command output is intentionally not copied into planning artifacts. Local Node/npm metadata is informational only and does not satisfy HST-RUNTIME.
+The repeated exact-candidate command output exists and is represented by SHA-256 `aad0b0d2f37d0988f47230fea01f4bbb932f46a6d1bab1f672ff50ff69cbfb69` in the canonical receipt JSON. Raw command output is intentionally not copied into planning artifacts. Local Node/npm metadata is informational only and does not satisfy HST-RUNTIME.
 
 ## Plan and Wave Status
 
@@ -87,28 +89,28 @@ Wave 0 is complete because every required focused fixture/test file exists and t
 
 | Receipt ID | Evidence class | Status | Required subcases | Candidate SHA | Canonical source |
 |---|---|---|---|---|---|
-| HST-RUNTIME | hosted-runtime | PENDING | 9 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| HST-SHELL | configured-shell | PENDING | 22 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| HST-SSH | configured-shell-ssh-agent | PENDING | 8 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| AUTH-GH-STATUS | authenticated-provider-status | PENDING | 12 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| AUTH-GL-STATUS | authenticated-provider-status | PENDING | 12 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| FORGE-GH-SAME | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| FORGE-GH-FORK | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| FORGE-GL-SAME | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| FORGE-GL-FORK | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| FORGE-RECOVERY | authenticated-forge-recovery | PENDING | 27 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-ARCHIVE | live-service-manual | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-REMOVE-FORCE | live-service-manual | PENDING | 15 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-STALE | live-service-manual | PENDING | 25 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-ATTENTION-FUZZY | live-service-manual | PENDING | 12 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-P126-ACTIONS | live-service-manual | PENDING | 23 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-P126-NOTES | live-service-manual | PENDING | 13 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-P126-FILE-STATUS | live-service-manual | PENDING | 15 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| LIVE-LIFECYCLE | live-service-manual | PENDING | 17 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| PHYS-BROWSER-XTERM | physical-browser-manual | PENDING | 20 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| VIS-RESPONSIVE | responsive-visual-manual | PENDING | 27 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| INT-TUI | interactive-tui-manual | PENDING | 20 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
-| HUMAN-PARITY | human-cross-client-parity | PENDING | 21 | f7bdca75f2545664251e88b233693b67fd37ee5c | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| HST-RUNTIME | hosted-runtime | PENDING | 9 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| HST-SHELL | configured-shell | PENDING | 22 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| HST-SSH | configured-shell-ssh-agent | PENDING | 8 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| AUTH-GH-STATUS | authenticated-provider-status | PENDING | 12 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| AUTH-GL-STATUS | authenticated-provider-status | PENDING | 12 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| FORGE-GH-SAME | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| FORGE-GH-FORK | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| FORGE-GL-SAME | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| FORGE-GL-FORK | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| FORGE-RECOVERY | authenticated-forge-recovery | PENDING | 27 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-ARCHIVE | live-service-manual | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-REMOVE-FORCE | live-service-manual | PENDING | 15 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-STALE | live-service-manual | PENDING | 25 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-ATTENTION-FUZZY | live-service-manual | PENDING | 12 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-P126-ACTIONS | live-service-manual | PENDING | 23 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-P126-NOTES | live-service-manual | PENDING | 13 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-P126-FILE-STATUS | live-service-manual | PENDING | 15 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| LIVE-LIFECYCLE | live-service-manual | PENDING | 17 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| PHYS-BROWSER-XTERM | physical-browser-manual | PENDING | 20 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| VIS-RESPONSIVE | responsive-visual-manual | PENDING | 27 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| INT-TUI | interactive-tui-manual | PENDING | 20 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
+| HUMAN-PARITY | human-cross-client-parity | PENDING | 21 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | [canonical row](./127-RECEIPTS.md#canonical-machine-readable-record) |
 
 All 22 external/manual rows are PENDING with null evidence. Deterministic tests, local builds, local release validation, missing tooling, or unavailable environments do not waive or promote any row.
 
