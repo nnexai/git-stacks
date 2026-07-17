@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-01-PLAN.md
-last_updated: "2026-07-17T09:19:32.860Z"
+stopped_at: Completed 127-02-PLAN.md
+last_updated: "2026-07-17T09:56:50.664Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 01 RED contracts completed
+last_activity_desc: Phase 127 Plan 02 client/release RED contracts completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 29
-  percent: 69
+  completed_plans: 30
+  percent: 71
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 2 of 14
+Plan: 3 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Plan 127-01 RED contracts completed
+Last activity: 2026-07-17 — Phase 127 Plan 02 client/release RED contracts completed
 
 ## Decisions
 
@@ -86,6 +86,10 @@ Last activity: 2026-07-17 — Plan 127-01 RED contracts completed
 - [Phase 127]: Stale policy remains pure through classifyStaleWorkspaces and rankStaleWorkspaceCandidates; cache and probe orchestration belong to createStaleWorkspaceEvaluator.
 - [Phase 127]: Provider and remote acquisition contracts are lookupForgeChangeStatus and observeRemoteBranchStatus with complete provenance, fixed argv-only commands, bounds, abort, and sanitized outcomes.
 - [Phase 127]: Intentional RED is accepted only when fixture loading, transform/discovery, unrelated authority tests, and diff hygiene pass and every nonzero failure is a named missing Phase 127 contract.
+- [Phase 127]: Web and OpenTUI stale contracts share one renderer-neutral fixture/copy vocabulary and guarded lifecycle imports; renderers own layout and input only.
+- [Phase 127]: Stale authority scanners apply broad mutation rejection only to stale-specific surfaces while integration files remain subject to stale policy and probe checks.
+- [Phase 127]: Pre-metadata RC validation runs twice with PATH restricted to recording command shims and mirrors every existing planning phase directory for preservation checks.
+- [Phase 127]: Intentional RED is accepted only for named missing Phase 127 contracts after discovery, hostile-boundary, unrelated-suite, release-fence, and diff-hygiene checks pass.
 
 ## Validated Inputs
 
@@ -155,9 +159,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 123 P07 | 25 min | 3 tasks | 9 files |
 | Phase 123 P08 | 22 min | 2 tasks | 5 files |
 | Phase 127 P01 | 34 min | 3 tasks | 5 files |
+| Phase 127 P02 | 35 min | 3 tasks | 7 files |
 
 ## Session
 
-**Last session:** 2026-07-17T09:19:32.845Z
-**Stopped at:** Completed 127-01-PLAN.md
+**Last session:** 2026-07-17T09:56:50.647Z
+**Stopped at:** Completed 127-02-PLAN.md
 **Resume file:** None
