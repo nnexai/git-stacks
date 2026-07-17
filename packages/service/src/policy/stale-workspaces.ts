@@ -1,4 +1,6 @@
 import {
+  TimestampSchema,
+  WEB_STALE_WORKSPACE_LIMITS,
   WebStaleWorkspaceResponseSchema,
   type WebStaleWorkspaceCandidate,
   type WebStaleWorkspaceCaution,
@@ -72,12 +74,12 @@ export type StaleForgeStatus =
   | { status: "merged"; occurred_at: string }
   | { status: "closed"; occurred_at: string }
   | { status: "open" }
-  | { status: "unknown"; reason: string }
+  | { status: "unknown"; reason: string; observed_at?: string }
 
 export type StaleRemoteBranchStatus =
   | { status: "present" }
-  | { status: "missing" }
-  | { status: "unknown"; reason: string }
+  | { status: "missing"; observed_at?: string }
+  | { status: "unknown"; reason: string; observed_at?: string }
 
 export type StalePolicyRepository = Readonly<{
   id: string
@@ -95,11 +97,7 @@ export type StalePolicyWorkspace = Readonly<{
   name: string
   created: string
   last_opened?: string
-  source?: Readonly<{
-    kind?: unknown
-    forge?: unknown
-    repo?: unknown
-  }>
+  source?: unknown
   notes_count: number
   repositories: readonly StalePolicyRepository[]
 }>
@@ -200,20 +198,22 @@ function cautionIdentity(caution: WebStaleWorkspaceCaution): string {
 
 function providerContext(workspace: StalePolicyWorkspace): ProviderContext | undefined {
   const source = workspace.source
-  if (source?.kind !== "forge") return undefined
-  if (source.forge !== "github" && source.forge !== "gitlab") return undefined
-  if (typeof source.repo !== "string") return undefined
-  const repository = workspace.repositories.find((candidate) => candidate.name === source.repo)
-  return repository ? { provider: source.forge, repository } : undefined
+  if (!source || typeof source !== "object" || Array.isArray(source)) return undefined
+  const value = source as Record<string, unknown>
+  if (value.kind !== "forge") return undefined
+  if (value.forge !== "github" && value.forge !== "gitlab") return undefined
+  if (typeof value.repo !== "string") return undefined
+  const repository = workspace.repositories.find((candidate) => candidate.name === value.repo)
+  return repository ? { provider: value.forge, repository } : undefined
 }
 
 function validTimestamp(value: string): boolean {
-  return Number.isFinite(Date.parse(value))
+  return TimestampSchema.safeParse(value).success
 }
 
 function providerUnknown(
   rawReason: string,
-  checkedAt: string,
+  observedAt: string,
   context: ProviderContext | undefined,
 ): WebStaleWorkspaceUnknownEvidence {
   const reason = KNOWN_UNKNOWN_CODES.has(rawReason as WebStaleWorkspaceUnknownEvidenceCode)
@@ -221,12 +221,12 @@ function providerUnknown(
     : "provider_unavailable"
 
   if (UNSCOPED_PROVIDER_UNKNOWN_CODES.has(reason)) {
-    return { code: reason as "invalid_provenance" | "unsupported_provider", observed_at: checkedAt }
+    return { code: reason as "invalid_provenance" | "unsupported_provider", observed_at: observedAt }
   }
   if (reason === "probe_superseded" && context) {
     return {
       code: "probe_superseded",
-      observed_at: checkedAt,
+      observed_at: observedAt,
       repository_id: context.repository.id,
       repository_name: context.repository.name,
     }
@@ -236,13 +236,13 @@ function providerUnknown(
       code: reason as Exclude<WebStaleWorkspaceUnknownEvidenceCode,
         "invalid_provenance" | "unsupported_provider" | "remote_check_failed" |
         "worktree_inaccessible" | "activity_unavailable" | "probe_superseded">,
-      observed_at: checkedAt,
+      observed_at: observedAt,
       repository_id: context.repository.id,
       repository_name: context.repository.name,
       provider: context.provider,
     }
   }
-  return { code: "invalid_provenance", observed_at: checkedAt }
+  return { code: "invalid_provenance", observed_at: observedAt }
 }
 
 function collectProviderEvidence(
@@ -257,7 +257,7 @@ function collectProviderEvidence(
 
   if (status.status === "open") return
   if (status.status === "unknown") {
-    unknown.push(providerUnknown(status.reason, checkedAt, context))
+    unknown.push(providerUnknown(status.reason, status.observed_at ?? checkedAt, context))
     return
   }
   if (!context) {
@@ -292,14 +292,16 @@ function collectRemoteEvidence(
     if (observation.outcome.status === "missing") {
       confirmed.push({
         code: "remote_branch_deleted",
-        occurred_at: checkedAt,
+        occurred_at: observation.outcome.observed_at ?? checkedAt,
         repository_id: repository.id,
         repository_name: repository.name,
       })
     } else if (observation.outcome.status === "unknown") {
       unknown.push({
-        code: "remote_check_failed",
-        observed_at: checkedAt,
+        code: observation.outcome.reason === "probe_superseded"
+          ? "probe_superseded"
+          : "remote_check_failed",
+        observed_at: observation.outcome.observed_at ?? checkedAt,
         repository_id: repository.id,
         repository_name: repository.name,
       })
@@ -344,7 +346,7 @@ function collectLocalRepositoryEvidence(
         code: "ahead_of_remote",
         repository_id: repository.id,
         repository_name: repository.name,
-        count: repository.ahead,
+        count: Math.min(repository.ahead, WEB_STALE_WORKSPACE_LIMITS.count),
       })
     }
     if (repository.drifted) {
@@ -356,7 +358,10 @@ function collectLocalRepositoryEvidence(
     }
   }
   if (Number.isSafeInteger(workspace.notes_count) && workspace.notes_count > 0) {
-    cautions.push({ code: "notes_present", count: workspace.notes_count })
+    cautions.push({
+      code: "notes_present",
+      count: Math.min(workspace.notes_count, WEB_STALE_WORKSPACE_LIMITS.count),
+    })
   }
 }
 
@@ -369,7 +374,7 @@ function activityEvidence(
 ): string | null {
   const activityAt = workspaceActivityAt(workspace)
   const activityEpoch = Date.parse(activityAt)
-  if (!Number.isFinite(activityEpoch)) {
+  if (!validTimestamp(activityAt) || !Number.isFinite(activityEpoch)) {
     unknown.push({ code: "activity_unavailable", observed_at: checkedAt })
     return null
   }
@@ -421,7 +426,9 @@ export function classifyStaleWorkspaces(
   input: ClassifyStaleWorkspacesInput,
 ): WebStaleWorkspaceResponse {
   const checkedAtEpoch = Date.parse(input.checked_at)
-  if (!Number.isFinite(checkedAtEpoch)) throw new TypeError("checked_at must be a valid timestamp")
+  if (!validTimestamp(input.checked_at) || !Number.isFinite(checkedAtEpoch)) {
+    throw new TypeError("checked_at must be a valid timestamp")
+  }
 
   const candidates: WebStaleWorkspaceCandidate[] = []
   const incomplete: WebStaleWorkspaceIncomplete[] = []

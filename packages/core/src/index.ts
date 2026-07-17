@@ -1,4 +1,5 @@
 export * from "./capabilities.js"
 export * from "./integrations/forge-change-status.js"
+export * from "./integrations/remote-branch-status.js"
 export * from "./integrations/forge-source.js"
 export * from "./integrations/forge-source-resolver.js"
