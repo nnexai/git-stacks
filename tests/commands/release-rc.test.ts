@@ -43,6 +43,9 @@ type PackageLock = {
 const ROOT = repoRoot()
 const README = readFileSync(join(ROOT, "README.md"), "utf8")
 const CHANGELOG = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
+const RELEASING = readFileSync(join(ROOT, "docs", "releasing.md"), "utf8")
+const STALE_GUIDE_PATH = join(ROOT, "docs", "stale-workspaces.md")
+const STALE_GUIDE = existsSync(STALE_GUIDE_PATH) ? readFileSync(STALE_GUIDE_PATH, "utf8") : ""
 const RC_VERSION = "0.22.0-rc.1"
 const RC_TAG = "v0.22.0-rc.1"
 const PACKAGE_MANIFEST_PATHS = [
@@ -194,6 +197,53 @@ describe("v0.22.0 release candidate metadata", () => {
     }
 
     expect(mismatches).toEqual([])
+  })
+
+  test("current RC changelog and stale guide describe the exact advisory product boundary", () => {
+    const rcEntry = changelogEntry(RC_VERSION)
+
+    expect(CHANGELOG).toContain("## [0.22.0-rc.1] - 2026-07-17")
+    expect(rcEntry).toContain("0.22.0-rc.1 / v0.22.0-rc.1; npm prerelease publication uses next")
+    expect(README).toContain("docs/stale-workspaces.md")
+
+    expect(STALE_GUIDE).toMatch(/strictly older than 30 days/i)
+    for (const confirmedReason of [
+      "Pull request merged",
+      "Merge request merged",
+      "Pull request closed",
+      "Merge request closed",
+      "Remote branch missing",
+      "Managed worktree missing",
+      "Inactive for",
+    ]) {
+      expect(STALE_GUIDE).toContain(confirmedReason)
+    }
+    expect(STALE_GUIDE).toMatch(/unknown-only.*Evaluation incomplete/is)
+    expect(STALE_GUIDE).toMatch(/five minutes.*explicit Refresh bypasses/is)
+    expect(STALE_GUIDE).toContain("no confidence or safety score")
+
+    for (const shortcut of ["Ctrl+Command+S", "Ctrl+Alt+Shift+S", "[R]", "[s]", "[r]", "[o]", "[a]"]) {
+      expect(STALE_GUIDE).toContain(shortcut)
+    }
+    for (const shellContract of ["configured Bash, zsh, or fish", "SSH_AUTH_SOCK", "ssh-add"]) {
+      expect(STALE_GUIDE).toContain(shellContract)
+    }
+    for (const migrationBoundary of [
+      "no YAML schema",
+      "no identity model",
+      "no threshold setting",
+      "no database",
+      "no ORM",
+      "no browser storage",
+      "no persisted evidence cache",
+    ]) {
+      expect(STALE_GUIDE).toContain(migrationBoundary)
+    }
+    for (const providerBoundary of ["GitHub.com", "GitLab.com", "Gitea", "validated persisted provenance"]) {
+      expect(STALE_GUIDE).toContain(providerBoundary)
+    }
+
+    expect(RELEASING).toContain("npm run release:check")
   })
 
   test("historical v0.21 release notes retain the Node package boundary", () => {

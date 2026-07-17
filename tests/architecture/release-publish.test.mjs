@@ -34,6 +34,15 @@ function lockPackageKey(manifestPath) {
   return manifestPath === "package.json" ? "" : manifestPath.slice(0, -"/package.json".length)
 }
 
+async function readTextOrEmpty(relativePath) {
+  try {
+    return await readFile(resolve(root, relativePath), "utf8")
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return ""
+    throw error
+  }
+}
+
 test("release publication uses GitHub OIDC without a durable npm token", async () => {
   const workflow = await readFile(resolve(root, ".github/workflows/release-publish.yml"), "utf8")
   assert.match(workflow, /release:\s*\n\s*types: \[published\]/)
@@ -152,6 +161,38 @@ test("release preparation preserves every existing planning phase directory", as
     assert.ok(Array.isArray(entries), `${phase} must remain readable`)
   }
   assert.deepEqual(await snapshot(), before)
+})
+
+test("Phase 127 documentation keeps stale evidence advisory and release authority separate", async () => {
+  const [changelog, readme, staleGuide, releasing] = await Promise.all([
+    readTextOrEmpty("CHANGELOG.md"),
+    readTextOrEmpty("README.md"),
+    readTextOrEmpty("docs/stale-workspaces.md"),
+    readTextOrEmpty("docs/releasing.md"),
+  ])
+
+  assert.match(changelog, /^## \[0\.22\.0-rc\.1\] - 2026-07-17$/m)
+  assert.match(changelog, /0\.22\.0-rc\.1 \/ v0\.22\.0-rc\.1; npm prerelease publication uses next/)
+  assert.match(readme, /docs\/stale-workspaces\.md/)
+
+  assert.match(staleGuide, /advisory.*nothing is changed automatically/is)
+  assert.match(staleGuide, /canonical Open.*Archive.*Remove.*Force Remove/is)
+  assert.match(staleGuide, /stale evidence grants no lifecycle authority/i)
+  assert.match(staleGuide, /browser.*machine paths.*credentials.*raw environment.*bearer/is)
+  assert.match(staleGuide, /TUI.*trusted service contract/is)
+  assert.match(staleGuide, /Gitea.*deferred/is)
+  assert.match(staleGuide, /CLI stale command.*deferred/is)
+  assert.match(staleGuide, /configurable threshold.*deferred/is)
+  assert.match(staleGuide, /self-hosted GitHub\/GitLab.*not claimed/is)
+
+  assert.match(releasing, /npm run release:check.*without `--tag`/is)
+  assert.match(releasing, /freeze.*exact candidate SHA/is)
+  assert.match(releasing, /local deterministic evidence/is)
+  for (const pendingClass of ["hosted", "authenticated", "live-service", "physical", "screenshot", "interactive", "human"]) {
+    assert.match(releasing, new RegExp(`${pendingClass}.*PENDING`, "is"))
+  }
+  assert.match(releasing, /preserve.*\.planning\/phases/is)
+  assert.match(releasing, /separate explicit authorization.*tag.*push.*publish.*GitHub Release.*release-only workflow/is)
 })
 
 test("release versions select locked npm dist-tags", () => {
