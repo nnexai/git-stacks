@@ -3,6 +3,7 @@ import {
   matchScopedShortcutEvent,
   presentStaleWorkspaceResponse,
   staleWorkspaceIncompleteActionsExplanation,
+  workspaceActionLabel,
   type PresentedStaleWorkspaceRow,
 } from "@git-stacks/client"
 import type {
@@ -47,7 +48,10 @@ type StaleUiState =
   | { phase: "open-pending"; response: WebStaleWorkspaceResponse; workspaceId: string; message: string }
   | { phase: "open-error"; response: WebStaleWorkspaceResponse; workspaceId: string; message: string }
   | { phase: "inventory-pending"; response: WebStaleWorkspaceResponse; workspaceId: string; message: string }
+  | { phase: "inventory-ready"; response: WebStaleWorkspaceResponse; workspaceId: string; descriptors: readonly WebWorkspaceAction[]; allowForce: boolean }
   | { phase: "inventory-error"; response: WebStaleWorkspaceResponse; workspaceId: string; message: string }
+  | { phase: "lifecycle-pending"; response: WebStaleWorkspaceResponse; workspaceId: string; actionId: WebWorkspaceActionId; message: string }
+  | { phase: "lifecycle-error"; response: WebStaleWorkspaceResponse; workspaceId: string; message: string }
 
 type ActionMenuState = {
   status: "ready" | "denied" | "error"
@@ -117,7 +121,12 @@ export function createWebStaleWorkspaceController(
   let refreshPromise: Promise<void> | undefined
   let inventoryPromise: Promise<ActionMenuState> | undefined
   let inventoryWorkspaceId: string | undefined
+  let activeMenuWorkspaceId: string | undefined
   let cachedInventory: { workspaceId: string; revision: string; descriptors: readonly WebWorkspaceAction[] } | undefined
+  let lifecyclePromise: Promise<unknown> | undefined
+  let lifecycleKey: string | undefined
+  let forceAuthorizedWorkspaceId: string | undefined
+  let loadGeneration = 0
   const listeners = new Set<(state: StaleUiState) => void>()
 
   const publish = (next: StaleUiState) => {
@@ -125,13 +134,8 @@ export function createWebStaleWorkspaceController(
     for (const listener of listeners) listener(current)
   }
 
-  let lastFetchedResponse: WebStaleWorkspaceResponse | undefined
   const coordinator = createStaleWorkspaceLoadCoordinator({
-    fetch: async (request) => {
-      const response = await options.fetchEvaluation(request)
-      lastFetchedResponse = response
-      return response
-    },
+    fetch: options.fetchEvaluation,
     reloadAuthoritative: async () => {
       publish({
         phase: "revision-recovery",
@@ -143,19 +147,22 @@ export function createWebStaleWorkspaceController(
   })
 
   const load = async (forceRefresh: boolean): Promise<void> => {
-    const result = await coordinator.load({
+    const generation = ++loadGeneration
+    let result = await coordinator.load({
       expectedRevision: options.expectedRevision(),
       forceRefresh,
     })
-    if (result.status === "ignored") {
-      if (result.reason !== "revision-mismatch" || !lastFetchedResponse) return
+    if (result.status === "ignored" && result.reason === "revision-mismatch") {
+      publish({
+        phase: "revision-recovery",
+        ...(retained ? { response: retained } : {}),
+        message: COPY.revisionRecovery,
+      })
       const authoritativeRevision = await options.reloadAuthoritative()
-      if (lastFetchedResponse.revision !== authoritativeRevision) return
-      retained = lastFetchedResponse
-      cachedInventory = undefined
-      publish({ phase: "loaded", response: lastFetchedResponse })
-      return
+      if (generation !== loadGeneration) return
+      result = await coordinator.load({ expectedRevision: authoritativeRevision, forceRefresh })
     }
+    if (generation !== loadGeneration || result.status === "ignored") return
     if (result.status === "accepted") {
       retained = result.response
       cachedInventory = undefined
@@ -178,11 +185,13 @@ export function createWebStaleWorkspaceController(
 
   const fetchInventory = async (workspaceId: string, showPending: boolean): Promise<ActionMenuState> => {
     const response = retained
+    if (showPending) activeMenuWorkspaceId = workspaceId
     if (!isConfirmedCandidate(response, workspaceId)) {
       return { status: "denied", descriptors: [], message: staleWorkspaceIncompleteActionsExplanation() }
     }
     const revision = options.expectedRevision()
     if (cachedInventory?.workspaceId === workspaceId && cachedInventory.revision === revision) {
+      if (showPending && response) publish({ phase: "inventory-ready", response, workspaceId, descriptors: cachedInventory.descriptors, allowForce: forceAuthorizedWorkspaceId === workspaceId })
       return { status: "ready", descriptors: cachedInventory.descriptors }
     }
     if (inventoryPromise && inventoryWorkspaceId === workspaceId) return inventoryPromise
@@ -193,8 +202,9 @@ export function createWebStaleWorkspaceController(
     inventoryPromise = options.fetchActionInventory({ workspace_id: workspaceId, expected_revision: revision })
       .then((descriptors) => {
         const exact = descriptors.filter(({ subject }) => subject.kind === "workspace" && subject.workspace_id === workspaceId)
+        if (!exact.length || exact.length !== descriptors.length) throw new Error("Workspace action inventory is not scoped to the requested workspace")
         cachedInventory = { workspaceId, revision, descriptors: exact }
-        if (retained) publish({ phase: "loaded", response: retained })
+        if (retained) publish({ phase: "inventory-ready", response: retained, workspaceId, descriptors: exact, allowForce: forceAuthorizedWorkspaceId === workspaceId })
         return { status: "ready", descriptors: exact } as ActionMenuState
       })
       .catch(() => {
@@ -211,6 +221,21 @@ export function createWebStaleWorkspaceController(
   const invokeCanonical = (descriptor: WebWorkspaceAction) =>
     options.invokeCanonicalAction({ descriptor, expected_revision: options.expectedRevision() })
 
+  const reconcileOperation = async (_operationId: string): Promise<void> => {
+    const revision = await options.reconcileAuthoritative()
+    cachedInventory = undefined
+    activeMenuWorkspaceId = undefined
+    const result = await coordinator.load({ expectedRevision: revision, forceRefresh: true })
+    if (result.status === "accepted") {
+      retained = result.response
+      publish({ phase: "loaded", response: result.response })
+    } else if (result.status === "failed") {
+      publish(retained
+        ? { phase: "retained-error", response: retained, message: fixedRetainedError(retained) }
+        : { phase: "first-load-error", message: COPY.firstLoadError })
+    }
+  }
+
   return {
     state: () => current,
     subscribe(listener) {
@@ -218,15 +243,19 @@ export function createWebStaleWorkspaceController(
       return () => { listeners.delete(listener) }
     },
     open() {
-      publish(retained
-        ? { phase: "loaded", response: retained }
-        : { phase: "initial-loading", message: COPY.initialLoading })
+      if (retained?.revision === options.expectedRevision()) {
+        if (cachedInventory && activeMenuWorkspaceId === cachedInventory.workspaceId && cachedInventory.revision === retained.revision) {
+          publish({ phase: "inventory-ready", response: retained, workspaceId: cachedInventory.workspaceId, descriptors: cachedInventory.descriptors, allowForce: forceAuthorizedWorkspaceId === cachedInventory.workspaceId })
+        } else publish({ phase: "loaded", response: retained })
+        return Promise.resolve()
+      }
+      publish({ phase: "initial-loading", message: COPY.initialLoading })
       return load(false)
     },
     refresh,
     close() {
+      loadGeneration += 1
       coordinator.invalidate()
-      cachedInventory = undefined
       openPromise = undefined
       openWorkspaceId = undefined
     },
@@ -268,34 +297,47 @@ export function createWebStaleWorkspaceController(
     loadActions(workspaceId) {
       return fetchInventory(workspaceId, true)
     },
-    async invokeLifecycle(workspaceId, actionId) {
-      const inventory = await fetchInventory(workspaceId, false)
-      const descriptor = inventory.descriptors.find((candidate) => candidate.action_id === actionId)
-      if (!descriptor || !descriptor.availability.available) return undefined
-      const result = await invokeCanonical(descriptor)
-      if (actionId === "workspace.remove"
-        && typeof result === "object" && result !== null
-        && (result as { kind?: unknown }).kind === "workspace_dirty"
-        && (result as { terminals_stopped?: unknown }).terminals_stopped === true
-        && (result as { force_allowed?: unknown }).force_allowed === true) {
-        cachedInventory = undefined
-        await fetchInventory(workspaceId, false)
-      }
-      return result
+    invokeLifecycle(workspaceId, actionId) {
+      const key = `${workspaceId}:${actionId}`
+      if (lifecyclePromise) return lifecycleKey === key ? lifecyclePromise : Promise.resolve(undefined)
+      lifecycleKey = key
+      lifecyclePromise = (async () => {
+        const response = retained
+        if (!response) return undefined
+        const inventory = await fetchInventory(workspaceId, false)
+        const descriptor = inventory.descriptors.find((candidate) => candidate.action_id === actionId)
+        if (!descriptor || !descriptor.availability.available) return undefined
+        publish({ phase: "lifecycle-pending", response, workspaceId, actionId, message: `${actionId === "workspace.archive" ? "Archiving" : actionId === "workspace.remove" ? "Removing" : "Force removing"} workspace…` })
+        try {
+          const result = await invokeCanonical(descriptor)
+          if (actionId === "workspace.remove"
+            && typeof result === "object" && result !== null
+            && (result as { kind?: unknown }).kind === "workspace_dirty"
+            && (result as { terminals_stopped?: unknown }).terminals_stopped === true
+            && (result as { force_allowed?: unknown }).force_allowed === true) {
+            forceAuthorizedWorkspaceId = workspaceId
+            cachedInventory = undefined
+            await fetchInventory(workspaceId, true)
+          } else if (typeof result === "object" && result !== null
+            && (result as { kind?: unknown }).kind === "operation"
+            && typeof (result as { operation_id?: unknown }).operation_id === "string") {
+            forceAuthorizedWorkspaceId = undefined
+            await reconcileOperation((result as { operation_id: string }).operation_id)
+          } else {
+            publish({ phase: "inventory-ready", response, workspaceId, descriptors: inventory.descriptors, allowForce: forceAuthorizedWorkspaceId === workspaceId })
+          }
+          return result
+        } catch {
+          publish({ phase: "lifecycle-error", response, workspaceId, message: "Workspace action could not be completed. Refresh workspace state and try again." })
+          return undefined
+        }
+      })().finally(() => {
+        lifecyclePromise = undefined
+        lifecycleKey = undefined
+      })
+      return lifecyclePromise
     },
-    async reconcileOperation(_operationId) {
-      const revision = await options.reconcileAuthoritative()
-      cachedInventory = undefined
-      const result = await coordinator.load({ expectedRevision: revision, forceRefresh: true })
-      if (result.status === "accepted") {
-        retained = result.response
-        publish({ phase: "loaded", response: result.response })
-      } else if (result.status === "failed") {
-        publish(retained
-          ? { phase: "retained-error", response: retained, message: fixedRetainedError(retained) }
-          : { phase: "first-load-error", message: COPY.firstLoadError })
-      }
-    },
+    reconcileOperation,
   }
 }
 
@@ -359,6 +401,8 @@ export function mountWebStaleWorkspaceOverlay(
   const document = view.body.ownerDocument
   view.body.classList.add("stale-body")
   view.body.parentElement?.classList.add("stale-modal")
+  const closeButton = view.body.parentElement?.querySelector<HTMLElement>(".modal-head")?.querySelector<HTMLButtonElement>("button")
+  let disposed = false
   let pending: Promise<void> = Promise.resolve()
 
   const runRefresh = () => {
@@ -394,8 +438,33 @@ export function mountWebStaleWorkspaceOverlay(
     actions.append(open)
     if (!incomplete) {
       const action = control(document, COPY.actions, "button stale-actions")
+      action.setAttribute("data-stale-actions", row.workspaceId)
       action.addEventListener("click", () => { pending = controller.loadActions(row.workspaceId).then(() => undefined) })
       actions.append(action)
+      const state = controller.state()
+      if (state.phase === "inventory-ready" && state.workspaceId === row.workspaceId) {
+        const menu = node(document, "div", "stale-action-menu")
+        menu.setAttribute("role", "menu")
+        menu.setAttribute("aria-label", `Workspace actions for ${row.workspaceName}`)
+        const visible = state.descriptors.filter(({ action_id }) => action_id === "workspace.archive"
+          || action_id === "workspace.remove"
+          || (state.allowForce && action_id === "workspace.force-remove"))
+        for (const descriptor of visible) {
+          const item = control(document, workspaceActionLabel(descriptor.action_id), `button stale-action-item${descriptor.action_id.includes("remove") ? " danger" : ""}`)
+          item.setAttribute("role", "menuitem")
+          if (!descriptor.availability.available) {
+            item.setAttribute("aria-disabled", "true")
+            item.title = descriptor.availability.message
+          }
+          item.addEventListener("click", () => {
+            if (!descriptor.availability.available) return
+            pending = controller.invokeLifecycle(row.workspaceId, descriptor.action_id).then(() => undefined)
+          })
+          menu.append(item)
+          if (!descriptor.availability.available) menu.append(node(document, "p", "stale-disabled-explanation", descriptor.availability.message))
+        }
+        actions.append(menu)
+      }
     }
     article.append(actions)
     return article
@@ -482,7 +551,7 @@ export function mountWebStaleWorkspaceOverlay(
           content.append(section)
         }
       }
-      if (state.phase === "open-pending" || state.phase === "open-error" || state.phase === "inventory-pending" || state.phase === "inventory-error") {
+      if (state.phase === "open-pending" || state.phase === "open-error" || state.phase === "inventory-pending" || state.phase === "inventory-error" || state.phase === "lifecycle-pending" || state.phase === "lifecycle-error") {
         const message = node(document, "div", state.phase.endsWith("error") ? "stale-error inline" : "stale-status inline", state.message)
         if (state.phase.endsWith("error")) message.setAttribute("role", "alert")
         content.append(message)
@@ -508,13 +577,26 @@ export function mountWebStaleWorkspaceOverlay(
     return true
   }
 
-  controller.subscribe(render)
+  const unsubscribe = controller.subscribe(() => { if (!disposed) render() })
+  view.onClose(() => {
+    disposed = true
+    unsubscribe()
+    controller.close()
+  })
   const ready = controller.open().finally(() => {
+    if (disposed) return
     render()
-    view.body.querySelector<HTMLButtonElement>("[data-stale-refresh]")?.focus()
+    if (document.activeElement === closeButton) {
+      const state = controller.state()
+      const menuInvoker = state.phase === "inventory-ready"
+        ? view.body.querySelector<HTMLButtonElement>(`[data-stale-actions='${state.workspaceId}']`)
+        : undefined
+      ;(menuInvoker ?? view.body.querySelector<HTMLButtonElement>("[data-stale-refresh]"))?.focus()
+    }
   })
   pending = ready
   render()
+  closeButton?.focus()
   return {
     ready,
     idle: async () => pending,

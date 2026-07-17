@@ -36,6 +36,7 @@ export type OverlayView = {
   close(restoreFocus?: boolean): void
   setPrimaryFocus(focus: () => void): void
   setExclusive(exclusive: boolean): void
+  onClose(listener: () => void): () => void
 }
 
 export type OverlayOpenResult =
@@ -112,10 +113,7 @@ export function createSingletonOverlayController(document: Document, options: Ov
     const preservedReturnTarget = active?.returnTarget ?? request.returnTarget
     const focusBeforeOpen = document.activeElement
     const overlayGeneration = ++focusGeneration
-    if (active) {
-      active.backdrop.remove()
-      active = undefined
-    }
+    if (active) active.close(false)
     options.activateFocus(preservedReturnTarget)
 
     const backdrop = node(document, "div", "modal-backdrop")
@@ -136,9 +134,12 @@ export function createSingletonOverlayController(document: Document, options: Ov
     document.body.append(backdrop)
 
     let closed = false
+    const closeListeners = new Set<() => void>()
     const close = (restoreFocus = true) => {
       if (closed) return
       closed = true
+      for (const listener of closeListeners) listener()
+      closeListeners.clear()
       backdrop.remove()
       if (active?.close === close) active = undefined
       if (restoreFocus) {
@@ -162,6 +163,14 @@ export function createSingletonOverlayController(document: Document, options: Ov
       },
       setExclusive(exclusive) {
         if (active?.close === close) active.exclusive = exclusive
+      },
+      onClose(listener) {
+        if (closed) {
+          listener()
+          return () => undefined
+        }
+        closeListeners.add(listener)
+        return () => { closeListeners.delete(listener) }
       },
     }
     active = {

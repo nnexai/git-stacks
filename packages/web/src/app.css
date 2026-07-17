@@ -199,6 +199,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .stale-evidence.confirmed .stale-evidence-label::before { content: "! "; color: var(--warning); font-weight: 650; }
 .stale-evidence.unknown .stale-evidence-label::before { content: "? "; color: var(--warning); font-weight: 650; }
 .stale-card-actions { min-width: 0; display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; padding-top: 4px; }
+.stale-action-menu { flex: 1 0 100%; min-width: 0; display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.stale-action-item { width: 100%; justify-content: start; text-align: left; }
+.stale-action-item[aria-disabled="true"] { color: var(--muted); cursor: not-allowed; }
 .stale-open:disabled, .stale-actions[aria-disabled="true"] { color: var(--muted); opacity: 1; }
 .stale-empty { display: grid; gap: 8px; padding: 24px 16px; text-align: center; color: var(--muted); }
 .stale-empty strong { color: var(--text); font-size: 14px; font-weight: 650; }

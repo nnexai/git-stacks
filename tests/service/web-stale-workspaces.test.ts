@@ -459,6 +459,7 @@ describe("Phase 127 web stale-workspace state machine", () => {
     initial.resolve(PHASE127_CLIENT_RESPONSES.populated)
     await mounted.ready
 
+    fixture.setRevision("8")
     const firstRefresh = controller.refresh()
     const repeatedRefresh = controller.refresh()
     await flushMicrotasks()
@@ -700,6 +701,45 @@ describe("Phase 127 web canonical Open and lifecycle authority", () => {
     expect(fixture.inventoryRequests).toHaveLength(3)
     const refreshed = await controller.loadActions(PHASE127_IDS.workspaces.merged)
     expect(refreshed.descriptors.some(({ action_id }) => action_id === "workspace.force-remove")).toBe(true)
+  })
+
+  test("action menu preserves canonical disabled reasons, hides Force, and latches lifecycle submission through reconciliation", async () => {
+    const { createController, mountOverlay } = webStaleExports()
+    const outcome = createDeferred<unknown>()
+    let staleFetches = 0
+    const fixture = controllerHarness({
+      fetchEvaluation: async (request) => {
+        fixture.requests.push(request)
+        staleFetches += 1
+        return staleFetches === 1 ? PHASE127_CLIENT_RESPONSES.populated : PHASE127_CLIENT_RESPONSES.refreshed
+      },
+      invokeCanonicalAction: (invocation) => {
+        fixture.actionInvocations.push(invocation)
+        return outcome.promise
+      },
+    })
+    const controller = createController(fixture.options)
+    const overlay = overlayHarness()
+    const mounted = mountOverlay(overlay.view, controller)
+    await mounted.ready
+    await controller.loadActions(PHASE127_IDS.workspaces.merged)
+    mounted.render()
+    const text = overlay.view.body.textContent
+    expect(text).toContain("Archive workspace")
+    expect(text).toContain("Remove workspace")
+    expect(text).not.toContain("Force Remove")
+    const unavailable = PHASE127_ACTION_INVENTORIES.candidate.find(({ action_id }) => action_id === "workspace.remove")
+    if (unavailable && !unavailable.availability.available) expect(text).toContain(unavailable.availability.message)
+
+    const first = controller.invokeLifecycle(PHASE127_IDS.workspaces.merged, "workspace.archive")
+    const repeated = controller.invokeLifecycle(PHASE127_IDS.workspaces.merged, "workspace.archive")
+    await flushMicrotasks()
+    expect(fixture.actionInvocations).toHaveLength(1)
+    outcome.resolve(PHASE127_LIFECYCLE_OUTCOMES.acceptedOperation)
+    await Promise.all([first, repeated])
+    expect(fixture.reconciliations).toBe(1)
+    expect(fixture.requests).toHaveLength(2)
+    expect(controller.state()).toMatchObject({ phase: "loaded", response: PHASE127_CLIENT_RESPONSES.refreshed })
   })
 
   test("terminal completion reconciles normal and stale state once and never replays the lifecycle mutation", async () => {

@@ -780,6 +780,8 @@ function confirmWorkspaceDescriptor(descriptor: WebWorkspaceAction): Promise<boo
       view.body.append(inventory)
     } else if (descriptor.action_id === "workspace.notes.clear") {
       view.body.append(element("p", "lifecycle-warning", `Clear all notes for ${workspace.name}? This permanently removes the workspace note history.`))
+    } else if (exact) {
+      view.body.append(element("p", "lifecycle-warning", `Type ${workspace.name} to confirm irreversible removal.`))
     } else {
       view.body.append(element("p", "lifecycle-warning", `${action} ${workspace.name}? Review the authoritative workspace state before continuing.`))
     }
@@ -790,9 +792,9 @@ function confirmWorkspaceDescriptor(descriptor: WebWorkspaceAction): Promise<boo
       view.body.append(confirmation)
     }
     const actions = element("div", "modal-actions")
-    const keep = button(descriptor.action_id === "workspace.notes.clear" ? "Keep notes" : exact ? "Back" : "Keep workspace")
+    const keep = button(descriptor.action_id === "workspace.notes.clear" ? "Keep notes" : exact ? "Back to removal review" : "Keep workspace")
     const submit = button(
-      descriptor.action_id === "workspace.notes.clear" ? "Clear workspace notes" : `${action} workspace`,
+      descriptor.action_id === "workspace.notes.clear" ? "Clear workspace notes" : exact ? `Force Remove ${workspace.name}` : `${action} workspace`,
       descriptor.action_id === "workspace.remove" || exact || descriptor.action_id === "workspace.notes.clear" ? "button danger" : "button primary",
     )
     if (confirmation) {
@@ -1471,33 +1473,40 @@ async function invokeStaleWorkspaceDescriptor(descriptor: WebWorkspaceAction): P
     return terminal()
   }
   callbacks["workspace.archive"] = async () => {
-    const operation = await runWorkspaceLifecycle("workspace.archive", lifecycleTarget(workspace))
-    outcome = operation?.state === "succeeded"
-      ? { kind: "operation", operation_id: operation.operation_id }
-      : operation?.state === "failed" || operation?.state === "cancelled"
-        ? operation.error.lifecycle
-        : undefined
+    const operation = await submitWorkspaceLifecycle("workspace.archive", lifecycleTarget(workspace))
+    if (operation?.state === "succeeded") {
+      outcome = { kind: "operation", operation_id: operation.operation_id }
+      actionToast(`${workspace.name} archived. Its terminals were stopped.`, "Undo", () => {
+        void unarchiveWorkspace(lifecycleTarget(workspace))
+      })
+    } else if (operation?.state === "failed" || operation?.state === "cancelled") {
+      await reconcileAuthoritativeState()
+      toast(operation.error.message, true)
+      outcome = operation.error.lifecycle
+    }
     return terminal()
   }
   callbacks["workspace.remove"] = async () => {
-    const operation = await runWorkspaceLifecycle("workspace.remove", lifecycleTarget(workspace))
-    outcome = operation?.state === "succeeded"
-      ? { kind: "operation", operation_id: operation.operation_id }
-      : operation?.state === "failed" || operation?.state === "cancelled"
-        ? operation.error.lifecycle
-        : undefined
+    const operation = await submitWorkspaceLifecycle("workspace.remove", lifecycleTarget(workspace))
+    if (operation?.state === "succeeded") outcome = { kind: "operation", operation_id: operation.operation_id }
+    else if (operation?.state === "failed" || operation?.state === "cancelled") {
+      await reconcileAuthoritativeState()
+      toast(operation.error.message, true)
+      outcome = operation.error.lifecycle
+    }
     return terminal()
   }
   callbacks["workspace.force-remove"] = async () => {
     const confirmation = confirmedForceNames.get(workspace.id)
     confirmedForceNames.delete(workspace.id)
     if (confirmation !== workspace.name) throw new Error("Exact workspace confirmation is required")
-    const operation = await runWorkspaceLifecycle("workspace.force-remove", lifecycleTarget(workspace), confirmation)
-    outcome = operation?.state === "succeeded"
-      ? { kind: "operation", operation_id: operation.operation_id }
-      : operation?.state === "failed" || operation?.state === "cancelled"
-        ? operation.error.lifecycle
-        : undefined
+    const operation = await submitWorkspaceLifecycle("workspace.force-remove", lifecycleTarget(workspace), confirmation)
+    if (operation?.state === "succeeded") outcome = { kind: "operation", operation_id: operation.operation_id }
+    else if (operation?.state === "failed" || operation?.state === "cancelled") {
+      await reconcileAuthoritativeState()
+      toast(operation.error.message, true)
+      outcome = operation.error.lifecycle
+    }
     return terminal()
   }
   const registry = createStaleWorkspaceActionRegistry([descriptor], callbacks, {
@@ -1507,6 +1516,8 @@ async function invokeStaleWorkspaceDescriptor(descriptor: WebWorkspaceAction): P
       : { available: true },
   })
   const result = await registry.invoke(descriptor.action_id, "pointer")
+  if (descriptor.action_id !== "workspace.open" && overlayController.activeSurface() === undefined) showStaleWorkspaces()
+  if (result.status === "cancelled") return { kind: "cancelled" }
   if (result.status !== "submitted") {
     throw new Error(result.status === "unavailable" ? result.reason : "Workspace action was not submitted")
   }
