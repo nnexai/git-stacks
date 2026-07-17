@@ -316,6 +316,7 @@ const WebShortcutPlatformOverridesConfigSchema = z.strictObject({
   "terminal.previous": WebShortcutOverrideConfigSchema.optional(),
   "terminal.next": WebShortcutOverrideConfigSchema.optional(),
   "attention.next": WebShortcutOverrideConfigSchema.optional(),
+  "workspace.stale": WebShortcutOverrideConfigSchema.optional(),
 })
 
 export const GlobalConfigSchema = z.object({

@@ -91,6 +91,25 @@ describe("authoritative web shortcut configuration", () => {
     expect(state.config().integrations).toEqual({ editor: { enabled: true } })
   })
 
+  test("rebinds and unbinds the global stale entry through the same revision authority", () => {
+    const state = authority()
+    let current = state.read("linux")
+    current = state.update({
+      platform: "linux", action_id: "workspace.stale", expected_revision: current.revision,
+      intent: "set-primary", binding: binding("KeyZ", { ctrl: true, alt: true, shift: true }),
+    })
+    expect(current.bindings.at(-1)).toEqual({
+      action_id: "workspace.stale",
+      primary: binding("KeyZ", { ctrl: true, alt: true, shift: true }),
+      aliases: [],
+    })
+    current = state.update({
+      platform: "linux", action_id: "workspace.stale", expected_revision: current.revision, intent: "unbind",
+    })
+    expect(current.bindings.at(-1)).toEqual({ action_id: "workspace.stale", primary: null, aliases: [] })
+    expect(state.config().web?.shortcuts?.linux?.["workspace.stale"]).toEqual({ primary: null, aliases: [] })
+  })
+
   test("allows familiar opt-in aliases without replacing safe primaries", () => {
     const state = authority()
     let current = state.read("macos")

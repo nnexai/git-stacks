@@ -1055,6 +1055,7 @@ describe("web authoritative shortcut overlays", () => {
     expect(text).toContain("Workspace")
     expect(text).toContain("Terminal")
     expect(text).toContain("Switch workspace or repository")
+    expect(text).toContain("Open stale workspaces")
     expect(text).toContain("Unbound")
     expect(opened.view!.body.querySelectorAll(".shortcut-row")).toHaveLength(9)
     expect(opened.view!.body.querySelectorAll("KBD").length).toBeGreaterThan(9)

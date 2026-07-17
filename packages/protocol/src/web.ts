@@ -19,6 +19,12 @@ import {
 export const WEB_PROTOCOL = "web-v1" as const
 export const WEB_COOKIE = "git_stacks_web"
 
+export const WEB_SCOPED_SHORTCUT_ACTION_IDS = [
+  "workspace.stale.refresh",
+] as const
+export const WebScopedShortcutActionIdSchema = z.enum(WEB_SCOPED_SHORTCUT_ACTION_IDS)
+export type WebScopedShortcutActionId = z.infer<typeof WebScopedShortcutActionIdSchema>
+
 export const WEB_SHORTCUT_ACTION_IDS = [
   "workspace.switch",
   "commands.open",
@@ -28,6 +34,7 @@ export const WEB_SHORTCUT_ACTION_IDS = [
   "terminal.previous",
   "terminal.next",
   "attention.next",
+  "workspace.stale",
 ] as const
 export const WEB_SHORTCUT_MAX_ALIASES = 4
 

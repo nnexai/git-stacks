@@ -1,5 +1,7 @@
 import {
+  WEB_SCOPED_SHORTCUT_ACTION_IDS,
   WEB_SHORTCUT_ACTION_IDS,
+  type WebScopedShortcutActionId,
   type WebShortcutActionId,
   type WebShortcutBinding,
   type WebShortcutEffectiveBinding,
@@ -14,7 +16,36 @@ export type ShortcutActionMetadata = {
   label: string
   category: ShortcutCategory
   defaultCode: WebShortcutBinding["code"]
+  tuiKey?: string
 }
+
+export type ScopedShortcutScope = "stale-view"
+
+export type ScopedShortcutActionMetadata = {
+  actionId: WebScopedShortcutActionId
+  scope: ScopedShortcutScope
+  label: string
+  accessibilityText: string
+  web: Readonly<{ code: WebShortcutBinding["code"]; label: string }>
+  tui: Readonly<{ key: string }>
+}
+
+const scopedActionMetadata: Record<
+  WebScopedShortcutActionId,
+  Omit<ScopedShortcutActionMetadata, "actionId">
+> = {
+  [WEB_SCOPED_SHORTCUT_ACTION_IDS[0]]: {
+    scope: "stale-view",
+    label: "Refresh evidence",
+    accessibilityText: "Refresh stale workspace evidence",
+    web: Object.freeze({ code: "KeyR", label: "R" }),
+    tui: Object.freeze({ key: "r" }),
+  },
+}
+
+export const WEB_SCOPED_SHORTCUT_ACTION_METADATA: readonly ScopedShortcutActionMetadata[] = Object.freeze(
+  WEB_SCOPED_SHORTCUT_ACTION_IDS.map((actionId) => Object.freeze({ actionId, ...scopedActionMetadata[actionId] })),
+)
 
 const actionMetadata: Record<WebShortcutActionId, Omit<ShortcutActionMetadata, "actionId">> = {
   "workspace.switch": { label: "Switch workspace", category: "navigation", defaultCode: "KeyK" },
@@ -25,6 +56,7 @@ const actionMetadata: Record<WebShortcutActionId, Omit<ShortcutActionMetadata, "
   "terminal.previous": { label: "Previous terminal", category: "terminal", defaultCode: "KeyJ" },
   "terminal.next": { label: "Next terminal", category: "terminal", defaultCode: "KeyL" },
   "attention.next": { label: "Next attention", category: "navigation", defaultCode: "KeyA" },
+  "workspace.stale": { label: "Open stale workspaces", category: "workspace", defaultCode: "KeyS", tuiKey: "s" },
 }
 
 export const WEB_SHORTCUT_ACTION_METADATA: readonly ShortcutActionMetadata[] = Object.freeze(
@@ -64,6 +96,14 @@ export type ShortcutMatch =
       repeat: boolean
     }
   | { handled: false; reason: ShortcutUnhandledReason }
+
+export type ScopedShortcutMatch =
+  | {
+      handled: true
+      actionId: WebScopedShortcutActionId
+      metadata: ScopedShortcutActionMetadata
+    }
+  | { handled: false; reason: ShortcutUnhandledReason | "inactive-scope" | "repeat" }
 
 export type ShortcutConflict = {
   binding: WebShortcutBinding
@@ -121,6 +161,25 @@ function eventRejection(event: ShortcutKeyEvent): Exclude<ShortcutUnhandledReaso
   if (event.getModifierState?.("AltGraph")) return "alt-graph"
   if (!/^Key[A-Z]$/.test(event.code)) return "invalid-code"
   return undefined
+}
+
+export function matchScopedShortcutEvent(
+  event: ShortcutKeyEvent,
+  activeScope: ScopedShortcutScope | undefined,
+): ScopedShortcutMatch {
+  const rejected = eventRejection(event)
+  if (rejected) return { handled: false, reason: rejected }
+  if (activeScope === undefined) return { handled: false, reason: "inactive-scope" }
+  if (event.repeat) return { handled: false, reason: "repeat" }
+  if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) {
+    return { handled: false, reason: "unmatched" }
+  }
+
+  const metadata = WEB_SCOPED_SHORTCUT_ACTION_METADATA.find((candidate) =>
+    candidate.scope === activeScope && candidate.web.code === event.code)
+  return metadata
+    ? { handled: true, actionId: metadata.actionId, metadata }
+    : { handled: false, reason: "unmatched" }
 }
 
 export function matchShortcutEvent(event: ShortcutKeyEvent, settings: Pick<WebShortcutSettings, "bindings">): ShortcutMatch {

@@ -15,6 +15,7 @@ export const WEB_SHORTCUT_ACTION_IDS = [
   "terminal.previous",
   "terminal.next",
   "attention.next",
+  "workspace.stale",
 ] as const
 
 export type WebShortcutActionId = typeof WEB_SHORTCUT_ACTION_IDS[number]
@@ -54,7 +55,7 @@ const binding = (
 
 const macosModifiers = { ctrl: true, alt: false, shift: false, meta: true } as const
 const linuxModifiers = { ctrl: true, alt: true, shift: true, meta: false } as const
-const actionKeys = ["K", "P", "N", "T", "W", "J", "L", "A"] as const
+const actionKeys = ["K", "P", "N", "T", "W", "J", "L", "A", "S"] as const
 
 function defaults(modifiers: typeof macosModifiers | typeof linuxModifiers): Record<WebShortcutActionId, WebShortcutBinding> {
   return Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((actionId, index) => [

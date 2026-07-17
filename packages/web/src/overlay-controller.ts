@@ -344,7 +344,7 @@ export function mountFuzzyOverlay<T>(view: OverlayView, options: FuzzyOverlayOpt
 
 const actionGroups: ReadonlyArray<{ label: string; actions: readonly WebShortcutActionId[] }> = [
   { label: "Navigation", actions: ["workspace.switch", "attention.next"] },
-  { label: "Workspace", actions: ["commands.open", "workspace.new"] },
+  { label: "Workspace", actions: ["commands.open", "workspace.new", "workspace.stale"] },
   { label: "Terminal", actions: ["terminal.new", "terminal.close", "terminal.previous", "terminal.next"] },
 ]
 
