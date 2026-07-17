@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 10/14 plans executed
+**Plans:** 11/14 plans executed
 
 Plans:
 **Wave 0**
@@ -182,7 +182,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 127-11-PLAN.md — Add immediate changelog/docs RED assertions and stale/RC documentation, then run the first complete test and validation-only release gates.
+- [x] 127-11-PLAN.md — Add immediate changelog/docs RED assertions and stale/RC documentation, then run the first complete test and validation-only release gates.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 

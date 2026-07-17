@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-10-PLAN.md
-last_updated: "2026-07-17T14:17:19.313Z"
+stopped_at: Completed 127-11-PLAN.md
+last_updated: "2026-07-17T14:45:42.296Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 10 exact RC manifest and lockfile graph completed
+last_activity_desc: Phase 127 Plan 11 stale-workspace and RC documentation plus local validation completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 38
-  percent: 90
+  completed_plans: 39
+  percent: 93
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 11 of 14
+Plan: 12 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 10 exact RC manifest and lockfile graph completed
+Last activity: 2026-07-17 — Phase 127 Plan 11 stale-workspace and RC documentation plus local validation completed
 
 ## Decisions
 
@@ -117,6 +117,10 @@ Last activity: 2026-07-17 — Phase 127 Plan 10 exact RC manifest and lockfile g
 - [Phase 127]: All eight manifests and every internal @git-stacks range are exact 0.22.0-rc.1; lock regeneration admitted only expected RC metadata changes.
 - [Phase 127]: The root default production graph remains CLI-only and cannot reach the optional TUI, Bun, or OpenTUI packages.
 - [Phase 127]: Plan 127-10 advances REL-01 and REL-02 evidence without completing them; documentation, exact-SHA external evidence, and release authorization remain later-plan work.
+- [Phase 127]: Stale documentation mirrors the strict service policy and keeps unknown evidence, cautions, ranking, and lifecycle authority separate.
+- [Phase 127]: Only validated GitHub.com and GitLab.com provenance enables read-only change status; Gitea and self-hosted status remain deferred or not claimed.
+- [Phase 127]: Local RC success remains separate from hosted, authenticated, live, physical, screenshot, interactive, human, and release-authorization evidence.
+- [Phase 127]: Plan 127-12 freezes the clean post-Plan-11 metadata HEAD as the exact candidate SHA.
 
 ## Validated Inputs
 
@@ -195,9 +199,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P08 | 50min | 3 tasks | 5 files |
 | Phase 127 P09 | 7min | 3 tasks | 4 files |
 | Phase 127 P10 | 8min | 3 tasks | 11 files |
+| Phase 127 P11 | 25min | 3 tasks | 6 files |
 
 ## Session
 
-**Last session:** 2026-07-17T14:17:19.283Z
-**Stopped at:** Completed 127-10-PLAN.md
+**Last session:** 2026-07-17T14:45:42.268Z
+**Stopped at:** Completed 127-11-PLAN.md
 **Resume file:** None
