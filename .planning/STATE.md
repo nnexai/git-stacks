@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-11-PLAN.md
-last_updated: "2026-07-17T14:45:42.296Z"
+stopped_at: Completed 127-12-PLAN.md
+last_updated: "2026-07-17T15:06:39.685Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 11 stale-workspace and RC documentation plus local validation completed
+last_activity_desc: Phase 127 Plan 12 exact-candidate evidence ledger and pending validation state completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 39
-  percent: 93
+  completed_plans: 40
+  percent: 95
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 12 of 14
+Plan: 13 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 11 stale-workspace and RC documentation plus local validation completed
+Last activity: 2026-07-17 — Phase 127 Plan 12 exact-candidate evidence ledger and pending validation state completed
 
 ## Decisions
 
@@ -121,6 +121,10 @@ Last activity: 2026-07-17 — Phase 127 Plan 11 stale-workspace and RC documenta
 - [Phase 127]: Only validated GitHub.com and GitLab.com provenance enables read-only change status; Gitea and self-hosted status remain deferred or not claimed.
 - [Phase 127]: Local RC success remains separate from hosted, authenticated, live, physical, screenshot, interactive, human, and release-authorization evidence.
 - [Phase 127]: Plan 127-12 freezes the clean post-Plan-11 metadata HEAD as the exact candidate SHA.
+- [Phase 127]: The immutable Plan 127-12 candidate is f7bdca75f2545664251e88b233693b67fd37ee5c, captured from the clean post-documentation HEAD before the ledger existed.
+- [Phase 127]: Local no-tag RC success remains deterministic-only evidence; all hosted, authenticated, live, physical, visual, interactive, and human rows stay exact-SHA PENDING until Plan 127-13 evidence exists.
+- [Phase 127]: The marker-delimited receipt JSON is the canonical immutable row/subcase authority; Plan 127-14 may reconcile only exact-SHA row-keyed approvals from Plan 127-13.
+- [Phase 127]: Self-hosted status remains NOT_CLAIMED, provider opt-outs retain reasons, and release authority remains NOT_AUTHORIZED despite green local validation.
 
 ## Validated Inputs
 
@@ -200,9 +204,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P09 | 7min | 3 tasks | 4 files |
 | Phase 127 P10 | 8min | 3 tasks | 11 files |
 | Phase 127 P11 | 25min | 3 tasks | 6 files |
+| Phase 127 P12 | 14min | 2 tasks | 3 files |
 
 ## Session
 
-**Last session:** 2026-07-17T14:45:42.268Z
-**Stopped at:** Completed 127-11-PLAN.md
+**Last session:** 2026-07-17T15:06:39.649Z
+**Stopped at:** Completed 127-12-PLAN.md
 **Resume file:** None

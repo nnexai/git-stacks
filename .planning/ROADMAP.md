@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 11/14 plans executed
+**Plans:** 12/14 plans executed
 
 Plans:
 **Wave 0**
@@ -186,7 +186,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 127-12-PLAN.md — Freeze the candidate SHA and create the strict canonical JSON row/subcase ledger with every external/manual class exact-SHA PENDING.
+- [x] 127-12-PLAN.md — Freeze the candidate SHA and create the strict canonical JSON row/subcase ledger with every external/manual class exact-SHA PENDING.
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
