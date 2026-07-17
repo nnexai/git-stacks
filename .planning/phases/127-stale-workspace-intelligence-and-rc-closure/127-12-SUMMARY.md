@@ -9,7 +9,7 @@ requires:
   - phase: 127-11
     provides: post-documentation 0.22.0-rc.1 candidate boundary plus green npm test and first no-tag release check
 provides:
-  - immutable exact candidate SHA f7bdca75f2545664251e88b233693b67fd37ee5c
+  - replacement immutable exact candidate SHA 233d294913bd4cd37602f6ef72f53cb960fb12d7, superseding f7bdca75f2545664251e88b233693b67fd37ee5c
   - repeated exact-candidate npm run release:check PASS receipt with unchanged tag refs
   - canonical marker-delimited JSON ledger with 23 immutable row/subcase records
   - reconciled awaiting-human-evidence validation state with Nyquist false and approval pending
@@ -33,7 +33,7 @@ key-files:
     - .planning/ROADMAP.md
 
 key-decisions:
-  - "The immutable release-candidate commit is f7bdca75f2545664251e88b233693b67fd37ee5c, captured from the clean post-Plan-127-11 HEAD before the receipt ledger existed."
+  - "The replacement immutable release-candidate commit is 233d294913bd4cd37602f6ef72f53cb960fb12d7, captured clean after the catalog, TUI lifecycle, and service-authentication repairs and before the ledger was rebound."
   - "The repeated local RC gate is PASS only for the deterministic local class; all 22 hosted/authenticated/live/physical/visual/interactive/human rows remain PENDING with null evidence."
   - "Every receipt row owns a nonempty immutable required_subcases array; Plan 127-13 must return row-keyed exact-SHA approvals and Plan 127-14 alone may reconcile them."
   - "Self-hosted GitHub/GitLab remains NOT_CLAIMED, Gitea and provider mutation/search/inference/checkout/polling remain reasoned OPT_OUT dispositions, and release authority remains NOT_AUTHORIZED."
@@ -51,7 +51,7 @@ coverage:
     requirement: REL-01
     verification:
       - kind: integration
-        ref: "npm run release:check — exit 0 without --tag for f7bdca75f2545664251e88b233693b67fd37ee5c"
+        ref: "npm run release:check — exit 0 without --tag for 233d294913bd4cd37602f6ef72f53cb960fb12d7"
         status: pass
       - kind: other
         ref: "41 tag refs byte-identical before/after; intended tag absent"
@@ -78,7 +78,7 @@ completed: 2026-07-17
 
 # Phase 127 Plan 12: Exact-Candidate Evidence Ledger Summary
 
-**The clean post-documentation `0.22.0-rc.1` candidate is frozen at `f7bdca75f2545664251e88b233693b67fd37ee5c`, with a green repeated no-tag RC gate and a canonical ledger that leaves every unavailable external/manual class honestly pending.**
+**The repaired `0.22.0-rc.1` candidate is frozen at `233d294913bd4cd37602f6ef72f53cb960fb12d7`, superseding `f7bdca75f2545664251e88b233693b67fd37ee5c`, with a green cold web launch and complete no-tag RC gate while every unavailable external/manual class remains honestly pending.**
 
 ## Performance
 
@@ -88,9 +88,17 @@ completed: 2026-07-17
 - **Tasks:** 2
 - **Files modified:** 5 planning artifacts including this summary and final STATE/ROADMAP metadata
 
+### Corrective refreeze
+
+- **Reason:** Three runtime fixes landed after the original candidate freeze.
+- **Replacement captured:** 2026-07-17T19:05:06Z
+- **Cold web launch:** PASS from a stopped-service state
+- **Complete regression:** `npm test`, `npm run typecheck`, `npm run coverage`, and `npm run release:check` PASS
+
 ## Accomplishments
 
-- Captured the exact clean post-Plan-127-11 HEAD before any ledger existed and preserved it as the immutable candidate SHA rather than redefining the candidate to a later receipt commit.
+- Captured the clean repaired HEAD after commits `42d92518`, `e5a59502`, `9d319c32`, and the consumed-handoff commit `233d2949`; the old candidate is explicitly superseded and contributes no approval.
+- Reproduced the normal one-command web launch from a stopped-service state after a fresh package build; it started the managed service and opened the secure packaged client without `LocalEnvironmentPreparationError`.
 - Repeated `npm run release:check` exactly without `--tag`; the command exited zero, produced local output, retained all 41 tag refs byte-for-byte, left `v0.22.0-rc.1` absent, and left the worktree clean.
 - Created `127-RECEIPTS.md` with exactly one marker-delimited valid JSON object, 23 exact row IDs, immutable row-specific subcase arrays, deterministic receipts, provider dispositions, edge outcomes, and release-stop status.
 - Reconciled `127-VALIDATION.md` to `awaiting-human-evidence`, `wave_0_complete: true`, `nyquist_compliant: false`, and `approval: pending` while keeping all 22 external/manual rows PENDING with null evidence.
@@ -98,18 +106,20 @@ completed: 2026-07-17
 
 ## Task Commits
 
-Each task was committed atomically with normal Git hooks:
+The original Plan 127-12 evidence commits (`a2b22ce8`, `c4e62f6e`, and `24a2ebfe`) remain historical ancestors only. Their candidate identity is superseded. The corrective source boundary is:
 
-1. **Task 1: Freeze the exact clean candidate and build the safe evidence index** — `a2b22ce8` (docs)
-2. **Task 2: Reconcile validation state without false Nyquist or approval claims** — `c4e62f6e` (docs)
+1. **Preserve larger authoritative workspace catalogs** — `42d92518`
+2. **Harden TUI preload and renderer lifecycle** — `e5a59502`
+3. **Close superseded service authentication** — `9d319c32`
+4. **Consume the structured handoff and freeze the repaired clean boundary** — `233d2949`
 
 ## Candidate Identity
 
 | Field | Value |
 |---|---|
-| Candidate SHA | `f7bdca75f2545664251e88b233693b67fd37ee5c` |
+| Candidate SHA | `233d294913bd4cd37602f6ef72f53cb960fb12d7` |
 | Branch at freeze | `planning/phase-127-revision-1` |
-| Captured UTC | `2026-07-17T14:50:55Z` |
+| Captured UTC | `2026-07-17T19:05:06Z` |
 | Version | `0.22.0-rc.1` |
 | Intended tag | `v0.22.0-rc.1` |
 | npm channel | `next` |
@@ -117,7 +127,7 @@ Each task was committed atomically with normal Git hooks:
 | Ledger existed at capture | no |
 | Release authority | `NOT_AUTHORIZED` |
 
-The candidate commit remains unchanged and is an ancestor of both task commits. Only `127-RECEIPTS.md` and `127-VALIDATION.md` changed between the candidate and the completed task boundary.
+The replacement candidate commit remains unchanged and is the required ancestor of the replacement ledger and validation commits. The superseded ledger still existed in the candidate snapshot, but no replacement identity or receipt had yet been written; the first descendant evidence commit rebinds every row to this SHA.
 
 ## Files Created/Modified
 
@@ -129,7 +139,7 @@ The candidate commit remains unchanged and is an ancestor of both task commits. 
 
 ## Decisions Made
 
-- Froze the candidate at the full post-documentation SHA captured from a clean tree. The ledger and validation commits are evidence descendants, not replacement candidates.
+- Froze the replacement candidate after the three post-freeze runtime repairs and complete local regression. The ledger and validation commits are evidence descendants, not replacement candidates.
 - Treated the second local release check as proof only for the local deterministic class. The local runtime was recorded as informational and explicitly does not satisfy the hosted Node 24 OS/architecture matrix.
 - Used one canonical JSON object and made every external/manual row carry its own candidate SHA, PENDING status, null evidence, source artifacts, gate, and comprehensive immutable `required_subcases` array.
 - Kept `RELEASE-AUTHORIZATION` distinct from the 22 evidence rows and permanently `NOT_AUTHORIZED` during this plan; neither local success nor later feature UAT implies tag/push/publish/release authority.
@@ -140,13 +150,22 @@ The candidate commit remains unchanged and is an ancestor of both task commits. 
 ### Exact-candidate local RC gate
 
 - Command: `npm run release:check`
-- Candidate: `f7bdca75f2545664251e88b233693b67fd37ee5c`
-- Started: `2026-07-17T14:51:56Z`
-- Completed: `2026-07-17T14:54:15Z`
+- Candidate: `233d294913bd4cd37602f6ef72f53cb960fb12d7`
+- Started: `2026-07-17T19:02:06Z`
+- Completed: `2026-07-17T19:03:46Z`
 - Exit: `0`
 - Sanitized result: `RC verification passed for 0.22.0-rc.1.`
-- Full output SHA-256: `d48efb3d413fe47724e0376b59c1e2e64912fab0f94b4cc2ed21b8f6ab3f0315`
+- Full output SHA-256: `aad0b0d2f37d0988f47230fea01f4bbb932f46a6d1bab1f672ff50ff69cbfb69`
 - Tag flag supplied: no
+
+### Cold web auto-launch
+
+- Build: `npm run build:packages`
+- Precondition: managed service stopped
+- Launch: `node packages/cli/dist/index.js web`
+- Result: secure packaged client opened and the managed service started automatically
+- `LocalEnvironmentPreparationError`: not reproduced
+- Cleanup: managed service stopped
 
 The raw command output existed locally and was not copied into the ledger because raw build/provider-adjacent output can contain machine-specific detail. The digest and sanitized terminal result bind the receipt without embedding that output.
 
@@ -157,7 +176,7 @@ The raw command output existed locally and was not copied into the ledger becaus
 - Intended `v0.22.0-rc.1` tag before/after: absent.
 - Existing phase directories before/after: 5 / 5, identical inventory.
 - Worktree after validation: clean.
-- Candidate-to-task diff: only `127-RECEIPTS.md` and `127-VALIDATION.md`.
+- Candidate-to-evidence diff is restricted to the Phase 127 ledger, validation, summary, and state metadata.
 
 ### Canonical ledger assertions
 
@@ -253,14 +272,22 @@ No new network endpoint, authentication path, file-access boundary, runtime sche
 - **Verification:** STATE reports Plan 13 of 14, 40/42 completed plans, 95% progress, Plan 127-12 activity, and Phase 127 decision labels; ROADMAP reports 12/14 plans executed.
 - **Committed in:** Plan metadata commit.
 
+**4. [Rule 3 - Blocking] Replaced the invalidated exact candidate after runtime fixes**
+- **Found during:** Post-freeze live runtime verification.
+- **Issue:** The original candidate predated fixes for catalogs larger than 16 workspaces, TUI preload/terminal cleanup, and shutdown racing with authentication.
+- **Fix:** Consumed the structured handoff, reproduced cold web auto-launch, ran the complete regression, froze `233d294913bd4cd37602f6ef72f53cb960fb12d7`, and rebound all receipt rows while leaving external/manual evidence PENDING.
+- **Verification:** Full tests, typecheck, coverage, no-tag release check, tag-ref integrity, planning-directory integrity, and clean-tree checks passed.
+- **Committed in:** Corrective Plan 127-12 evidence commits after the replacement candidate.
+
 ---
 
-**Total deviations:** 3 auto-fixed (2 blocking workflow issues, 1 verification-process bug)
+**Total deviations:** 4 auto-fixed (3 blocking workflow issues, 1 verification-process bug)
 **Impact on plan:** All fixes strengthened planned truthfulness and tracking gates. Candidate identity, evidence statuses, command results, external/manual pending state, and release boundary were unchanged.
 
 ## Issues Encountered
 
 - The plan's task-one pre-commit validator intentionally compares ledger `candidate_sha` to current HEAD. It was run before the ledger commit while HEAD still equalled the candidate; post-commit verification instead proved the immutable candidate is a distinct ancestor of the ledger commits.
+- The replacement candidate snapshot contains the superseded ledger as historical planning state. The replacement evidence commit must therefore prove `replacement_ledger_not_yet_rebound: true` rather than falsely claiming that no ledger path existed.
 - `git diff --name-only` does not report an untracked new ledger file. Task-one scope validation therefore used `git status --porcelain` before the first commit, then commit-range diff checks after commit.
 
 ## Known Stubs
@@ -285,8 +312,8 @@ None for this plan. Plan 127-13 requires separately supplied exact-candidate hos
 ## Self-Check: PASSED
 
 - `127-RECEIPTS.md`, `127-VALIDATION.md`, and this summary exist at the required paths.
-- Task commits `a2b22ce8` and `c4e62f6e` exist in repository history.
-- Candidate `f7bdca75f2545664251e88b233693b67fd37ee5c` exists, remains immutable, and is an ancestor of both task commits.
+- Historical task commits `a2b22ce8` and `c4e62f6e` and all three post-freeze repair commits exist in repository history.
+- Candidate `233d294913bd4cd37602f6ef72f53cb960fb12d7` exists, remains immutable, and is the clean replacement boundary for descendant evidence commits.
 - The final fail-fast verification passed ledger, validation, tag-integrity, file-scope, diff-hygiene, and clean-tree assertions.
 
 ---

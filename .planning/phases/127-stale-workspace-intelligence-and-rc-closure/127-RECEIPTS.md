@@ -6,15 +6,16 @@ This ledger freezes one release-candidate commit and separates local determinist
 
 | Field | Value |
 |---|---|
-| Candidate SHA | f7bdca75f2545664251e88b233693b67fd37ee5c |
+| Candidate SHA | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| Superseded candidate | f7bdca75f2545664251e88b233693b67fd37ee5c |
 | Branch at freeze | planning/phase-127-revision-1 |
-| Captured UTC | 2026-07-17T14:50:55Z |
+| Captured UTC | 2026-07-17T19:05:06Z |
 | Package version | 0.22.0-rc.1 |
 | Intended tag | v0.22.0-rc.1 |
 | npm channel | next |
 | Release authority | NOT_AUTHORIZED |
 
-The candidate was captured from a clean committed worktree before this ledger existed. The ledger and later validation commits must remain descendants of this immutable SHA and must not redefine it.
+The replacement candidate was captured from a clean committed worktree after the catalog, TUI lifecycle, and service-authentication repairs and before this ledger was rebound. It supersedes `f7bdca75f2545664251e88b233693b67fd37ee5c`; no deterministic or human approval from that older source is reused. The replacement ledger and later validation commits must remain descendants of this immutable SHA and must not redefine it.
 
 ## Status Legend
 
@@ -30,13 +31,15 @@ The candidate was captured from a clean committed worktree before this ledger ex
 
 | Receipt | Evidence class | Result | Command or audit | Candidate SHA |
 |---|---|---|---|---|
-| candidate_freeze | LOCAL_DETERMINISTIC | PASS | git rev-parse HEAD | f7bdca75f2545664251e88b233693b67fd37ee5c |
-| release_check | LOCAL_DETERMINISTIC | PASS | npm run release:check | f7bdca75f2545664251e88b233693b67fd37ee5c |
-| tag_ref_integrity | LOCAL_DETERMINISTIC | PASS | git for-each-ref --format='%(refname):%(objectname)' refs/tags before and after npm run release:check | f7bdca75f2545664251e88b233693b67fd37ee5c |
-| planning_directory_integrity | LOCAL_DETERMINISTIC | PASS | compare .planning/phases directory inventory before and after npm run release:check | f7bdca75f2545664251e88b233693b67fd37ee5c |
-| outward_release_actions | EXECUTION_BOUNDARY | PASS | execution audit | f7bdca75f2545664251e88b233693b67fd37ee5c |
+| candidate_freeze | LOCAL_DETERMINISTIC | PASS | git rev-parse HEAD | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| web_auto_launch | LOCAL_DETERMINISTIC | PASS | npm run build:packages; service stopped; node packages/cli/dist/index.js web | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| release_check | LOCAL_DETERMINISTIC | PASS | npm run release:check | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| tag_ref_integrity | LOCAL_DETERMINISTIC | PASS | git for-each-ref --format='%(refname):%(objectname)' refs/tags before and after npm run release:check | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| planning_directory_integrity | LOCAL_DETERMINISTIC | PASS | compare .planning/phases directory inventory before and after npm run release:check | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
+| outward_release_actions | EXECUTION_BOUNDARY | PASS | execution audit | 233d294913bd4cd37602f6ef72f53cb960fb12d7 |
 
 - The repeated command was exactly `npm run release:check` with no tag flag and exited zero.
+- A fresh package build followed by a cold one-command web launch started the managed service and opened the secure packaged client without `LocalEnvironmentPreparationError`; the service was stopped afterward.
 - The complete command output existed locally and is represented by its SHA-256 digest in the canonical JSON; raw output is not embedded because it may contain machine-specific detail.
 - All 41 tag refs were byte-identical before and after validation, and `v0.22.0-rc.1` was absent before and after.
 - All 5 pre-existing phase directories remained present with an identical directory inventory; the repository was clean after validation.
@@ -62,29 +65,29 @@ The candidate was captured from a clean committed worktree before this ledger ex
 
 | Receipt ID | Evidence class | Status | Required subcases | Candidate SHA | Gate |
 |---|---|---|---|---|---|
-| HST-RUNTIME | hosted-runtime | PENDING | 9 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| HST-SHELL | configured-shell | PENDING | 22 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| HST-SSH | configured-shell-ssh-agent | PENDING | 8 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| AUTH-GH-STATUS | authenticated-provider-status | PENDING | 12 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| AUTH-GL-STATUS | authenticated-provider-status | PENDING | 12 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| FORGE-GH-SAME | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| FORGE-GH-FORK | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| FORGE-GL-SAME | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| FORGE-GL-FORK | authenticated-forge-create | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| FORGE-RECOVERY | authenticated-forge-recovery | PENDING | 27 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 1 hosted/authenticated checkpoint |
-| LIVE-ARCHIVE | live-service-manual | PENDING | 14 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-REMOVE-FORCE | live-service-manual | PENDING | 15 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-STALE | live-service-manual | PENDING | 25 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-ATTENTION-FUZZY | live-service-manual | PENDING | 12 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-P126-ACTIONS | live-service-manual | PENDING | 23 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-P126-NOTES | live-service-manual | PENDING | 13 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-P126-FILE-STATUS | live-service-manual | PENDING | 15 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| LIVE-LIFECYCLE | live-service-manual | PENDING | 17 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| PHYS-BROWSER-XTERM | physical-browser-manual | PENDING | 20 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| VIS-RESPONSIVE | responsive-visual-manual | PENDING | 27 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| INT-TUI | interactive-tui-manual | PENDING | 20 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| HUMAN-PARITY | human-cross-client-parity | PENDING | 21 | f7bdca75f2545664251e88b233693b67fd37ee5c | 127-13 Task 2 physical/manual checkpoint |
-| RELEASE-AUTHORIZATION | release-authorization | NOT_AUTHORIZED | 6 | f7bdca75f2545664251e88b233693b67fd37ee5c | Separate explicit operator authorization outside Phase 127 |
+| HST-RUNTIME | hosted-runtime | PENDING | 9 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| HST-SHELL | configured-shell | PENDING | 22 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| HST-SSH | configured-shell-ssh-agent | PENDING | 8 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| AUTH-GH-STATUS | authenticated-provider-status | PENDING | 12 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| AUTH-GL-STATUS | authenticated-provider-status | PENDING | 12 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| FORGE-GH-SAME | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| FORGE-GH-FORK | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| FORGE-GL-SAME | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| FORGE-GL-FORK | authenticated-forge-create | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| FORGE-RECOVERY | authenticated-forge-recovery | PENDING | 27 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 1 hosted/authenticated checkpoint |
+| LIVE-ARCHIVE | live-service-manual | PENDING | 14 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-REMOVE-FORCE | live-service-manual | PENDING | 15 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-STALE | live-service-manual | PENDING | 25 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-ATTENTION-FUZZY | live-service-manual | PENDING | 12 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-P126-ACTIONS | live-service-manual | PENDING | 23 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-P126-NOTES | live-service-manual | PENDING | 13 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-P126-FILE-STATUS | live-service-manual | PENDING | 15 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| LIVE-LIFECYCLE | live-service-manual | PENDING | 17 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| PHYS-BROWSER-XTERM | physical-browser-manual | PENDING | 20 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| VIS-RESPONSIVE | responsive-visual-manual | PENDING | 27 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| INT-TUI | interactive-tui-manual | PENDING | 20 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| HUMAN-PARITY | human-cross-client-parity | PENDING | 21 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | 127-13 Task 2 physical/manual checkpoint |
+| RELEASE-AUTHORIZATION | release-authorization | NOT_AUTHORIZED | 6 | 233d294913bd4cd37602f6ef72f53cb960fb12d7 | Separate explicit operator authorization outside Phase 127 |
 
 Every HST/AUTH/FORGE/LIVE/PHYS/VIS/INT/HUMAN row remains PENDING with null evidence until safe exact-candidate-SHA evidence covers every immutable `required_subcases` entry. Self-hosted support remains NOT_CLAIMED without an explicit host list. RELEASE-AUTHORIZATION remains NOT_AUTHORIZED.
 
@@ -105,9 +108,10 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
 <!-- phase127-receipts-json:start -->
 {
   "schema_version": 1,
-  "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+  "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
+  "supersedes_candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
   "branch": "planning/phase-127-revision-1",
-  "captured_at": "2026-07-17T14:50:55Z",
+  "captured_at": "2026-07-17T19:05:06Z",
   "version": "0.22.0-rc.1",
   "tag": "v0.22.0-rc.1",
   "channel": "next",
@@ -115,24 +119,39 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
   "deterministic_receipts": {
     "candidate_freeze": {
       "evidence_class": "LOCAL_DETERMINISTIC",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "command": "git rev-parse HEAD",
-      "captured_at": "2026-07-17T14:50:55Z",
+      "captured_at": "2026-07-17T19:05:06Z",
       "result": "PASS",
       "clean_worktree_and_index": true,
-      "ledger_absent_at_capture": true
+      "ledger_absent_at_capture": false,
+      "replacement_ledger_not_yet_rebound": true
+    },
+    "web_auto_launch": {
+      "evidence_class": "LOCAL_DETERMINISTIC",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
+      "build_command": "npm run build:packages",
+      "launch_command": "node packages/cli/dist/index.js web",
+      "managed_service_running_before_launch": false,
+      "managed_service_started_by_launch": true,
+      "secure_packaged_client_opened": true,
+      "local_environment_preparation_error": false,
+      "managed_service_stopped_after_launch": true,
+      "observed_at": "2026-07-17T18:59:27Z",
+      "result": "PASS",
+      "limitation": "Local cold-launch proof does not satisfy HST-RUNTIME or any physical, visual, interactive, or human row."
     },
     "release_check": {
       "evidence_class": "LOCAL_DETERMINISTIC",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "command": "npm run release:check",
       "tag_flag_supplied": false,
-      "started_at": "2026-07-17T14:51:56Z",
-      "completed_at": "2026-07-17T14:54:15Z",
+      "started_at": "2026-07-17T19:02:06Z",
+      "completed_at": "2026-07-17T19:03:46Z",
       "exit_code": 0,
       "result": "PASS",
       "sanitized_result": "RC verification passed for 0.22.0-rc.1.",
-      "output_sha256": "d48efb3d413fe47724e0376b59c1e2e64912fab0f94b4cc2ed21b8f6ab3f0315",
+      "output_sha256": "aad0b0d2f37d0988f47230fea01f4bbb932f46a6d1bab1f672ff50ff69cbfb69",
       "artifact_reference": "127-12-SUMMARY.md local validation receipt",
       "local_runtime": {
         "node": "v26.5.0",
@@ -143,7 +162,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     },
     "tag_ref_integrity": {
       "evidence_class": "LOCAL_DETERMINISTIC",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "command": "git for-each-ref --format='%(refname):%(objectname)' refs/tags before and after npm run release:check",
       "result": "PASS",
       "ref_count_before": 41,
@@ -156,7 +175,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     },
     "planning_directory_integrity": {
       "evidence_class": "LOCAL_DETERMINISTIC",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "command": "compare .planning/phases directory inventory before and after npm run release:check",
       "result": "PASS",
       "directory_count_before": 5,
@@ -168,7 +187,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     },
     "outward_release_actions": {
       "evidence_class": "EXECUTION_BOUNDARY",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "result": "PASS",
       "git_tag": "NOT_PERFORMED",
       "git_push": "NOT_PERFORMED",
@@ -214,7 +233,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "HST-RUNTIME": {
       "description": "Hosted supported-runtime, package-policy, and optional TUI matrix",
       "evidence_class": "hosted-runtime",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -239,7 +258,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "HST-SHELL": {
       "description": "Configured Bash, zsh, and fish command, hook, PTY, initialization, and diagnostic behavior",
       "evidence_class": "configured-shell",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -277,7 +296,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "HST-SSH": {
       "description": "Dynamic SSH-agent authority across refreshed configured-shell launches",
       "evidence_class": "configured-shell-ssh-agent",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -301,7 +320,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "AUTH-GH-STATUS": {
       "description": "Authenticated GitHub.com read-only pull-request status and sanitized recovery",
       "evidence_class": "authenticated-provider-status",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -328,7 +347,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "AUTH-GL-STATUS": {
       "description": "Authenticated GitLab.com read-only merge-request status and sanitized recovery",
       "evidence_class": "authenticated-provider-status",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -355,7 +374,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "FORGE-GH-SAME": {
       "description": "GitHub same-repository full URL Resolve, editable Review, and explicit Create",
       "evidence_class": "authenticated-forge-create",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -385,7 +404,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "FORGE-GH-FORK": {
       "description": "GitHub fork-source full URL Resolve, editable Review, and explicit Create",
       "evidence_class": "authenticated-forge-create",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -415,7 +434,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "FORGE-GL-SAME": {
       "description": "GitLab same-project full URL Resolve, editable Review, and explicit Create",
       "evidence_class": "authenticated-forge-create",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -445,7 +464,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "FORGE-GL-FORK": {
       "description": "GitLab fork-source full URL Resolve, editable Review, and explicit Create",
       "evidence_class": "authenticated-forge-create",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -475,7 +494,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "FORGE-RECOVERY": {
       "description": "Complete GitHub/GitLab same/fork Resolve, Review, Create recovery and rollback matrix",
       "evidence_class": "authenticated-forge-recovery",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -518,7 +537,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-ARCHIVE": {
       "description": "Complete archived-workspace lifecycle and active/archive-empty transitions in web and TUI",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -548,7 +567,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-REMOVE-FORCE": {
       "description": "Clean removal, typed dirty blocker, exact-name Force Remove, stale confirmation, and failure behavior",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -580,7 +599,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-STALE": {
       "description": "Every approved stale-workspace state, evidence class, action, revision, and reconciliation path",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -622,7 +641,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-ATTENTION-FUZZY": {
       "description": "Fuzzy top-result execution, archived exclusion, singleton focus, and deterministic attention navigation",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -650,7 +669,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-P126-ACTIONS": {
       "description": "Complete Phase 126 shared action inventory, entry surfaces, operation semantics, and reconciliation",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -689,7 +708,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-P126-NOTES": {
       "description": "Authoritative notes zero/one/many, add/clear, conflict, failure-retention, and parity behavior",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -718,7 +737,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-P126-FILE-STATUS": {
       "description": "Authoritative path-free file status groups, states, counts, reasons, loading/error/retry, and parity",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -749,7 +768,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "LIVE-LIFECYCLE": {
       "description": "Durable operation lifecycle, reconnect, cancellation, refresh-failed lock, concurrency, and convergence",
       "evidence_class": "live-service-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -782,7 +801,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "PHYS-BROWSER-XTERM": {
       "description": "Physical browser pointer, keyboard, xterm input isolation, focus defaults, and exact restoration",
       "evidence_class": "physical-browser-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -819,7 +838,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "VIS-RESPONSIVE": {
       "description": "Light/dark desktop, 375px, and 320px screenshots for all stale and required Phase 126 states",
       "evidence_class": "responsive-visual-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -863,7 +882,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "INT-TUI": {
       "description": "Interactive OpenTUI width/height tiers and complete archived/action/operation/notes/file/forge/stale matrix",
       "evidence_class": "interactive-tui-manual",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -900,7 +919,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "HUMAN-PARITY": {
       "description": "Side-by-side web/TUI human approval against the same authoritative fixtures",
       "evidence_class": "human-cross-client-parity",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "PENDING",
       "evidence": null,
       "required_subcases": [
@@ -938,7 +957,7 @@ One generic approval cannot satisfy multiple rows. Plan 127-13 must return row-k
     "RELEASE-AUTHORIZATION": {
       "description": "Separate operator authority for outward release actions",
       "evidence_class": "release-authorization",
-      "candidate_sha": "f7bdca75f2545664251e88b233693b67fd37ee5c",
+      "candidate_sha": "233d294913bd4cd37602f6ef72f53cb960fb12d7",
       "status": "NOT_AUTHORIZED",
       "evidence": null,
       "required_subcases": [
