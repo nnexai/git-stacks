@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 2/14 plans executed
+**Plans:** 3/14 plans executed
 
 Plans:
 **Wave 0**
@@ -153,7 +153,7 @@ Plans:
 
 **Wave 1** *(blocked on Wave 0 completion)*
 
-- [ ] 127-03-PLAN.md — Add strict stale DTOs and GitHub/GitLab read-only status probes, turning the runtime schema matrix green.
+- [x] 127-03-PLAN.md — Add strict stale DTOs and GitHub/GitLab read-only status probes, turning the runtime schema matrix green.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
