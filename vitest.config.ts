@@ -1,10 +1,26 @@
 import { resolve } from "node:path"
 
+import { transform as transformWithEsbuild } from "esbuild"
 import { defineConfig } from "vitest/config"
 
 const root = import.meta.dirname
+const staleTuiView = resolve(root, "packages/tui/src/StaleWorkspacesView.tsx")
 
 export default defineConfig({
+  plugins: [{
+    name: "transform-stale-opentui-view",
+    enforce: "pre",
+    transform(code, id) {
+      if (id.split("?", 1)[0] !== staleTuiView) return undefined
+      return transformWithEsbuild(code, {
+        sourcefile: id,
+        loader: "tsx",
+        jsx: "automatic",
+        jsxImportSource: "@opentui/solid",
+        sourcemap: "inline",
+      })
+    },
+  }],
   resolve: {
     alias: [
       { find: "@test/api", replacement: resolve(root, "tests/test-api.ts") },

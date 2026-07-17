@@ -269,6 +269,50 @@ function actionDescriptor(
 }
 
 describe("Phase 127 shared stale presentation availability", () => {
+  test("loads the TUI stale adapter through the guarded JSX import", () => {
+    expect(
+      tuiModuleLoadError,
+      "Phase 127 TUI must import without JSX analysis failures",
+    ).toBeUndefined()
+    expect(
+      tuiModule?.adaptTuiStaleWorkspacePresentation,
+      "Phase 127 TUI stale module must export adaptTuiStaleWorkspacePresentation",
+    ).toBeTypeOf("function")
+  })
+
+  test("keeps TUI stale adapter conformance independent of web availability", () => {
+    const tui = tuiModule?.adaptTuiStaleWorkspacePresentation as AdaptStaleWorkspacePresentation | undefined
+    expect(tui).toBeTypeOf("function")
+    const presentation = sharedExports().present(PHASE127_CLIENT_RESPONSES.populated, {
+      now: Date.parse("2026-07-17T12:05:00.000Z"),
+    })
+    const model = tui!(presentation, {
+      inventories: {
+        [PHASE127_IDS.workspaces.merged]: PHASE127_ACTION_INVENTORIES.candidate,
+      },
+    })
+    expect(model.rows.map(({ workspaceId }) => workspaceId)).toEqual(
+      phase127WorkspaceOrder(PHASE127_CLIENT_RESPONSES.populated),
+    )
+    expect(model).toMatchObject({
+      candidateCountLabel: "2 cleanup candidates",
+      incompleteCountLabel: "1 incomplete evaluation",
+    })
+    expect(candidate(model).actions).toEqual([
+      { actionId: "workspace.open", label: "Open workspace" },
+      { actionId: "workspace.archive", label: "Archive workspace" },
+      {
+        actionId: "workspace.remove",
+        label: "Remove workspace",
+        disabledReason: "Uncommitted work must be reviewed before removal.",
+      },
+    ])
+    const incomplete = model.rows.find(({ section }) => section === "incomplete")!
+    expect(incomplete.actions).toEqual([{ actionId: "workspace.open", label: "Open workspace" }])
+    expect(incomplete.lifecycleDeniedReason).toBe(PHASE127_CLIENT_COPY.incompleteActions)
+    expect(() => assertPhase127RendererTextSafe(JSON.stringify(model))).not.toThrow()
+  })
+
   test("loads shared, web, and TUI adapters through guarded lifecycle imports", () => {
     const shared = sharedExports()
     const renderers = rendererExports()

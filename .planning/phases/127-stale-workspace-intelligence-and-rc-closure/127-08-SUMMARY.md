@@ -33,6 +33,8 @@ key-files:
     - packages/tui/src/types.ts
     - packages/tui/src/WorkspaceRemovalDialog.tsx
     - tests/tui/dashboard/integ-workspace-archive-remove.test.tsx
+    - tests/service/phase127-cross-client-conformance.test.ts
+    - vitest.config.ts
 
 key-decisions:
   - "Keep the dedicated stale UIView as the sole owner of its navigation and action keys, with the App guard preceding every dashboard shortcut."
@@ -108,7 +110,7 @@ status: complete
 - **Started:** 2026-07-17T12:27:07Z
 - **Completed:** 2026-07-17T13:17:23Z
 - **Tasks:** 3
-- **Files modified:** 5
+- **Files modified:** 7
 
 ## Accomplishments
 
@@ -116,6 +118,7 @@ status: complete
 - Integrated lazy exact-revision evaluation, retained refresh/error data, monotonic generation acceptance, one authoritative conflict reload/retry, stable-ID selection, and exact origin restoration.
 - Routed Open through fresh canonical inventory and durable operation identity; routed candidate actions through canonical Archive/Remove descriptors while retaining existing confirmation, dirty blocker, terminal shutdown, exact-name Force, and recovery behavior.
 - Reconciled normal workspace state and stale evidence exactly once after lifecycle terminal results, preserving unrelated selection when its stable ID remains and never replaying the mutation.
+- Closed the Wave 5 aggregate import boundary with a narrowly scoped OpenTUI JSX transform and a real TUI renderer adapter that preserves shared ordering, labels, evidence groups, disabled reasons, and incomplete-row denial semantics.
 
 ## Task Commits
 
@@ -134,6 +137,10 @@ The RED contracts were committed earlier in Plan 127-02; these three commits are
 - `packages/tui/src/types.ts` - Stale selection, origin, return context, and discriminated `UIView`/target typing.
 - `packages/tui/src/WorkspaceRemovalDialog.tsx` - Noun-bearing safe/destructive lifecycle copy and deferred exact-name input focus after fresh Force authorization.
 - `tests/tui/dashboard/integ-workspace-archive-remove.test.tsx` - Real App integration coverage for one-shot stale Open and exactly-once stale Archive reconciliation, alongside existing lifecycle safeguards.
+- `tests/service/phase127-cross-client-conformance.test.ts` - TUI-specific guarded-import and renderer-adapter regression coverage independent of the separately owned web adapter.
+- `vitest.config.ts` - Exact-path OpenTUI TSX pre-transform for the guarded Node/Vitest import; no other TUI or web module is affected.
+
+All key-file paths use their actual source extensions: OpenTUI components are `.tsx`, while the discriminated state definitions remain in `packages/tui/src/types.ts`.
 
 ## Decisions Made
 
@@ -187,25 +194,36 @@ The RED contracts were committed earlier in Plan 127-02; these three commits are
 - **Verification:** The focused lifecycle file passes 9/9 and the full isolated TUI suite passes.
 - **Committed in:** `560ccf13`
 
+**6. [Rule 1 - Bug] Closed the guarded Node import boundary for the OpenTUI renderer**
+- **Found during:** Wave 5 aggregate cross-client verification
+- **Issue:** The TUI package intentionally preserves JSX for the Bun/OpenTUI compiler, so Vitest's Node import-analysis stage received untransformed custom JSX and failed near the first candidate-row text child. The module also lacked the real renderer adapter required by the committed cross-client contract.
+- **Fix:** Added an exact-file Vitest pre-transform using the installed esbuild runtime, exported `adaptTuiStaleWorkspacePresentation`, and added TUI-only guarded-import/conformance assertions. The adapter consumes shared presentation and canonical labels, preserves service row order, filters descriptors to the exact workspace subject, carries authoritative disabled messages, and never adds local stale policy.
+- **Files modified:** `packages/tui/src/StaleWorkspacesView.tsx`, `tests/service/phase127-cross-client-conformance.test.ts`, `vitest.config.ts`
+- **Verification:** Two focused TUI import/conformance assertions pass, all 44 stale authority checks pass, TUI typecheck/build pass, the complete isolated TUI suite passes, and the real built TUI retains every responsive tier and Escape-only fallback.
+- **Committed in:** This post-completion repair commit.
+
 ---
 
-**Total deviations:** 5 auto-fixed (4 Rule 1 bugs, 1 Rule 2 missing critical requirement)
-**Impact on plan:** All fixes were required for the locked responsive, lifecycle, focus, and non-replay contract. No new transport, persistence, provider policy, or release scope was added.
+**Total deviations:** 6 auto-fixed (5 Rule 1 bugs, 1 Rule 2 missing critical requirement)
+**Impact on plan:** All fixes were required for the locked responsive, lifecycle, focus, importability, conformance, and non-replay contract. No new transport, persistence, provider policy, web behavior, or release scope was added.
 
 ## Issues Encountered
 
 - Context7 was unavailable in the executor environment (`ctx7` was not installed). No package was installed or substituted; implementation followed repository-pinned OpenTUI 0.4.3 declarations and established local patterns.
 - The full TUI suite initially exposed stale lifecycle copy expectations and asynchronous Force-input focus timing; production copy, focus sequencing, and integration expectations were corrected together.
-- Runtime verification used an isolated real OpenTUI process with an empty temporary config. Safety policy blocked recursive deletion outside the repository, so `/tmp/git-stacks-12708-runtime-UeZgNg` and small `/tmp` pointer/log files may remain; the tmux session and service were stopped.
+- Runtime verification used isolated real OpenTUI processes with empty temporary configs. Safety policy blocked recursive deletion outside the repository, so `/tmp/git-stacks-12708-runtime-UeZgNg`, `/tmp/git-stacks-12708-fix-R6so6b`, and small `/tmp` pointer/log files may remain; both tmux sessions and services were stopped.
+- The unfiltered cross-client file on this branch now proceeds past the TUI JSX import but stops at the separately owned missing web adapter assertion. The new Plan 08-focused import/conformance filter passes 2/2; no web source or direct-repeat shortcut behavior was changed.
 - The GSD requirements handler did not recognize this repository's colon-inside-bold requirement form (`**STALE-01:**`), and the legacy progress updater found no body-level progress field. The exact Plan 08 checkboxes and structured 36/42 (86%) state were reconciled directly after both handlers reported their unsupported surfaces; the roadmap handler completed normally.
 
 ## Verification
 
+- `npx vitest run tests/service/phase127-cross-client-conformance.test.ts -t "TUI stale adapter"` - 2 focused guarded-import and TUI conformance tests passed; 13 unrelated/shared cases skipped.
+- `node --test tests/architecture/phase127-stale-authority.test.mjs` - all 44 authority, disclosure, package-direction, and no-local-policy checks passed.
 - `bun test --preload @opentui/solid/preload tests/tui/dashboard/StaleWorkspaces.test.tsx` - 18 tests passed.
 - `bun test --preload @opentui/solid/preload tests/tui/dashboard/integ-workspace-archive-remove.test.tsx` - 9 tests passed, including one-shot stale Open and exactly-once stale Archive reconciliation.
 - `npm run test:tui` - complete isolated OpenTUI suite passed; each file ran in its own Bun process.
 - `npm run typecheck --workspace @git-stacks/tui` - passed.
-- `npm run tui:build` - passed.
+- `npm run tui:build` - passed after the aggregate repair.
 - `npx vitest run tests/lib/service/workspace-action-authority.test.ts` - 8 tests passed.
 - `npm run test:architecture` - package architecture passed.
 - `git diff --check` - passed.
@@ -230,8 +248,8 @@ None - no external service configuration required.
 
 ## Self-Check: PASSED
 
-- Confirmed the summary and all five implementation/test files exist.
-- Confirmed task commits `eed10fd1`, `75624b34`, and `560ccf13` exist in repository history.
+- Confirmed the summary and all seven implementation/config/test files exist with their actual `.tsx`/`.ts` extensions.
+- Confirmed task commits `eed10fd1`, `75624b34`, and `560ccf13` exist in repository history; the aggregate repair diff passed focused verification before its atomic commit.
 
 ---
 *Phase: 127-stale-workspace-intelligence-and-rc-closure*

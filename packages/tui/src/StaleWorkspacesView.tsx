@@ -6,11 +6,16 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import {
   presentStaleWorkspaceResponse,
   staleWorkspaceIncompleteActionsExplanation,
+  workspaceActionLabel,
   type PresentedStaleWorkspaceRow,
   type StaleWorkspacePresentedEvidence,
   type StaleWorkspacePresentation,
 } from "@git-stacks/client"
-import type { WebStaleWorkspaceResponse } from "@git-stacks/protocol"
+import type {
+  WebStaleWorkspaceResponse,
+  WebWorkspaceAction,
+  WebWorkspaceActionId,
+} from "@git-stacks/protocol"
 import type { StaleWorkspaceSelection } from "./types"
 
 export type { StaleWorkspaceSelection } from "./types"
@@ -66,6 +71,71 @@ function selectableRows(presentation: StaleWorkspacePresentation | undefined): S
       row,
     })),
   ]
+}
+
+const TUI_STALE_LIFECYCLE_ACTION_ORDER = [
+  "workspace.archive",
+  "workspace.remove",
+  "workspace.force-remove",
+] as const satisfies readonly WebWorkspaceActionId[]
+
+export function adaptTuiStaleWorkspacePresentation(
+  presentation: StaleWorkspacePresentation,
+  options: {
+    inventories: Readonly<Record<string, readonly WebWorkspaceAction[]>>
+  },
+) {
+  const adaptRow = (
+    row: PresentedStaleWorkspaceRow,
+    section: StaleWorkspaceSelection["section"],
+  ) => {
+    const actions: Array<{
+      actionId: WebWorkspaceActionId
+      label: string
+      disabledReason?: string
+    }> = [{
+      actionId: "workspace.open",
+      label: workspaceActionLabel("workspace.open"),
+    }]
+
+    if (section === "candidate") {
+      const descriptors = options.inventories[row.workspaceId] ?? []
+      for (const actionId of TUI_STALE_LIFECYCLE_ACTION_ORDER) {
+        const descriptor = descriptors.find((candidate) =>
+          candidate.action_id === actionId
+          && candidate.subject.kind === "workspace"
+          && candidate.subject.workspace_id === row.workspaceId)
+        if (!descriptor) continue
+        actions.push({
+          actionId,
+          label: workspaceActionLabel(actionId),
+          ...(!descriptor.availability.available
+            ? { disabledReason: descriptor.availability.message }
+            : {}),
+        })
+      }
+    }
+
+    return Object.freeze({
+      ...row,
+      section,
+      actions: Object.freeze(actions),
+      ...(section === "incomplete"
+        ? { lifecycleDeniedReason: staleWorkspaceIncompleteActionsExplanation() }
+        : {}),
+    })
+  }
+
+  return Object.freeze({
+    revision: presentation.revision,
+    checkedAt: presentation.checkedAt,
+    candidateCountLabel: presentation.candidateCountLabel,
+    incompleteCountLabel: presentation.incompleteCountLabel,
+    rows: Object.freeze([
+      ...presentation.candidates.map((row) => adaptRow(row, "candidate")),
+      ...presentation.incomplete.map((row) => adaptRow(row, "incomplete")),
+    ]),
+  })
 }
 
 function compact(value: string, width: number): string {
