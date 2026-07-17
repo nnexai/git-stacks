@@ -55,12 +55,14 @@ import type {
   WorkspaceLifecycleTarget,
   WorkspaceActionTarget,
   StaleWorkspaceOrigin,
+  StaleWorkspaceReturn,
   StaleWorkspaceSelection,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
 import {
   createForgeReviewCoordinator,
   createOperationTracker,
+  createStaleWorkspaceActionRegistry,
   createWorkspaceActionRegistry,
   isStaleWorkspaceRevisionConflict,
   issueTrackerLabels,
@@ -314,6 +316,9 @@ export default function App() {
   })
   let staleWorkspaceRequestPending = false
   let staleWorkspaceRequestAbort: AbortController | undefined
+  let staleWorkspaceOpenPending = false
+  const staleWorkspaceUnknownOpens = new Set<string>()
+  let staleWorkspaceInventoryPending = false
   const staleWorkspaceCoordinator = createStaleWorkspaceRequestCoordinator({
     fetch: async ({ expected_revision, force_refresh, signal }) => {
       try {
@@ -328,11 +333,11 @@ export default function App() {
             ? {
                 phase: "revision-recovery",
                 response: retained,
-                message: "Workspace data changed while stale evidence was loading. Reloading the authoritative revision and retrying once…",
+                message: "Workspace state changed. Reloading current workspaces before checking again…",
               }
             : {
                 phase: "revision-recovery",
-                message: "Workspace data changed while stale evidence was loading. Reloading the authoritative revision and retrying once…",
+                message: "Workspace state changed. Reloading current workspaces before checking again…",
               })
         }
         throw error
@@ -590,6 +595,47 @@ export default function App() {
     }
   }
 
+  function captureStaleWorkspaceReturn(workspaceId: string): StaleWorkspaceReturn | undefined {
+    const activeView = view()
+    if (activeView.view !== "stale-workspaces") return undefined
+    return {
+      origin: activeView.origin,
+      selection: activeView.selection,
+      detailOffset: activeView.detailOffset,
+      workspaceId,
+    }
+  }
+
+  function returnToStaleWorkspace(context: StaleWorkspaceReturn, message?: string): void {
+    const currentState = staleWorkspaceState()
+    const response = currentState.response
+    const reusableResponse = response?.revision === core.state()?.revision ? response : undefined
+    const selection = reusableResponse
+      ? staleWorkspaceSelection(reusableResponse, context.workspaceId, context.selection)
+      : context.selection
+    setView({
+      view: "stale-workspaces",
+      origin: context.origin,
+      selection,
+      detailOffset: staleWorkspaceId(reusableResponse, selection) === context.workspaceId
+        ? context.detailOffset
+        : 0,
+    })
+    if (reusableResponse) {
+      if (message) setStaleWorkspaceState({ phase: "loaded", response: reusableResponse, message })
+      else if (currentState.phase !== "retained-error") {
+        setStaleWorkspaceState({ phase: "loaded", response: reusableResponse })
+      }
+      return
+    }
+    if (currentState.phase === "first-load-error") return
+    setStaleWorkspaceState({
+      phase: "initial-loading",
+      message: "Loading stale workspace evidence…",
+    })
+    void loadStaleWorkspaceEvidence(false)
+  }
+
   function restoreStaleWorkspaceOrigin(origin: StaleWorkspaceOrigin): void {
     staleWorkspaceRequestAbort?.abort()
     staleWorkspaceRequestAbort = undefined
@@ -621,7 +667,7 @@ export default function App() {
     if (!expectedRevision) {
       setStaleWorkspaceState({
         phase: "first-load-error",
-        message: "Stale workspace evidence could not be loaded. Retry the refresh.",
+        message: "Stale workspace evidence could not be loaded. Existing workspace state was not changed. Retry refresh.",
       })
       return
     }
@@ -676,7 +722,7 @@ export default function App() {
       } else {
         setStaleWorkspaceState({
           phase: "first-load-error",
-          message: "Stale workspace evidence could not be loaded. Retry the refresh.",
+          message: "Stale workspace evidence could not be loaded. Existing workspace state was not changed. Retry refresh.",
         })
       }
     } finally {
@@ -685,6 +731,64 @@ export default function App() {
         staleWorkspaceRequestPending = false
       }
     }
+  }
+
+  async function refreshStaleWorkspaceAfterLifecycle(
+    context: StaleWorkspaceReturn,
+  ): Promise<StaleWorkspaceReturn> {
+    const expectedRevision = core.state()?.revision
+    const previousResponse = staleWorkspaceState().response
+    if (!expectedRevision) {
+      setStaleWorkspaceState({
+        phase: "first-load-error",
+        message: "Stale workspace evidence could not be loaded. Existing workspace state was not changed. Retry refresh.",
+      })
+      return context
+    }
+
+    staleWorkspaceRequestAbort?.abort()
+    staleWorkspaceCoordinator.invalidate()
+    const controller = new AbortController()
+    staleWorkspaceRequestPending = true
+    staleWorkspaceRequestAbort = controller
+    const result = await staleWorkspaceCoordinator.load({
+      expectedRevision,
+      forceRefresh: true,
+      signal: controller.signal,
+    })
+    if (staleWorkspaceRequestAbort !== controller) return context
+    staleWorkspaceRequestAbort = undefined
+    staleWorkspaceRequestPending = false
+
+    if (result.status === "accepted") {
+      const selection = staleWorkspaceSelection(result.response, context.workspaceId, context.selection)
+      setStaleWorkspaceState({ phase: "loaded", response: result.response })
+      return {
+        ...context,
+        selection,
+        detailOffset: staleWorkspaceId(result.response, selection) === context.workspaceId
+          ? context.detailOffset
+          : 0,
+      }
+    }
+
+    const safeRetainedResponse = previousResponse?.revision === core.state()?.revision
+      ? previousResponse
+      : undefined
+    if (safeRetainedResponse) {
+      const checkedAt = presentStaleWorkspaceResponse(safeRetainedResponse).checkedAt.relative
+      setStaleWorkspaceState({
+        phase: "retained-error",
+        response: safeRetainedResponse,
+        message: `Stale evidence could not be refreshed. Showing results checked ${checkedAt}.`,
+      })
+    } else {
+      setStaleWorkspaceState({
+        phase: "first-load-error",
+        message: "Stale workspace evidence could not be loaded. Existing workspace state was not changed. Retry refresh.",
+      })
+    }
+    return context
   }
 
   function enterStaleWorkspaces(): void {
@@ -711,6 +815,10 @@ export default function App() {
     const activeView = view()
     if (activeView.view !== "stale-workspaces") return
     setView({ ...activeView, selection, detailOffset: 0 })
+    const currentState = staleWorkspaceState()
+    if (currentState.phase === "loaded" && currentState.response) {
+      setStaleWorkspaceState({ phase: "loaded", response: currentState.response })
+    }
   }
 
   function updateStaleWorkspaceDetail(direction: "page-up" | "page-down"): void {
@@ -723,7 +831,14 @@ export default function App() {
   function announceStaleWorkspace(message: string): void {
     const current = staleWorkspaceState()
     if (!current.response) return
-    setStaleWorkspaceState({ phase: "loaded", response: current.response, message })
+    if (current.phase === "loaded") {
+      setStaleWorkspaceState({ phase: "loaded", response: current.response, message })
+      return
+    }
+    setStaleWorkspaceState({
+      ...current,
+      message: current.message?.includes(message) ? current.message : `${current.message ?? ""} ${message}`.trim(),
+    })
   }
 
   function resetCommandOutput(status: CommandOutputStatus = "running") {
@@ -771,18 +886,34 @@ export default function App() {
     }
   }
 
-  function lifecycleTarget(entry: WorkspaceEntry | undefined): WorkspaceLifecycleTarget | undefined {
+  function lifecycleTarget(
+    entry: WorkspaceEntry | undefined,
+    staleReturn?: StaleWorkspaceReturn,
+  ): WorkspaceLifecycleTarget | undefined {
     const revision = core.state()?.revision
     if (!entry || !revision) return undefined
-    return { id: entry.workspaceId, name: entry.workspace.name, expectedRevision: revision }
+    return {
+      id: entry.workspaceId,
+      name: entry.workspace.name,
+      expectedRevision: revision,
+      ...(staleReturn ? { staleReturn } : {}),
+    }
   }
 
-  function currentLifecycleTarget(id: string): WorkspaceLifecycleTarget | undefined {
+  function currentLifecycleTarget(
+    id: string,
+    staleReturn?: StaleWorkspaceReturn,
+  ): WorkspaceLifecycleTarget | undefined {
     const state = core.state()
     if (!state) return undefined
     const entry = state.workspaces.find((candidate) => candidate.projection.id === id)
     if (!entry) return undefined
-    return { id, name: entry.definition.name, expectedRevision: state.revision }
+    return {
+      id,
+      name: entry.definition.name,
+      expectedRevision: state.revision,
+      ...(staleReturn ? { staleReturn } : {}),
+    }
   }
 
   function lifecycleFailure(error: unknown): { code?: string; message: string; details?: WorkspaceLifecycleFailureDetails } {
@@ -813,11 +944,47 @@ export default function App() {
     }
   }
 
-  async function reconcileLifecycleState(): Promise<void> {
+  async function reconcileLifecycleState(options: { preserveCursor?: boolean } = {}): Promise<void> {
     await core.refresh()
     await refreshSignals()
     setSelected(new Set<string>())
-    tabCursor.workspaces[1](0)
+    if (!options.preserveCursor) tabCursor.workspaces[1](0)
+  }
+
+  async function reconcileLifecycleTarget(
+    target: WorkspaceLifecycleTarget,
+  ): Promise<WorkspaceLifecycleTarget> {
+    await reconcileLifecycleState({ preserveCursor: Boolean(target.staleReturn) })
+    const staleReturn = target.staleReturn
+      ? await refreshStaleWorkspaceAfterLifecycle(target.staleReturn)
+      : undefined
+    return currentLifecycleTarget(target.id, staleReturn) ?? {
+      ...target,
+      expectedRevision: core.state()?.revision ?? target.expectedRevision,
+      ...(staleReturn ? { staleReturn } : {}),
+    }
+  }
+
+  function settleUnauthorizedLifecycle(target: WorkspaceLifecycleTarget, message: string): void {
+    if (target.staleReturn) {
+      returnToStaleWorkspace(target.staleReturn, message)
+      return
+    }
+    setRefreshFlash(message)
+    setView({ view: "list" })
+  }
+
+  async function reviewForceRemove(
+    target: WorkspaceLifecycleTarget,
+    details: DirtyRemovalContext,
+  ): Promise<void> {
+    const descriptor = await authorizeCurrentWorkspaceAction(target, "workspace.force-remove")
+    const freshTarget = currentLifecycleTarget(target.id, target.staleReturn)
+    if (!descriptor || descriptor.confirmation !== "exact-name" || !freshTarget) {
+      settleUnauthorizedLifecycle(target, "Force Remove is no longer authorized. Refresh and review the workspace again.")
+      return
+    }
+    setView({ view: "force-remove-name", target: freshTarget, details })
   }
 
   async function executeWorkspaceLifecycle(
@@ -827,21 +994,22 @@ export default function App() {
   ): Promise<void> {
     const actionId = `workspace.${action}` as Extract<WebWorkspaceActionId, `workspace.${string}`>
     const descriptor = await authorizeCurrentWorkspaceAction(target, actionId)
-    if (!descriptor || descriptor.confirmation !== (action === "force-remove" ? "exact-name" : action === "remove" ? "confirm" : "none")) {
-      setRefreshFlash("Workspace action is no longer authorized. Refresh and try again.")
-      setView({ view: "list" })
+    const expectedConfirmation = action === "force-remove" ? "exact-name" : action === "remove" ? "confirm" : "none"
+    const authorizedRevision = core.state()?.revision
+    if (!descriptor || descriptor.confirmation !== expectedConfirmation || !authorizedRevision) {
+      settleUnauthorizedLifecycle(target, "Workspace action is no longer authorized. Refresh and try again.")
       return
     }
     if (action === "force-remove" && confirmationName !== target.name) {
-      setRefreshFlash("Exact, case-sensitive workspace name required.")
-      setView({ view: "list" })
+      settleUnauthorizedLifecycle(target, "Exact, case-sensitive workspace name required.")
       return
     }
+    const executionTarget = { ...target, expectedRevision: authorizedRevision }
     const request: WorkspaceLifecycleMutation = action === "force-remove"
       ? {
           kind: "workspace.force-remove",
           workspace_id: target.id,
-          expected_revision: target.expectedRevision,
+          expected_revision: authorizedRevision,
           confirmation_name: confirmationName ?? "",
         }
       : {
@@ -851,16 +1019,16 @@ export default function App() {
             ? "workspace.unarchive"
             : "workspace.remove",
           workspace_id: target.id,
-          expected_revision: target.expectedRevision,
+          expected_revision: authorizedRevision,
         }
-    setView({ view: "lifecycle-progress", target, action, message: `${action}: ${target.name}` })
+    setView({ view: "lifecycle-progress", target: executionTarget, action, message: `${action}: ${target.name}` })
     try {
       await officialService.runWorkspaceLifecycleMutation(request, {
         onOperation: (operation) => {
           if (operation.state !== "running") return
           setView({
             view: "lifecycle-progress",
-            target,
+            target: executionTarget,
             action,
             message: operation.progress.message ?? `${action}: ${target.name}`,
           })
@@ -868,32 +1036,54 @@ export default function App() {
       })
     } catch (error) {
       const failure = lifecycleFailure(error)
-      const shouldReload = failure.code === "conflict" || failure.details?.terminals_stopped === true
-      if (shouldReload) await reconcileLifecycleState()
-      const freshTarget = currentLifecycleTarget(target.id)
+      let reconciledTarget: WorkspaceLifecycleTarget
+      try {
+        reconciledTarget = await reconcileLifecycleTarget(executionTarget)
+      } catch {
+        setView({
+          view: "lifecycle-failure",
+          target: executionTarget,
+          action,
+          message: "Authoritative workspace reconciliation failed. Refresh workspace state without repeating the action.",
+        })
+        return
+      }
       const dirty = dirtyRemovalContext(failure.details)
-      if ((action === "remove" || action === "force-remove") && dirty && freshTarget) {
-        setView({ view: "dirty-remove-blocked", target: freshTarget, details: dirty })
+      if ((action === "remove" || action === "force-remove") && dirty) {
+        setView({ view: "dirty-remove-blocked", target: reconciledTarget, details: dirty })
         return
       }
       if (failure.code === "conflict") {
-        setRefreshFlash("Workspace changed; confirm the action again.")
-        setView({ view: "list" })
+        settleUnauthorizedLifecycle(reconciledTarget, "Workspace changed; confirm the action again.")
         return
       }
       setView({
         view: "lifecycle-failure",
-        target: freshTarget ?? target,
+        target: reconciledTarget,
         action,
-        message: failure.message,
+        message: target.staleReturn
+          ? "Workspace action did not complete. Refresh workspace state and try again."
+          : failure.message,
       })
       return
     }
 
-    await reconcileLifecycleState()
-    const currentRevision = core.state()?.revision ?? target.expectedRevision
+    let reconciledTarget: WorkspaceLifecycleTarget
+    try {
+      reconciledTarget = await reconcileLifecycleTarget(executionTarget)
+    } catch {
+      setView({
+        view: "lifecycle-failure",
+        target: executionTarget,
+        action,
+        message: "Authoritative workspace reconciliation failed. Refresh workspace state without repeating the action.",
+      })
+      return
+    }
     if (action === "archive") {
-      setView({ view: "archive-undo", target: { ...target, expectedRevision: currentRevision } })
+      setView({ view: "archive-undo", target: reconciledTarget })
+    } else if (reconciledTarget.staleReturn) {
+      returnToStaleWorkspace(reconciledTarget.staleReturn)
     } else {
       setView({ view: "list" })
     }
@@ -962,6 +1152,25 @@ export default function App() {
     })
   }
 
+  function installWorkspaceActionInventory(
+    actions: readonly WebWorkspaceAction[],
+    target: WorkspaceActionTarget,
+  ): void {
+    const callbacks = Object.fromEntries(actions.map((descriptor) => [
+      descriptor.action_id,
+      async () => {
+        await runCanonicalWorkspaceAction(descriptor, target)
+        return { kind: "terminal" as const }
+      },
+    ])) as unknown as Parameters<typeof createWorkspaceActionRegistry>[1]
+    const registry = createWorkspaceActionRegistry(actions, callbacks, {
+      confirm: (descriptor) => confirmCanonicalWorkspaceAction(descriptor, target),
+    })
+    setWorkspaceActions(actions)
+    setWorkspaceActionRegistry(registry)
+    setWorkspaceActionInventoryState("ready")
+  }
+
   async function openWorkspaceActionMenu(index: number): Promise<void> {
     const entry = filteredEntries()[index]
     const revision = core.state()?.revision
@@ -994,19 +1203,7 @@ export default function App() {
       if (!workspaceActionInventoryGate.accepts(token, target.workspaceId, actions) || !inventoryMatchesTarget(actions, target)) {
         throw new Error("Workspace action inventory subject mismatch")
       }
-      const callbacks = Object.fromEntries(actions.map((descriptor) => [
-        descriptor.action_id,
-        async () => {
-          await runCanonicalWorkspaceAction(descriptor, target)
-          return { kind: "terminal" as const }
-        },
-      ])) as unknown as Parameters<typeof createWorkspaceActionRegistry>[1]
-      const registry = createWorkspaceActionRegistry(actions, callbacks, {
-        confirm: (descriptor) => confirmCanonicalWorkspaceAction(descriptor, target),
-      })
-      setWorkspaceActions(actions)
-      setWorkspaceActionRegistry(registry)
-      setWorkspaceActionInventoryState("ready")
+      installWorkspaceActionInventory(actions, target)
     } catch {
       const activeTarget = workspaceActionTarget()
       if (!workspaceActionInventoryGate.isCurrent(token, target.workspaceId) || view().view !== "action-menu" || activeTarget?.workspaceId !== target.workspaceId) return
@@ -1014,6 +1211,252 @@ export default function App() {
       setWorkspaceActionRegistry(undefined)
       setWorkspaceActionInventoryError("Workspace actions could not be loaded. Retry from the workspace list.")
       setWorkspaceActionInventoryState("error")
+    }
+  }
+
+  async function openStaleWorkspace(workspaceId: string): Promise<void> {
+    if (staleWorkspaceOpenPending) return
+    const activeView = view()
+    const response = staleWorkspaceState().response
+    const revision = core.state()?.revision
+    const staleRow = response?.candidates.find((row) => row.workspace_id === workspaceId)
+      ?? response?.incomplete.find((row) => row.workspace_id === workspaceId)
+    const entry = entries().find((candidate) => candidate.workspaceId === workspaceId)
+    const workspaceName = staleRow?.workspace_name ?? entry?.workspace.name ?? "workspace"
+    if (activeView.view !== "stale-workspaces" || !response || response.revision !== revision || !entry || !revision) {
+      if (activeView.view === "stale-workspaces" && response) {
+        setStaleWorkspaceState({
+          phase: "open-error",
+          response,
+          workspaceId,
+          message: `Could not open ${workspaceName}. The stale view was not changed. Refresh workspace state and try again.`,
+        })
+      }
+      return
+    }
+
+    staleWorkspaceOpenPending = true
+    setStaleWorkspaceState({
+      phase: "open-pending",
+      response,
+      workspaceId,
+      message: `Opening ${workspaceName}…`,
+    })
+    let openTracker: OperationTracker<WebOperationMutation> | undefined
+    let openOutcome: "succeeded" | "failed" | "cancelled" | undefined
+    try {
+      const inventory = await officialService.fetchWorkspaceActionInventory({
+        workspace_id: workspaceId,
+        expected_revision: revision,
+      })
+      if (view().view !== "stale-workspaces" || staleWorkspaceState().response !== response) {
+        throw new Error("Stale Open intent was superseded")
+      }
+      const target: WorkspaceActionTarget = {
+        workspaceId,
+        workspaceName: entry.workspace.name,
+        originIndex: Math.max(0, filteredEntries().findIndex((candidate) => candidate.workspaceId === workspaceId)),
+      }
+      if (!inventoryMatchesTarget(inventory, target)) throw new Error("Workspace action inventory subject mismatch")
+      const descriptor = inventory.find((candidate) => candidate.action_id === "workspace.open")
+      if (!descriptor || descriptor.confirmation !== "none") throw new Error("Canonical Open is unavailable")
+      const operationContext = {
+        actionId: "workspace.open" as const,
+        workspaceId,
+        workspaceName: entry.workspace.name,
+      }
+      openTracker = createOperationTracker<WebOperationMutation>({
+        submit: async (intent) => operationSummary(
+          await officialService.submitWebOperation(intent),
+          operationContext,
+          false,
+        ),
+        get: async (operationId) => operationSummary(
+          await officialService.fetchWebOperation(operationId),
+          operationContext,
+          false,
+        ),
+        cancel: (operationId) => officialService.cancelWebOperation(operationId),
+        refresh: async () => undefined,
+        reconcile: ({ outcome }) => { openOutcome = outcome },
+      })
+      const mutation: WebOperationMutation = {
+        kind: "workspace.open",
+        request: { workspace_id: workspaceId, expected_revision: revision },
+      }
+      if (staleWorkspaceUnknownOpens.has(workspaceId)) {
+        if (!descriptor.pending_operation_id) throw new Error("Canonical Open outcome remains unknown")
+        while (!openOutcome) {
+          try {
+            await openTracker.hydrate(descriptor.pending_operation_id)
+            if (!openOutcome) await new Promise<void>((resolve) => setTimeout(resolve, 100))
+          } catch {
+            setStaleWorkspaceState({
+              phase: "open-pending",
+              response,
+              workspaceId,
+              message: `Opening ${workspaceName}… Reconnecting to the accepted operation.`,
+            })
+            await new Promise<void>((resolve) => setTimeout(resolve, 250))
+          }
+        }
+      } else {
+        const callbacks = {
+          "workspace.open": async (authorized: WebWorkspaceAction) => {
+            if (authorized.subject.workspace_id !== workspaceId) throw new Error("Canonical Open subject mismatch")
+            const submitted = await openTracker!.submit(mutation)
+            if (submitted.status !== "observing") throw new Error("Canonical Open submission is locked")
+            return { kind: "operation" as const, operationId: submitted.operationId }
+          },
+        } as unknown as Parameters<typeof createWorkspaceActionRegistry>[1]
+        const registry = createStaleWorkspaceActionRegistry(inventory, callbacks)
+        const result = await registry.invoke("workspace.open", "keyboard")
+        if (result.status !== "submitted") throw new Error("Canonical Open was not submitted")
+      }
+
+      while (!openOutcome) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 100))
+        try {
+          await openTracker.reconnect()
+        } catch {
+          setStaleWorkspaceState({
+            phase: "open-pending",
+            response,
+            workspaceId,
+            message: `Opening ${workspaceName}… Reconnecting to the accepted operation.`,
+          })
+        }
+      }
+      if (openOutcome !== "succeeded") {
+        staleWorkspaceUnknownOpens.delete(workspaceId)
+        throw new Error("Canonical Open did not succeed")
+      }
+      staleWorkspaceUnknownOpens.add(workspaceId)
+
+      await core.refresh()
+      await refreshSignals()
+      const authoritativeEntry = entries().find((candidate) => candidate.workspaceId === workspaceId)
+      if (!authoritativeEntry) throw new Error("Opened workspace was not present after reconciliation")
+      staleWorkspaceUnknownOpens.delete(workspaceId)
+      staleWorkspaceRequestAbort?.abort()
+      staleWorkspaceRequestAbort = undefined
+      staleWorkspaceRequestPending = false
+      staleWorkspaceCoordinator.invalidate()
+      setTab("workspaces")
+      tabFiltering.workspaces[1](false)
+      tabFilter.workspaces[1]("")
+      setSelected(new Set<string>())
+      const selectedIndex = workspaceGroupingMode() === "none"
+        ? filteredEntries().findIndex((candidate) => candidate.workspaceId === workspaceId)
+        : groupedNavigableEntries().findIndex((item) => item.entry.workspaceId === workspaceId)
+      tabCursor.workspaces[1](Math.max(0, selectedIndex))
+      setRefreshFlash(`Opened ${authoritativeEntry.workspace.name}`)
+      setTimeout(() => setRefreshFlash(""), 1500)
+      setView({ view: "list" })
+    } catch {
+      if (openTracker?.state().phase === "submit-unknown") staleWorkspaceUnknownOpens.add(workspaceId)
+      if (view().view === "stale-workspaces") {
+        setStaleWorkspaceState({
+          phase: "open-error",
+          response,
+          workspaceId,
+          message: `Could not open ${workspaceName}. The stale view was not changed. Refresh workspace state and try again.`,
+        })
+      }
+    } finally {
+      staleWorkspaceOpenPending = false
+    }
+  }
+
+  async function openStaleWorkspaceActions(
+    workspaceId: string,
+    returnContext?: StaleWorkspaceReturn,
+  ): Promise<void> {
+    if (staleWorkspaceInventoryPending) return
+    if (returnContext) returnToStaleWorkspace(returnContext)
+    const activeView = view()
+    const response = staleWorkspaceState().response
+    const revision = core.state()?.revision
+    const candidate = response?.candidates.find((row) => row.workspace_id === workspaceId)
+    const context = returnContext ?? captureStaleWorkspaceReturn(workspaceId)
+    if (
+      activeView.view !== "stale-workspaces"
+      || !response
+      || response.revision !== revision
+      || !candidate
+      || !context
+      || !revision
+    ) {
+      if (activeView.view === "stale-workspaces" && response) {
+        setStaleWorkspaceState({
+          phase: "inventory-error",
+          response,
+          workspaceId,
+          message: "Workspace actions could not be loaded. Refresh workspace state and try again.",
+        })
+      }
+      return
+    }
+
+    staleWorkspaceInventoryPending = true
+    const token = workspaceActionInventoryGate.begin(workspaceId)
+    setWorkspaceActions(undefined)
+    setWorkspaceActionRegistry(undefined)
+    setWorkspaceActionTarget(undefined)
+    setWorkspaceActionInventoryError("")
+    setWorkspaceActionInventoryState("loading")
+    setStaleWorkspaceState({
+      phase: "inventory-pending",
+      response,
+      workspaceId,
+      message: "Loading workspace actions…",
+    })
+    try {
+      const inventory = await officialService.fetchWorkspaceActionInventory({
+        workspace_id: workspaceId,
+        expected_revision: revision,
+      })
+      const currentView = view()
+      if (
+        !workspaceActionInventoryGate.isCurrent(token, workspaceId)
+        || currentView.view !== "stale-workspaces"
+        || staleWorkspaceState().response !== response
+      ) return
+      const target: WorkspaceActionTarget = {
+        workspaceId,
+        workspaceName: candidate.workspace_name,
+        originIndex: Math.max(0, filteredEntries().findIndex((entry) => entry.workspaceId === workspaceId)),
+        staleReturn: context,
+      }
+      if (!workspaceActionInventoryGate.accepts(token, workspaceId, inventory) || !inventoryMatchesTarget(inventory, target)) {
+        throw new Error("Workspace action inventory subject mismatch")
+      }
+      const lifecycleActions = inventory.filter((descriptor) =>
+        descriptor.action_id === "workspace.archive" || descriptor.action_id === "workspace.remove")
+      if (
+        !lifecycleActions.some((descriptor) => descriptor.action_id === "workspace.archive")
+        || !lifecycleActions.some((descriptor) => descriptor.action_id === "workspace.remove")
+      ) throw new Error("Canonical lifecycle actions are unavailable")
+      setWorkspaceActionTarget(target)
+      installWorkspaceActionInventory(lifecycleActions, target)
+      setStaleWorkspaceState({ phase: "loaded", response })
+      setView({
+        view: "action-menu",
+        index: target.originIndex,
+        workspaceId: target.workspaceId,
+        workspaceName: target.workspaceName,
+      })
+    } catch {
+      if (workspaceActionInventoryGate.isCurrent(token, workspaceId) && view().view === "stale-workspaces") {
+        setStaleWorkspaceState({
+          phase: "inventory-error",
+          response,
+          workspaceId,
+          message: "Workspace actions could not be loaded. Refresh workspace state and try again.",
+        })
+      }
+    } finally {
+      staleWorkspaceInventoryPending = false
     }
   }
 
@@ -1271,7 +1714,7 @@ export default function App() {
       return
     }
     if (actionId === "workspace.archive" || actionId === "workspace.remove") {
-      const lifecycle = lifecycleTarget(entry)
+      const lifecycle = lifecycleTarget(entry, target.staleReturn)
       if (lifecycle) await executeWorkspaceLifecycle(actionId === "workspace.archive" ? "archive" : "remove", lifecycle)
     }
   }
@@ -1890,6 +2333,7 @@ export default function App() {
 
     // The dedicated stale view owns every key before dashboard or overlay shortcuts.
     if (view().view === "stale-workspaces") {
+      if (staleWorkspaceState().phase === "open-pending") return
       if (key.name === "escape") {
         restoreStaleWorkspaceOrigin((v as Extract<UIView, { view: "stale-workspaces" }>).origin)
         return
@@ -1963,7 +2407,8 @@ export default function App() {
 
     if (v.view === "lifecycle-progress") return
     if (v.view === "lifecycle-failure") {
-      setView({ view: "list" })
+      if (v.target.staleReturn) returnToStaleWorkspace(v.target.staleReturn)
+      else setView({ view: "list" })
       return
     }
     if (
@@ -2221,8 +2666,8 @@ export default function App() {
               onSelectionChange={updateStaleWorkspaceSelection}
               onDetailPage={updateStaleWorkspaceDetail}
               onRefresh={() => loadStaleWorkspaceEvidence(true)}
-              onOpen={async () => undefined}
-              onActions={async () => undefined}
+              onOpen={openStaleWorkspace}
+              onActions={openStaleWorkspaceActions}
               onAnnounce={announceStaleWorkspace}
               onBack={() => restoreStaleWorkspaceOrigin(staleView.origin)}
             />
@@ -2241,14 +2686,18 @@ export default function App() {
               descriptors={workspaceActions()}
               issueDisabledReason={issueDisabledReason()}
               commandsDisabledReason={commandsDisabledReason()}
-              onAction={(action) => {
+              onAction={workspaceActionTarget()?.staleReturn ? undefined : (action) => {
                 const target = workspaceActionTarget()
                 const index = target ? filteredEntries().findIndex((entry) => entry.workspaceId === target.workspaceId) : -1
                 if (index >= 0) void runAction(action, index)
               }}
               onInvoke={invokeCanonicalWorkspaceAction}
-              onCancel={() => setView({ view: "list" })}
-              onRun={() => {
+              onCancel={() => {
+                const staleReturn = workspaceActionTarget()?.staleReturn
+                if (staleReturn) returnToStaleWorkspace(staleReturn)
+                else setView({ view: "list" })
+              }}
+              onRun={workspaceActionTarget()?.staleReturn ? undefined : () => {
                 const target = workspaceActionTarget()
                 if (target) void handleRun(target.workspaceName)
               }}
@@ -2335,7 +2784,10 @@ export default function App() {
           return (
             <ArchivedWorkspaceUndoDialog
               target={v.target}
-              onClose={() => setView({ view: "list" })}
+              onClose={() => {
+                if (v.target.staleReturn) returnToStaleWorkspace(v.target.staleReturn)
+                else setView({ view: "list" })
+              }}
               onUndo={() => void executeWorkspaceLifecycle("unarchive", v.target)}
             />
           )
@@ -2348,7 +2800,10 @@ export default function App() {
           return (
             <WorkspaceRemovalDialog
               workspaceName={v.target.name}
-              onCancel={() => setView({ view: "list" })}
+              onCancel={() => {
+                if (v.target.staleReturn) returnToStaleWorkspace(v.target.staleReturn)
+                else setView({ view: "list" })
+              }}
               onConfirm={() => void executeWorkspaceLifecycle("remove", v.target)}
             />
           )
@@ -2362,8 +2817,11 @@ export default function App() {
             <WorkspaceDirtyBlockedDialog
               workspaceName={v.target.name}
               details={v.details}
-              onCancel={() => setView({ view: "list" })}
-              onForce={() => setView({ view: "force-remove-name", target: v.target, details: v.details })}
+              onCancel={() => {
+                if (v.target.staleReturn) void openStaleWorkspaceActions(v.target.id, v.target.staleReturn)
+                else setView({ view: "list" })
+              }}
+              onForce={() => { void reviewForceRemove(v.target, v.details) }}
             />
           )
         })()}

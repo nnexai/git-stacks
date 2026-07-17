@@ -29,7 +29,7 @@ export function WorkspaceRemovalDialog(props: ConfirmProps) {
         <text fg="white">    - managed worktrees</text>
         <text fg="white">    - workspace directory</text>
         <text fg="white">    - YAML definition</text>
-        <text fg="gray">{"\n"}  [y] Remove  [n/Esc] Cancel</text>
+        <text fg="gray">{"\n"}  [y] Remove workspace  [n/Esc] Keep workspace</text>
       </box>
     </CenteredDialog>
   )
@@ -59,7 +59,7 @@ export function WorkspaceDirtyBlockedDialog(props: DirtyProps) {
         <For each={props.details.blockingRepositories}>
           {(repository) => <text fg="yellow">    - {repository}</text>}
         </For>
-        <text fg="red">{"\n"}  [f] Force Remove  [Esc] Cancel</text>
+        <text fg="red">{"\n"}  [f] Review Force Remove  [Esc] Back to workspace actions</text>
       </box>
     </CenteredDialog>
   )
@@ -79,8 +79,9 @@ export function WorkspaceForceRemoveDialog(props: ForceProps) {
   const exact = () => confirmation() === props.workspaceName
 
   onMount(() => {
-    // Keep the key that opened this dialog out of the confirmation input.
-    setTimeout(() => setInputFocused(true), 0)
+    // Keep the key that opened this dialog out of the confirmation input while
+    // allowing an asynchronously authorized dialog to focus after its mount.
+    queueMicrotask(() => setInputFocused(true))
   })
 
   useKeyboard((key) => {
@@ -94,7 +95,7 @@ export function WorkspaceForceRemoveDialog(props: ForceProps) {
         <For each={props.details.blockingRepositories}>
           {(repository) => <text fg="yellow">    - {repository}</text>}
         </For>
-        <text fg="white">  Type {props.workspaceName} to enable Force Remove.</text>
+        <text fg="white">  Type {props.workspaceName} to confirm irreversible removal.</text>
         <box flexDirection="row">
           <text fg="cyan">  Name: </text>
           <input
@@ -111,7 +112,7 @@ export function WorkspaceForceRemoveDialog(props: ForceProps) {
         <text fg={exact() ? "red" : "gray"}>
           {exact() ? "  [Enter] Force Remove" : "  Exact, case-sensitive name required"}
         </text>
-        <text fg="gray">  [Esc] Cancel</text>
+        <text fg="gray">  [Esc] Back to removal review</text>
       </box>
     </CenteredDialog>
   )

@@ -345,7 +345,13 @@ export function StaleWorkspacesView(props: Props) {
 
   const invokeOpen = () => {
     const item = selectedItem()
-    if (!item || openPending || props.state.phase === "open-pending" || props.state.phase === "revision-recovery") return
+    if (
+      !item
+      || openPending
+      || props.state.phase === "open-pending"
+      || props.state.phase === "refreshing"
+      || props.state.phase === "revision-recovery"
+    ) return
     openPending = true
     try {
       Promise.resolve(props.onOpen(item.row.workspaceId)).finally(() => { openPending = false })
@@ -361,7 +367,12 @@ export function StaleWorkspacesView(props: Props) {
       props.onAnnounce(staleWorkspaceIncompleteActionsExplanation())
       return
     }
-    if (actionsPending || props.state.phase === "inventory-pending" || props.state.phase === "revision-recovery") return
+    if (
+      actionsPending
+      || props.state.phase === "inventory-pending"
+      || props.state.phase === "refreshing"
+      || props.state.phase === "revision-recovery"
+    ) return
     actionsPending = true
     try {
       Promise.resolve(props.onActions(item.row.workspaceId)).finally(() => { actionsPending = false })
@@ -371,6 +382,7 @@ export function StaleWorkspacesView(props: Props) {
   }
 
   useKeyboard((key) => {
+    if (props.state.phase === "open-pending") return
     if (tooSmall()) {
       if (key.name === "escape") props.onBack()
       return

@@ -2,6 +2,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import {
   WEB_WORKSPACE_ACTION_IDS,
+  type WebOperation,
+  type WebStaleWorkspaceResponse,
   type WebWorkspaceAction,
   type WebWorkspaceActionDisabledReason,
   type WebWorkspaceActionId,
@@ -157,6 +159,49 @@ function lifecycleActionInventory(workspaceId: string): WebWorkspaceAction[] {
   return canonicalActionInventory(workspaceId, unavailable)
 }
 
+function staleWorkspaceEvaluation(revision: string): WebStaleWorkspaceResponse {
+  return {
+    revision,
+    checked_at: "2026-07-17T12:00:00.000Z",
+    threshold_days: 30,
+    candidates: currentState.workspaces.map((entry: any) => ({
+      workspace_id: entry.projection.id,
+      workspace_name: entry.definition.name,
+      activity_at: entry.projection.activity_at,
+      confirmed_reasons: [{
+        code: "inactive" as const,
+        occurred_at: entry.projection.activity_at,
+      }],
+      unknown_evidence: [],
+      cautions: [],
+    })),
+    incomplete: [],
+  }
+}
+
+const fetchStaleWorkspaceEvaluationMock = mock(async (request: {
+  expected_revision: string
+  force_refresh: boolean
+}) => staleWorkspaceEvaluation(request.expected_revision))
+
+const submitWebOperationMock = mock(async (): Promise<WebOperation> => ({
+  operation_id: "op_1234567890123456",
+  state: "succeeded",
+  accepted_at: "2026-07-17T12:00:00.000Z",
+  started_at: "2026-07-17T12:00:00.000Z",
+  finished_at: "2026-07-17T12:00:01.000Z",
+  result: {},
+}))
+
+const fetchWebOperationMock = mock(async (): Promise<WebOperation> => ({
+  operation_id: "op_1234567890123456",
+  state: "succeeded",
+  accepted_at: "2026-07-17T12:00:00.000Z",
+  started_at: "2026-07-17T12:00:00.000Z",
+  finished_at: "2026-07-17T12:00:01.000Z",
+  result: {},
+}))
+
 const fetchCoreStateMock = mock(async () => {
   callOrder.push(`reload:${reloadedState.revision}`)
   currentState = reloadedState
@@ -301,8 +346,12 @@ mock.module("@git-stacks/service/client", () => ({
 
 mock.module("../../../packages/tui/src/official-service", () => ({
   officialService: {
+    cancelWebOperation: mock(async () => ({ outcome: "unavailable" as const, reason: "operation_finished" as const })),
+    fetchStaleWorkspaceEvaluation: fetchStaleWorkspaceEvaluationMock,
+    fetchWebOperation: fetchWebOperationMock,
     fetchWorkspaceActionInventory: mock(async (request: { workspace_id: string }) => lifecycleActionInventory(request.workspace_id)),
     runWorkspaceLifecycleMutation: lifecycleMutationMock,
+    submitWebOperation: submitWebOperationMock,
   },
 }))
 
@@ -346,6 +395,9 @@ beforeEach(() => {
   callOrder = []
   lifecycleMutationMock.mockClear()
   fetchCoreStateMock.mockClear()
+  fetchStaleWorkspaceEvaluationMock.mockClear()
+  fetchWebOperationMock.mockClear()
+  submitWebOperationMock.mockClear()
 })
 
 afterEach(() => {
@@ -379,6 +431,69 @@ describe("integration: archived workspaces and safe removal", () => {
     expect(frame).toContain("successor-repo")
     expect(frame).toContain("Undo")
     expect(frame).not.toContain("target-repo")
+  })
+
+  test("opens a selected stale workspace once through the canonical operation", async () => {
+    const target = workspace({ id: UUIDS.target, name: "stale-open" })
+    const initial = coreState([target], [], "50")
+    reloadedState = coreState([target], [], "51")
+    const { mockInput, renderOnce, captureCharFrame } = await renderApp(initial)
+
+    mockInput.pressKey("s")
+    await settle(renderOnce)
+    expect(captureCharFrame()).toContain("Stale Workspaces")
+    expect(captureCharFrame()).toContain("stale-open")
+
+    mockInput.pressKey("o")
+    mockInput.pressEnter()
+    await settle(renderOnce)
+
+    expect(submitWebOperationMock).toHaveBeenCalledTimes(1)
+    expect(submitWebOperationMock.mock.calls[0]?.[0]).toEqual({
+      kind: "workspace.open",
+      request: { workspace_id: UUIDS.target, expected_revision: "50" },
+    })
+    expect(captureCharFrame()).toContain("stale-open")
+    expect(captureCharFrame()).not.toContain("Opening stale-open")
+  })
+
+  test("reconciles normal and stale state once after a stale Archive action", async () => {
+    const target = workspace({ id: UUIDS.target, name: "stale-archive" })
+    const initial = coreState([target], [], "60")
+    reloadedState = coreState([], [{
+      id: UUIDS.target,
+      name: target.name,
+      activity_at: "2026-07-17T12:00:00.000Z",
+    }], "61")
+    const { mockInput, renderOnce, captureCharFrame } = await renderApp(initial)
+
+    mockInput.pressKey("s")
+    await settle(renderOnce)
+    mockInput.pressKey("a")
+    await settle(renderOnce)
+    expect(captureCharFrame()).toContain("Archive workspace")
+    expect(captureCharFrame()).toContain("Remove workspace")
+    expect(captureCharFrame()).not.toContain("Force Remove")
+
+    mockInput.pressKey("a")
+    await settle(renderOnce)
+
+    expect(lifecycleMutationMock).toHaveBeenCalledTimes(1)
+    expect(lifecycleMutationMock.mock.calls[0]?.[0]).toEqual({
+      kind: "workspace.archive",
+      workspace_id: UUIDS.target,
+      expected_revision: "60",
+    })
+    expect(fetchStaleWorkspaceEvaluationMock.mock.calls.map(([request]) => request)).toEqual([
+      { expected_revision: "60", force_refresh: false },
+      { expected_revision: "61", force_refresh: true },
+    ])
+    expect(captureCharFrame()).toContain("Undo")
+
+    mockInput.pressEscape()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Stale Workspaces")
+    expect(captureCharFrame()).toContain("No stale workspaces")
   })
 
   test("selects the rendered successor through every shared ordering tier", async () => {
@@ -475,8 +590,8 @@ describe("integration: archived workspaces and safe removal", () => {
     expect(frame).toContain("managed worktrees")
     expect(frame).toContain("workspace directory")
     expect(frame).toContain("YAML definition")
-    expect(frame).toContain("[y] Remove")
-    expect(frame).toContain("[n/Esc] Cancel")
+    expect(frame).toContain("[y] Remove workspace")
+    expect(frame).toContain("[n/Esc] Keep workspace")
 
     mockInput.pressEscape()
     await renderOnce()

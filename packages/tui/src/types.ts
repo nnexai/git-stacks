@@ -51,18 +51,27 @@ export type StaleWorkspaceOrigin = {
   workspaceId?: string
 }
 
+export type StaleWorkspaceReturn = {
+  origin: StaleWorkspaceOrigin
+  selection: StaleWorkspaceSelection
+  detailOffset: number
+  workspaceId: string
+}
+
 export type Action = "open" | "close" | "edit" | "rename" | "clean" | "archive" | "remove" | "merge" | "sync" | "push" | "create-workspace" | "issue" | "commands"
 
 export type WorkspaceLifecycleTarget = {
   id: string
   name: string
   expectedRevision: string
+  staleReturn?: StaleWorkspaceReturn
 }
 
 export type WorkspaceActionTarget = {
   workspaceId: string
   workspaceName: string
   originIndex: number
+  staleReturn?: StaleWorkspaceReturn
 }
 
 export type DirtyRemovalContext = {
