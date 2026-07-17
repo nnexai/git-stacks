@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 5/14 plans executed
+**Plans:** 6/14 plans executed
 
 Plans:
 **Wave 0**
@@ -165,7 +165,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 127-06-PLAN.md — Add shared presentation/generations/retry/TUI seams plus atomic protocol/core/client global stale-entry and distinct scoped-refresh registries.
+- [x] 127-06-PLAN.md — Add shared presentation/generations/retry/TUI seams plus atomic protocol/core/client global stale-entry and distinct scoped-refresh registries.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

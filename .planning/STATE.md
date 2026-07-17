@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-05-PLAN.md
-last_updated: "2026-07-17T11:15:34.429Z"
+stopped_at: Completed 127-06-PLAN.md
+last_updated: "2026-07-17T11:53:23.049Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 05 stale secure route and service composition completed
+last_activity_desc: Phase 127 Plan 06 shared stale client coordination, shortcuts, and trusted TUI adapter completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 33
-  percent: 79
+  completed_plans: 34
+  percent: 80
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 6 of 14
+Plan: 7 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 05 stale secure route and service composition completed
+Last activity: 2026-07-17 — Phase 127 Plan 06 shared stale client coordination, shortcuts, and trusted TUI adapter completed
 
 ## Decisions
 
@@ -100,6 +100,9 @@ Last activity: 2026-07-17 — Phase 127 Plan 05 stale secure route and service c
 - [Phase 127]: Repository identity and mode mismatches fail closed instead of becoming false missing-worktree evidence.
 - [Phase 127]: One managed service owns one injected stale evaluator and volatile cache; restart drops the cache naturally.
 - [Phase 127]: Stale responses cross client boundaries only through strict request/response parsing and an explicit nested browser allowlist.
+- [Phase 127]: Stale response acceptance requires the newest generation and exact expected revision; typed conflict reloads authoritative state once and retries once.
+- [Phase 127]: workspace.stale is persisted/global, while workspace.stale.refresh is stale-view scoped only and never enters persistence, collision ownership, or browser-global dispatch.
+- [Phase 127]: TUI stale evaluation uses the official service adapter and shared client coordinator; the service client disables hidden transport retry.
 
 ## Validated Inputs
 
@@ -173,9 +176,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P03 | 10 min | 2 tasks | 3 files |
 | Phase 127 P04 | 19 min | 2 tasks | 4 files |
 | Phase 127 P05 | 27 min | 2 tasks | 6 files |
+| Phase 127 P06 | 29m 57s | 3 tasks | 20 files |
 
 ## Session
 
-**Last session:** 2026-07-17T11:15:34.414Z
-**Stopped at:** Completed 127-05-PLAN.md
+**Last session:** 2026-07-17T11:53:23.038Z
+**Stopped at:** Completed 127-06-PLAN.md
 **Resume file:** None
