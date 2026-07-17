@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-03-PLAN.md
-last_updated: "2026-07-17T10:14:08.671Z"
+stopped_at: Completed 127-04-PLAN.md
+last_updated: "2026-07-17T10:40:11.643Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 03 strict stale transport and forge status completed
+last_activity_desc: Phase 127 Plan 04 stale workspace policy and volatile evaluation completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 31
-  percent: 74
+  completed_plans: 32
+  percent: 76
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 4 of 14
+Plan: 5 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 03 strict stale transport and forge status completed
+Last activity: 2026-07-17 — Phase 127 Plan 04 stale workspace policy and volatile evaluation completed
 
 ## Decisions
 
@@ -93,6 +93,9 @@ Last activity: 2026-07-17 — Phase 127 Plan 03 strict stale transport and forge
 - [Phase 127]: Stale transport evidence encodes provider, repository-scoped, and unscoped authority as distinct strict schema variants.
 - [Phase 127]: Forge status accepts only canonical credential-free GitHub.com PR or GitLab.com MR persisted provenance and makes zero process calls for Gitea, unsupported hosts, or invalid identity.
 - [Phase 127]: Provider execution remains bounded argv-only and maps every operational or malformed result to finite sanitized unknown reasons.
+- [Phase 127]: Stale qualification requires confirmed evidence; unknown-only rows remain incomplete, cautions do not qualify or suppress, and ordering uses a transparent stable tuple without a score.
+- [Phase 127]: Only forge and remote-branch outcomes use the exact five-minute volatile cache; all local evidence is recomputed from each immutable revisioned read model.
+- [Phase 127]: Revision-first rejection, bounded fan-out, abort-safe per-key generations, and fixed sanitized remote outcomes preserve newest-write-wins without lifecycle authority.
 
 ## Validated Inputs
 
@@ -164,9 +167,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P01 | 34 min | 3 tasks | 5 files |
 | Phase 127 P02 | 35 min | 3 tasks | 7 files |
 | Phase 127 P03 | 10 min | 2 tasks | 3 files |
+| Phase 127 P04 | 19 min | 2 tasks | 4 files |
 
 ## Session
 
-**Last session:** 2026-07-17T10:14:08.656Z
-**Stopped at:** Completed 127-03-PLAN.md
+**Last session:** 2026-07-17T10:40:11.629Z
+**Stopped at:** Completed 127-04-PLAN.md
 **Resume file:** None
