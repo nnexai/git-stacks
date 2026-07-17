@@ -415,7 +415,7 @@ export type WebActionRegistry = {
   dispatch(event: ShortcutKeyEvent, source: WebActionSource): WebActionDispatchResult
 }
 
-const repeatRefocusActions = new Set<WebShortcutActionId>(["workspace.switch", "commands.open", "workspace.stale"])
+const repeatRefocusActions = new Set<WebShortcutActionId>(["workspace.switch", "commands.open"])
 const settingsUnavailable: WebActionAvailability = {
   available: false,
   disabledReason: "Shortcut settings are not loaded.",

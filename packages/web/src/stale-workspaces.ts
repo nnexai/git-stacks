@@ -5,6 +5,7 @@ import {
   staleWorkspaceIncompleteActionsExplanation,
   workspaceActionLabel,
   type PresentedStaleWorkspaceRow,
+  type StaleWorkspacePresentation,
 } from "@git-stacks/client"
 import type {
   WebStaleWorkspaceResponse,
@@ -62,6 +63,69 @@ type ActionMenuState = {
 type CanonicalInvocation = {
   descriptor: WebWorkspaceAction
   expected_revision: string
+}
+
+const WEB_STALE_LIFECYCLE_ACTION_ORDER = [
+  "workspace.archive",
+  "workspace.remove",
+  "workspace.force-remove",
+] as const satisfies readonly WebWorkspaceActionId[]
+
+/**
+ * Adapts the shared, already-classified presentation for web rendering tests and
+ * cross-client comparison. It preserves shared row/evidence order and derives
+ * action placement only from exact canonical service descriptors.
+ */
+export function adaptWebStaleWorkspacePresentation(
+  presentation: StaleWorkspacePresentation,
+  options: {
+    inventories: Readonly<Record<string, readonly WebWorkspaceAction[]>>
+  },
+) {
+  const adaptRow = (row: PresentedStaleWorkspaceRow, section: "candidate" | "incomplete") => {
+    const actions: Array<{
+      actionId: WebWorkspaceActionId
+      label: string
+      disabledReason?: string
+    }> = [{ actionId: "workspace.open", label: workspaceActionLabel("workspace.open") }]
+
+    if (section === "candidate") {
+      const descriptors = options.inventories[row.workspaceId] ?? []
+      for (const actionId of WEB_STALE_LIFECYCLE_ACTION_ORDER) {
+        const descriptor = descriptors.find((candidate) => candidate.action_id === actionId
+          && candidate.subject.kind === "workspace"
+          && candidate.subject.workspace_id === row.workspaceId)
+        if (!descriptor) continue
+        actions.push({
+          actionId,
+          label: workspaceActionLabel(actionId),
+          ...(!descriptor.availability.available
+            ? { disabledReason: descriptor.availability.message }
+            : {}),
+        })
+      }
+    }
+
+    return Object.freeze({
+      ...row,
+      section,
+      actions: Object.freeze(actions),
+      ...(section === "incomplete"
+        ? { lifecycleDeniedReason: staleWorkspaceIncompleteActionsExplanation() }
+        : {}),
+    })
+  }
+
+  return Object.freeze({
+    revision: presentation.revision,
+    checkedAt: presentation.checkedAt,
+    candidateCountLabel: presentation.candidateCountLabel,
+    incompleteCountLabel: presentation.incompleteCountLabel,
+    rows: Object.freeze([
+      ...presentation.candidates.map((row) => adaptRow(row, "candidate")),
+      ...presentation.incomplete.map((row) => adaptRow(row, "incomplete")),
+    ]),
+  })
 }
 
 export type WebStaleWorkspaceControllerOptions = {
