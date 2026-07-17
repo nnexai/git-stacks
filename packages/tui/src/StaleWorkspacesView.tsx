@@ -11,11 +11,9 @@ import {
   type StaleWorkspacePresentation,
 } from "@git-stacks/client"
 import type { WebStaleWorkspaceResponse } from "@git-stacks/protocol"
+import type { StaleWorkspaceSelection } from "./types"
 
-export type StaleWorkspaceSelection = {
-  section: "candidate" | "incomplete"
-  index: number
-}
+export type { StaleWorkspaceSelection } from "./types"
 
 export type StaleWorkspacesViewState = {
   phase:
@@ -347,7 +345,7 @@ export function StaleWorkspacesView(props: Props) {
 
   const invokeOpen = () => {
     const item = selectedItem()
-    if (!item || openPending || props.state.phase === "open-pending") return
+    if (!item || openPending || props.state.phase === "open-pending" || props.state.phase === "revision-recovery") return
     openPending = true
     try {
       Promise.resolve(props.onOpen(item.row.workspaceId)).finally(() => { openPending = false })
@@ -363,7 +361,7 @@ export function StaleWorkspacesView(props: Props) {
       props.onAnnounce(staleWorkspaceIncompleteActionsExplanation())
       return
     }
-    if (actionsPending || props.state.phase === "inventory-pending") return
+    if (actionsPending || props.state.phase === "inventory-pending" || props.state.phase === "revision-recovery") return
     actionsPending = true
     try {
       Promise.resolve(props.onActions(item.row.workspaceId)).finally(() => { actionsPending = false })
@@ -389,6 +387,7 @@ export function StaleWorkspacesView(props: Props) {
     // testRender's string helper emits these named special keys as character streams;
     // real terminals reach the direct branches above.
     if (consumeSyntheticSpecialKey(key.name)) return
+    if (key.name === "s") return
     if (key.name === "r") { invokeRefresh(); return }
     if (key.name === "o" || key.name === "return") { invokeOpen(); return }
     if (key.name === "a") invokeActions()
@@ -400,7 +399,7 @@ export function StaleWorkspacesView(props: Props) {
     || props.state.phase === "inventory-error"
     ? "red"
     : props.state.phase === "loaded"
-    ? "green"
+    ? "gray"
     : "yellow"
 
   const footer = () => {

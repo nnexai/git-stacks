@@ -18,6 +18,7 @@ import { WorkspaceOperationView } from "./WorkspaceOperationView"
 import { WorkspaceNotesDialog } from "./WorkspaceNotesDialog"
 import { WorkspaceFileStatusDialog } from "./WorkspaceFileStatusDialog"
 import { ForgeSourceReviewDialog } from "./ForgeSourceReviewDialog"
+import { StaleWorkspacesView, type StaleWorkspacesViewState } from "./StaleWorkspacesView"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
@@ -53,13 +54,18 @@ import type {
   LifecycleAction,
   WorkspaceLifecycleTarget,
   WorkspaceActionTarget,
+  StaleWorkspaceOrigin,
+  StaleWorkspaceSelection,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
 import {
   createForgeReviewCoordinator,
   createOperationTracker,
   createWorkspaceActionRegistry,
+  isStaleWorkspaceRevisionConflict,
   issueTrackerLabels,
+  presentStaleWorkspaceResponse,
+  WEB_SHORTCUT_ACTION_METADATA,
   type OperationTracker,
   type OperationTrackerState,
   type WorkspaceActionRegistry,
@@ -67,7 +73,11 @@ import {
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
 import { officialService } from "./official-service"
-import { createWorkspaceActionInventoryGate, createWorkspaceNotesResponseGate } from "./workspace-action-inventory"
+import {
+  createStaleWorkspaceRequestCoordinator,
+  createWorkspaceActionInventoryGate,
+  createWorkspaceNotesResponseGate,
+} from "./workspace-action-inventory"
 import type {
   Operation,
   WebOperation,
@@ -76,6 +86,7 @@ import type {
   WebNotesResponse,
   WebWorkspaceAction,
   WebWorkspaceActionId,
+  WebStaleWorkspaceResponse,
   WorkspaceLifecycleFailureDetails,
   WorkspaceLifecycleMutation,
 } from "@git-stacks/protocol"
@@ -172,6 +183,10 @@ function workspaceStateGroup(status: WorkspaceStatus): string {
   if (status.aheadBehindStale) return "state: stale"
   return "state: clean"
 }
+
+const staleWorkspaceTuiShortcut = WEB_SHORTCUT_ACTION_METADATA
+  .find((metadata) => metadata.actionId === "workspace.stale")
+  ?.tuiKey
 
 function workspaceGroupLabels(entry: WorkspaceEntry, mode: WorkspaceGroupingMode): string[] {
   if (mode === "label") {
@@ -293,6 +308,43 @@ export default function App() {
   const [notesError, setNotesError] = createSignal("")
   const [notesMutationError, setNotesMutationError] = createSignal("")
   const notesResponseGate = createWorkspaceNotesResponseGate()
+  const [staleWorkspaceState, setStaleWorkspaceState] = createSignal<StaleWorkspacesViewState>({
+    phase: "initial-loading",
+    message: "Loading stale workspace evidence…",
+  })
+  let staleWorkspaceRequestPending = false
+  let staleWorkspaceRequestAbort: AbortController | undefined
+  const staleWorkspaceCoordinator = createStaleWorkspaceRequestCoordinator({
+    fetch: async ({ expected_revision, force_refresh, signal }) => {
+      try {
+        return await officialService.fetchStaleWorkspaceEvaluation(
+          { expected_revision, force_refresh },
+          signal,
+        )
+      } catch (error) {
+        if (isStaleWorkspaceRevisionConflict(error) && view().view === "stale-workspaces") {
+          const retained = staleWorkspaceState().response
+          setStaleWorkspaceState(retained
+            ? {
+                phase: "revision-recovery",
+                response: retained,
+                message: "Workspace data changed while stale evidence was loading. Reloading the authoritative revision and retrying once…",
+              }
+            : {
+                phase: "revision-recovery",
+                message: "Workspace data changed while stale evidence was loading. Reloading the authoritative revision and retrying once…",
+              })
+        }
+        throw error
+      }
+    },
+    reloadAuthoritative: async () => {
+      await core.refresh()
+      const revision = core.state()?.revision
+      if (!revision) throw new Error("Authoritative workspace revision is unavailable")
+      return revision
+    },
+  })
   const forgeReview = createForgeReviewCoordinator({
     resolve: (request) => officialService.resolveForgeSourceReview(request),
     create: async (request) => {
@@ -472,7 +524,7 @@ export default function App() {
   const helpBarText = createMemo(() => {
     const w = dims().width
     const t = tab()
-    const msgShortcut = t === "workspaces" ? "  m Signals  u PR/MR" : ""
+    const msgShortcut = t === "workspaces" ? "  s Stale  m Signals  u PR/MR" : ""
     const groupHint = t === "workspaces" ? `  g Group:${workspaceGroupingMode()}` : ""
     const scrollHint = t === "workspaces" ? "  Pg Detail" : ""
     const clearHint = filter() ? "  esc Clear" : ""
@@ -499,6 +551,179 @@ export default function App() {
       : tab() === "templates" ? filteredTemplates()
       : filteredRepos()
     setCursor(c => Math.min(c, Math.max(0, entriesList.length - 1)))
+  }
+
+  function staleWorkspaceId(
+    response: WebStaleWorkspaceResponse | undefined,
+    selection: StaleWorkspaceSelection,
+  ): string | undefined {
+    return selection.section === "candidate"
+      ? response?.candidates[selection.index]?.workspace_id
+      : response?.incomplete[selection.index]?.workspace_id
+  }
+
+  function staleWorkspaceSelection(
+    response: WebStaleWorkspaceResponse,
+    preferredWorkspaceId?: string,
+    fallback: StaleWorkspaceSelection = { section: "candidate", index: 0 },
+  ): StaleWorkspaceSelection {
+    if (preferredWorkspaceId) {
+      const candidateIndex = response.candidates.findIndex((row) => row.workspace_id === preferredWorkspaceId)
+      if (candidateIndex >= 0) return { section: "candidate", index: candidateIndex }
+      const incompleteIndex = response.incomplete.findIndex((row) => row.workspace_id === preferredWorkspaceId)
+      if (incompleteIndex >= 0) return { section: "incomplete", index: incompleteIndex }
+    }
+    if (fallback.section === "candidate" && response.candidates[fallback.index]) return fallback
+    if (fallback.section === "incomplete" && response.incomplete[fallback.index]) return fallback
+    if (response.candidates.length > 0) return { section: "candidate", index: 0 }
+    return { section: "incomplete", index: 0 }
+  }
+
+  function captureStaleWorkspaceOrigin(): StaleWorkspaceOrigin {
+    const activeTab = tab()
+    const workspaceId = activeTab === "workspaces" ? currentEntry()?.workspaceId : undefined
+    return {
+      view: "list",
+      tab: activeTab,
+      cursor: tabCursor[activeTab][0](),
+      ...(workspaceId ? { workspaceId } : {}),
+    }
+  }
+
+  function restoreStaleWorkspaceOrigin(origin: StaleWorkspaceOrigin): void {
+    staleWorkspaceRequestAbort?.abort()
+    staleWorkspaceRequestAbort = undefined
+    staleWorkspaceRequestPending = false
+    staleWorkspaceCoordinator.invalidate()
+    setTab(origin.tab)
+    if (origin.tab === "workspaces" && origin.workspaceId) {
+      const workspaceIndex = workspaceGroupingMode() === "none"
+        ? filteredEntries().findIndex((entry) => entry.workspaceId === origin.workspaceId)
+        : groupedNavigableEntries().findIndex((item) => item.entry.workspaceId === origin.workspaceId)
+      tabCursor.workspaces[1](workspaceIndex >= 0 ? workspaceIndex : origin.cursor)
+    } else {
+      tabCursor[origin.tab][1](origin.cursor)
+    }
+    setView({ view: origin.view })
+    clampCursor()
+  }
+
+  async function loadStaleWorkspaceEvidence(forceRefresh: boolean): Promise<void> {
+    if (staleWorkspaceRequestPending) return
+    const expectedRevision = core.state()?.revision
+    const previousState = staleWorkspaceState()
+    const previousResponse = previousState.response
+    const currentView = view()
+    const previousWorkspaceId = currentView.view === "stale-workspaces"
+      ? staleWorkspaceId(previousResponse, currentView.selection)
+      : undefined
+    const retainedResponse = previousResponse?.revision === expectedRevision ? previousResponse : undefined
+    if (!expectedRevision) {
+      setStaleWorkspaceState({
+        phase: "first-load-error",
+        message: "Stale workspace evidence could not be loaded. Retry the refresh.",
+      })
+      return
+    }
+
+    const controller = new AbortController()
+    staleWorkspaceRequestPending = true
+    staleWorkspaceRequestAbort = controller
+    setStaleWorkspaceState(retainedResponse
+      ? {
+          phase: "refreshing",
+          response: retainedResponse,
+          message: "Refreshing stale workspace evidence… Previous results remain visible.",
+        }
+      : {
+          phase: "initial-loading",
+          message: "Loading stale workspace evidence…",
+        })
+
+    try {
+      const result = await staleWorkspaceCoordinator.load({
+        expectedRevision,
+        forceRefresh,
+        signal: controller.signal,
+      })
+      if (staleWorkspaceRequestAbort !== controller || view().view !== "stale-workspaces") return
+      if (result.status === "accepted") {
+        const activeView = view() as Extract<UIView, { view: "stale-workspaces" }>
+        const selection = staleWorkspaceSelection(result.response, previousWorkspaceId, activeView.selection)
+        setStaleWorkspaceState({ phase: "loaded", response: result.response })
+        setView({
+          ...activeView,
+          selection,
+          detailOffset: staleWorkspaceId(result.response, selection) === previousWorkspaceId
+            ? activeView.detailOffset
+            : 0,
+        })
+        return
+      }
+      if (result.status === "ignored" && result.reason === "superseded") return
+
+      const authoritativeRevision = core.state()?.revision
+      const safeRetainedResponse = retainedResponse?.revision === authoritativeRevision
+        ? retainedResponse
+        : undefined
+      if (safeRetainedResponse) {
+        const checkedAt = presentStaleWorkspaceResponse(safeRetainedResponse).checkedAt.relative
+        setStaleWorkspaceState({
+          phase: "retained-error",
+          response: safeRetainedResponse,
+          message: `Stale evidence could not be refreshed. Showing results checked ${checkedAt}.`,
+        })
+      } else {
+        setStaleWorkspaceState({
+          phase: "first-load-error",
+          message: "Stale workspace evidence could not be loaded. Retry the refresh.",
+        })
+      }
+    } finally {
+      if (staleWorkspaceRequestAbort === controller) {
+        staleWorkspaceRequestAbort = undefined
+        staleWorkspaceRequestPending = false
+      }
+    }
+  }
+
+  function enterStaleWorkspaces(): void {
+    if (view().view === "stale-workspaces") return
+    const origin = captureStaleWorkspaceOrigin()
+    const response = staleWorkspaceState().response
+    const reusableResponse = response?.revision === core.state()?.revision ? response : undefined
+    setView({
+      view: "stale-workspaces",
+      origin,
+      selection: reusableResponse
+        ? staleWorkspaceSelection(reusableResponse)
+        : { section: "candidate", index: 0 },
+      detailOffset: 0,
+    })
+    if (reusableResponse) {
+      setStaleWorkspaceState({ phase: "loaded", response: reusableResponse })
+      return
+    }
+    void loadStaleWorkspaceEvidence(false)
+  }
+
+  function updateStaleWorkspaceSelection(selection: StaleWorkspaceSelection): void {
+    const activeView = view()
+    if (activeView.view !== "stale-workspaces") return
+    setView({ ...activeView, selection, detailOffset: 0 })
+  }
+
+  function updateStaleWorkspaceDetail(direction: "page-up" | "page-down"): void {
+    const activeView = view()
+    if (activeView.view !== "stale-workspaces") return
+    const delta = direction === "page-down" ? 1 : -1
+    setView({ ...activeView, detailOffset: Math.max(0, Math.min(64, activeView.detailOffset + delta)) })
+  }
+
+  function announceStaleWorkspace(message: string): void {
+    const current = staleWorkspaceState()
+    if (!current.response) return
+    setStaleWorkspaceState({ phase: "loaded", response: current.response, message })
   }
 
   function resetCommandOutput(status: CommandOutputStatus = "running") {
@@ -1663,6 +1888,17 @@ export default function App() {
   useKeyboard((key) => {
     const v = view()
 
+    // The dedicated stale view owns every key before dashboard or overlay shortcuts.
+    if (view().view === "stale-workspaces") {
+      if (key.name === "escape") {
+        restoreStaleWorkspaceOrigin((v as Extract<UIView, { view: "stale-workspaces" }>).origin)
+        return
+      }
+      // Repeated canonical entry is a refocus/no-op; StaleWorkspacesView routes its remaining intents.
+      if (key.name === "s" && staleWorkspaceTuiShortcut === key.name) return
+      return
+    }
+
     // Help overlay toggle — must be at very top
     if (key.name === "?" && !filtering()) {
       if (helpOpen()) { setHelpOpen(false); return }
@@ -1808,6 +2044,16 @@ export default function App() {
         if (reposSelected().size > 0) { setReposSelected(() => new Set<number>()); return }
         if (templatesSelected().size > 0) { setTemplatesSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
+        return
+      }
+
+      if (
+        key.name === "s"
+        && staleWorkspaceTuiShortcut === key.name
+        && tab() === "workspaces"
+        && view().view !== "stale-workspaces"
+      ) {
+        enterStaleWorkspaces()
         return
       }
 
@@ -1962,6 +2208,26 @@ export default function App() {
         <box height={1}>
           <text fg="gray">  {"\u2191\u2193"}/jk Navigate  d Dismiss signal  Esc Close</text>
         </box>
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "stale-workspaces"}>
+        {(() => {
+          const staleView = view() as Extract<UIView, { view: "stale-workspaces" }>
+          return (
+            <StaleWorkspacesView
+              state={staleWorkspaceState()}
+              selection={staleView.selection}
+              detailOffset={staleView.detailOffset}
+              onSelectionChange={updateStaleWorkspaceSelection}
+              onDetailPage={updateStaleWorkspaceDetail}
+              onRefresh={() => loadStaleWorkspaceEvidence(true)}
+              onOpen={async () => undefined}
+              onActions={async () => undefined}
+              onAnnounce={announceStaleWorkspace}
+              onBack={() => restoreStaleWorkspaceOrigin(staleView.origin)}
+            />
+          )
+        })()}
       </Show>
 
       {/* Action menus — full-screen CenteredDialog overlays */}
@@ -2394,8 +2660,11 @@ export default function App() {
         />
       </Show>
 
-      <Show when={view().view !== "archived-workspaces"}>
-      {/* Split pane — always visible except while the intentionally minimal archive surface is open */}
+      <Show when={
+        view().view !== "archived-workspaces"
+        && view().view !== "stale-workspaces"
+      }>
+      {/* Split pane — hidden while dedicated full-screen archive or stale-workspace surfaces are open */}
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" height={listPaneHeight()} minHeight={6}>
           <Show when={core.error()}>

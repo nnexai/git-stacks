@@ -39,6 +39,18 @@ export type WorkspaceFileStatusState =
 
 export type Tab = "workspaces" | "templates" | "repos"
 
+export type StaleWorkspaceSelection = {
+  section: "candidate" | "incomplete"
+  index: number
+}
+
+export type StaleWorkspaceOrigin = {
+  view: "list"
+  tab: Tab
+  cursor: number
+  workspaceId?: string
+}
+
 export type Action = "open" | "close" | "edit" | "rename" | "clean" | "archive" | "remove" | "merge" | "sync" | "push" | "create-workspace" | "issue" | "commands"
 
 export type WorkspaceLifecycleTarget = {
@@ -68,6 +80,7 @@ export type IssueCandidate = {
 
 export type UIView =
   | { view: "list" }
+  | { view: "stale-workspaces"; origin: StaleWorkspaceOrigin; selection: StaleWorkspaceSelection; detailOffset: number }
   | { view: "action-menu"; index: number; workspaceId?: string; workspaceName?: string }
   | { view: "archived-workspaces"; rows: ArchivedWorkspaceSummary[] }
   | { view: "archive-undo"; target: WorkspaceLifecycleTarget }
