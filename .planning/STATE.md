@@ -4,27 +4,27 @@ milestone: v0.22.0
 milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
-status: in_progress
-stopped_at: Phase 127 targeted planning revision validated; 14 plans ready to execute
-last_updated: "2026-07-17T08:13:17.010Z"
+status: executing
+stopped_at: Completed 127-01-PLAN.md
+last_updated: "2026-07-17T09:19:32.860Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 targeted planning revision validated — 14 plans across Waves 0-11 with dependency, decision, source, and validation coverage green
+last_activity_desc: Phase 127 Plan 01 RED contracts completed
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 28
-  completed_plans: 28
-  percent: 80
+  total_plans: 42
+  completed_plans: 29
+  percent: 69
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 127 — Stale Workspace Intelligence and RC Closure
-Plan: 0 of 14
-Status: Ready to execute validated revision
-Last activity: 2026-07-17 — Phase 127 targeted planning revision validated
+Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
+Plan: 2 of 14
+Status: Ready to execute
+Last activity: 2026-07-17 — Plan 127-01 RED contracts completed
 
 ## Decisions
 
@@ -82,6 +82,10 @@ Last activity: 2026-07-17 — Phase 127 targeted planning revision validated
 - [Phase 126]: Notes are service-owned newest-first append-only records, and file status is a lazy path-free service projection with no client persistence or recomputation authority.
 - [Phase 126]: Forge creation is full URL Resolve → editable Review → explicit one-shot Create with immutable source anchors and service revalidation of token, revision, provider state, draft, and head SHA.
 - [Phase 126]: Deterministic local evidence is complete; authenticated hosts, hosted runners, live reconnect/cancel, physical input, screenshots, interactive OpenTUI, and human parity remain Phase 127 pre-tag work.
+- [Phase 127]: Wave 0 net-new modules load through guarded file-URL imports and fail through named Vitest contract assertions rather than discovery errors.
+- [Phase 127]: Stale policy remains pure through classifyStaleWorkspaces and rankStaleWorkspaceCandidates; cache and probe orchestration belong to createStaleWorkspaceEvaluator.
+- [Phase 127]: Provider and remote acquisition contracts are lookupForgeChangeStatus and observeRemoteBranchStatus with complete provenance, fixed argv-only commands, bounds, abort, and sanitized outcomes.
+- [Phase 127]: Intentional RED is accepted only when fixture loading, transform/discovery, unrelated authority tests, and diff hygiene pass and every nonzero failure is a named missing Phase 127 contract.
 
 ## Validated Inputs
 
@@ -150,9 +154,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 123 P06 | 9 min | 3 tasks | 6 files |
 | Phase 123 P07 | 25 min | 3 tasks | 9 files |
 | Phase 123 P08 | 22 min | 2 tasks | 5 files |
+| Phase 127 P01 | 34 min | 3 tasks | 5 files |
 
 ## Session
 
-**Last session:** 2026-07-17T08:13:17.010Z
-**Stopped at:** Phase 127 targeted planning revision validated; ready to execute Wave 0
-**Resume file:** .planning/phases/127-stale-workspace-intelligence-and-rc-closure/127-01-PLAN.md
+**Last session:** 2026-07-17T09:19:32.845Z
+**Stopped at:** Completed 127-01-PLAN.md
+**Resume file:** None

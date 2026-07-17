@@ -143,12 +143,12 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 14 plans
+**Plans:** 1/14 plans executed
 
 Plans:
 **Wave 0**
 
-- [ ] 127-01-PLAN.md — Create guarded-import runtime Zod, provider, abortable remote-branch, policy, cache, revision, and no-mutation RED contracts.
+- [x] 127-01-PLAN.md — Create guarded-import runtime Zod, provider, abortable remote-branch, policy, cache, revision, and no-mutation RED contracts.
 - [ ] 127-02-PLAN.md — Create guarded-import web, TUI, conformance, authority RED contracts and an isolated named hermetic pre-metadata no-outward-release-action fence.
 
 **Wave 1** *(blocked on Wave 0 completion)*
@@ -212,7 +212,7 @@ Plans:
 | 124 | User Shell and Environment Authority | 7 | Complete    |
 | 125 | Terminal-Safe Keyboard Navigation | 13 | Complete    |
 | 126 | Web Workflow and Forge-Source Parity | 9 | Complete    |
-| 127 | Stale Workspace Intelligence and RC Closure | 7 | Planned    |
+| 127 | Stale Workspace Intelligence and RC Closure | 7 | In Progress|
 
 ## Scope control
 
