@@ -68,11 +68,15 @@ const labels: Record<WebWorkspaceActionId, string> = {
   "workspace.pull": "Pull workspace",
   "workspace.push": "Push workspace",
   "workspace.merge": "Merge workspace",
-  "workspace.notes.list": "List workspace notes",
-  "workspace.notes.add": "Add workspace note",
-  "workspace.notes.clear": "Clear workspace notes",
-  "workspace.files.inspect": "Inspect workspace files",
+  "workspace.notes.list": "View notes",
+  "workspace.notes.add": "Add note",
+  "workspace.notes.clear": "Clear notes",
+  "workspace.files.inspect": "View file status",
   "operation.cancel": "Cancel operation",
+}
+
+export function workspaceActionLabel(actionId: WebWorkspaceActionId): string {
+  return labels[actionId]
 }
 
 function subjectKey(descriptor: WebWorkspaceAction): string {
@@ -148,7 +152,7 @@ export function createWorkspaceActionRegistry(
     const callback = callbackFor(actionId)
     return {
       actionId,
-      label: labels[actionId],
+      label: workspaceActionLabel(actionId),
       descriptor,
       availability: currentAvailability,
       disabledReason,

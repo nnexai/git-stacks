@@ -5,6 +5,7 @@ import { useKeyboard } from "@opentui/solid"
 import type { WebWorkspaceAction, WebWorkspaceActionId } from "@git-stacks/protocol"
 import type { Action } from "./types"
 import { CenteredDialog } from "./CenteredDialog"
+import { tuiWorkspaceActionRows, type TuiWorkspaceActionGroup } from "./workspace-action-inventory"
 
 type Props = {
   workspaceName: string
@@ -19,7 +20,7 @@ type Props = {
   onRun?: () => void
 }
 
-type CanonicalGroup = "Workspace" | "Git" | "Details" | "Lifecycle"
+type CanonicalGroup = TuiWorkspaceActionGroup
 
 type CanonicalRow = {
   id: string
@@ -28,27 +29,6 @@ type CanonicalRow = {
   group: CanonicalGroup
   disabledReason?: string
   activate: () => void | Promise<void>
-}
-
-const canonicalPresentation: Record<WebWorkspaceActionId, { key: string; label: string; group: CanonicalGroup }> = {
-  "workspace.open": { key: "o", label: "Open workspace", group: "Workspace" },
-  "workspace.close": { key: "x", label: "Close workspace", group: "Workspace" },
-  "workspace.rename": { key: "n", label: "Rename workspace", group: "Workspace" },
-  "workspace.pin": { key: "v", label: "Pin workspace", group: "Workspace" },
-  "workspace.unpin": { key: "g", label: "Unpin workspace", group: "Workspace" },
-  "workspace.sync": { key: "s", label: "Sync workspace", group: "Git" },
-  "workspace.pull": { key: "l", label: "Pull workspace", group: "Git" },
-  "workspace.push": { key: "p", label: "Push workspace", group: "Git" },
-  "workspace.merge": { key: "m", label: "Merge workspace", group: "Git" },
-  "workspace.notes.list": { key: "t", label: "View notes", group: "Details" },
-  "workspace.notes.add": { key: "+", label: "Add note", group: "Details" },
-  "workspace.notes.clear": { key: "z", label: "Clear notes", group: "Details" },
-  "workspace.files.inspect": { key: "f", label: "View file status", group: "Details" },
-  "workspace.archive": { key: "a", label: "Archive workspace", group: "Lifecycle" },
-  "workspace.unarchive": { key: "h", label: "Unarchive workspace", group: "Lifecycle" },
-  "workspace.remove": { key: "r", label: "Remove workspace", group: "Lifecycle" },
-  "workspace.force-remove": { key: "!", label: "Force remove workspace", group: "Lifecycle" },
-  "operation.cancel": { key: "c", label: "Cancel operation", group: "Lifecycle" },
 }
 
 function InventoryUnavailableMenu(props: Pick<Props, "workspaceName" | "inventoryState" | "inventoryError" | "onCancel">) {
@@ -69,11 +49,9 @@ function InventoryUnavailableMenu(props: Pick<Props, "workspaceName" | "inventor
 }
 
 function CanonicalActionMenu(props: Required<Pick<Props, "workspaceName" | "descriptors" | "onInvoke" | "onCancel">> & Pick<Props, "issueDisabledReason" | "commandsDisabledReason" | "onAction" | "onRun">) {
-  const canonicalRows = (): CanonicalRow[] => props.descriptors.map((descriptor) => ({
-    ...canonicalPresentation[descriptor.action_id],
-    id: descriptor.action_id,
-    ...(!descriptor.availability.available ? { disabledReason: descriptor.availability.message } : {}),
-    activate: () => props.onInvoke(descriptor.action_id),
+  const canonicalRows = (): CanonicalRow[] => tuiWorkspaceActionRows(props.descriptors).map((row) => ({
+    ...row,
+    activate: () => props.onInvoke(row.actionId),
   }))
   const adaptedRows = (): CanonicalRow[] => {
     const invokeLegacy = (action: Action) => () => props.onAction?.(action)

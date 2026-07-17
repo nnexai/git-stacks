@@ -1,4 +1,38 @@
-import type { WebNotesResponse, WebWorkspaceAction } from "@git-stacks/protocol"
+import { workspaceActionLabel } from "@git-stacks/client"
+import type { WebNotesResponse, WebWorkspaceAction, WebWorkspaceActionId } from "@git-stacks/protocol"
+
+export type TuiWorkspaceActionGroup = "Workspace" | "Git" | "Details" | "Lifecycle"
+
+export const TUI_WORKSPACE_ACTION_PRESENTATION: Record<WebWorkspaceActionId, { key: string; group: TuiWorkspaceActionGroup }> = {
+  "workspace.open": { key: "o", group: "Workspace" },
+  "workspace.close": { key: "x", group: "Workspace" },
+  "workspace.rename": { key: "n", group: "Workspace" },
+  "workspace.pin": { key: "v", group: "Workspace" },
+  "workspace.unpin": { key: "g", group: "Workspace" },
+  "workspace.sync": { key: "s", group: "Git" },
+  "workspace.pull": { key: "l", group: "Git" },
+  "workspace.push": { key: "p", group: "Git" },
+  "workspace.merge": { key: "m", group: "Git" },
+  "workspace.notes.list": { key: "t", group: "Details" },
+  "workspace.notes.add": { key: "+", group: "Details" },
+  "workspace.notes.clear": { key: "z", group: "Details" },
+  "workspace.files.inspect": { key: "f", group: "Details" },
+  "workspace.archive": { key: "a", group: "Lifecycle" },
+  "workspace.unarchive": { key: "h", group: "Lifecycle" },
+  "workspace.remove": { key: "r", group: "Lifecycle" },
+  "workspace.force-remove": { key: "!", group: "Lifecycle" },
+  "operation.cancel": { key: "c", group: "Lifecycle" },
+}
+
+export function tuiWorkspaceActionRows(descriptors: readonly WebWorkspaceAction[]) {
+  return descriptors.map((descriptor) => ({
+    id: descriptor.action_id,
+    actionId: descriptor.action_id,
+    label: workspaceActionLabel(descriptor.action_id),
+    ...TUI_WORKSPACE_ACTION_PRESENTATION[descriptor.action_id],
+    ...(!descriptor.availability.available ? { disabledReason: descriptor.availability.message } : {}),
+  }))
+}
 
 export type WorkspaceActionInventoryToken = Readonly<{ generation: number; workspaceId: string }>
 
