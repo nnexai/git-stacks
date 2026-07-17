@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest"
 
 import {
+  WEB_SCOPED_SHORTCUT_ACTION_METADATA,
   WEB_SHORTCUT_ACTION_METADATA,
   bindingKey,
   defaultShortcutSettings,
   findShortcutConflict,
   formatShortcutBinding,
+  matchScopedShortcutEvent,
   matchShortcutEvent,
   validateShortcutSettings,
   type ShortcutKeyEvent,
@@ -32,7 +34,7 @@ const binding = (code: string, overrides: Partial<WebShortcutBinding> = {}): Web
   ...overrides,
 })
 
-const primaryCodes = ["KeyK", "KeyP", "KeyN", "KeyT", "KeyW", "KeyJ", "KeyL", "KeyA"]
+const primaryCodes = ["KeyK", "KeyP", "KeyN", "KeyT", "KeyW", "KeyJ", "KeyL", "KeyA", "KeyS"]
 
 describe("client shortcut semantics", () => {
   test.each([
@@ -101,6 +103,46 @@ describe("client shortcut semantics", () => {
     expect(matchShortcutEvent(event("KeyP", { ctrlKey: true, shiftKey: true }), defaults)).toEqual({ handled: false, reason: "unmatched" })
     expect(matchShortcutEvent(event("KeyK", { ctrlKey: true }), withAliases)).toMatchObject({ handled: true, actionId: "workspace.switch", source: "alias" })
     expect(matchShortcutEvent(event("KeyP", { ctrlKey: true, shiftKey: true }), withAliases)).toMatchObject({ handled: true, actionId: "commands.open", source: "alias" })
+  })
+
+  test("keeps stale entry global and refresh active-view scoped", () => {
+    expect(WEB_SHORTCUT_ACTION_METADATA.find(({ actionId }) => actionId === "workspace.stale")).toMatchObject({
+      label: "Open stale workspaces",
+      category: "workspace",
+      defaultCode: "KeyS",
+      tuiKey: "s",
+    })
+    const scoped = WEB_SCOPED_SHORTCUT_ACTION_METADATA[0]
+    expect(scoped).toEqual({
+      actionId: "workspace.stale.refresh",
+      scope: "stale-view",
+      label: "Refresh evidence",
+      accessibilityText: "Refresh stale workspace evidence",
+      web: { code: "KeyR", label: "R" },
+      tui: { key: "r" },
+    })
+
+    const refresh = event("KeyR")
+    expect(matchScopedShortcutEvent(refresh, "stale-view")).toEqual({
+      handled: true,
+      actionId: "workspace.stale.refresh",
+      metadata: scoped,
+    })
+    expect(matchScopedShortcutEvent(refresh, undefined)).toEqual({ handled: false, reason: "inactive-scope" })
+    for (const guarded of [
+      event("KeyR", { repeat: true }),
+      event("KeyR", { isComposing: true }),
+      event("KeyR", { key: "Process" }),
+      event("KeyR", { key: "Dead" }),
+      event("KeyR", { getModifierState: (name) => name === "AltGraph" }),
+      event("KeyR", { ctrlKey: true }),
+    ]) {
+      expect(matchScopedShortcutEvent(guarded, "stale-view")).toMatchObject({ handled: false })
+    }
+
+    const global = defaultShortcutSettings("linux")
+    expect(global.bindings.map(({ action_id }) => action_id)).not.toContain("workspace.stale.refresh")
+    expect(matchShortcutEvent(refresh, global)).toEqual({ handled: false, reason: "unmatched" })
   })
 
   test("reports complete primary and alias ownership for conflicts", () => {

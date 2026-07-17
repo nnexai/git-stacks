@@ -1043,7 +1043,7 @@ describe("web singleton keyboard overlays", () => {
 })
 
 describe("web authoritative shortcut overlays", () => {
-  test("help renders all eight grouped actions with primary, aliases, and Unbound", () => {
+  test("help renders all nine grouped actions with primary, aliases, and Unbound", () => {
     const { controller } = harness()
     const settings = defaultShortcutSettings("linux", "4")
     settings.bindings[0]!.aliases.push({ code: "KeyQ", ctrl: true, alt: true, shift: true, meta: false })
@@ -1056,8 +1056,8 @@ describe("web authoritative shortcut overlays", () => {
     expect(text).toContain("Terminal")
     expect(text).toContain("Switch workspace or repository")
     expect(text).toContain("Unbound")
-    expect(opened.view!.body.querySelectorAll(".shortcut-row")).toHaveLength(8)
-    expect(opened.view!.body.querySelectorAll("KBD").length).toBeGreaterThan(8)
+    expect(opened.view!.body.querySelectorAll(".shortcut-row")).toHaveLength(9)
+    expect(opened.view!.body.querySelectorAll("KBD").length).toBeGreaterThan(9)
   })
 
   test("chooses help initial focus from safe invoker context", () => {
@@ -1097,7 +1097,7 @@ describe("web authoritative shortcut overlays", () => {
     })
     expect(opened.view?.body.textContent).toContain("Loading shortcuts…")
     await settings.ready
-    expect(opened.view?.body.querySelectorAll(".shortcut-row")).toHaveLength(8)
+    expect(opened.view?.body.querySelectorAll(".shortcut-row")).toHaveLength(9)
 
     const unbind = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.textContent === "Unbind shortcut")
     unbind?.dispatch("click")

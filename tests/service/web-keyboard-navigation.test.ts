@@ -99,7 +99,7 @@ function harness(options: { unavailable?: WebShortcutActionId } = {}) {
 describe("web keyboard navigation boundary", () => {
   test("exposes one complete canonical registry with effective bindings and availability", () => {
     const { registry } = harness({ unavailable: "terminal.close" })
-    expect(registry.entries()).toHaveLength(8)
+    expect(registry.entries()).toHaveLength(9)
     expect(registry.entries().map(({ actionId }) => actionId)).toEqual(WEB_SHORTCUT_ACTION_IDS)
     expect(registry.entries().map(({ actionId, label, category }) => ({ actionId, label, category }))).toEqual(
       WEB_SHORTCUT_ACTION_METADATA.map(({ actionId, label, category }) => ({ actionId, label, category })),
@@ -135,6 +135,7 @@ describe("web keyboard navigation boundary", () => {
       ["terminal.previous", "KeyJ"],
       ["terminal.next", "KeyL"],
       ["attention.next", "KeyA"],
+      ["workspace.stale", "KeyS"],
     ] as const) {
       const xterm = harness()
       const xtermEvent = linuxEvent(action[1], { repeat: true })

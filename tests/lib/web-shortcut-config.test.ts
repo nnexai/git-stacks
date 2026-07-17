@@ -38,15 +38,15 @@ function authority(initial: GlobalConfig = GlobalConfigSchema.parse({})) {
 }
 
 describe("authoritative web shortcut configuration", () => {
-  test("derives all eight safe platform defaults with no aliases", () => {
+  test("derives all nine safe platform defaults with no aliases", () => {
     const state = authority()
     const macos = state.read("macos")
     const linux = state.read("linux")
 
     expect(macos.bindings.map((row) => row.action_id)).toEqual(WEB_SHORTCUT_ACTION_IDS)
-    expect(macos.bindings.map((row) => row.primary)).toEqual("K P N T W J L A".split(" ").map((key) =>
+    expect(macos.bindings.map((row) => row.primary)).toEqual("K P N T W J L A S".split(" ").map((key) =>
       binding(`Key${key}`, { ctrl: true, meta: true })))
-    expect(linux.bindings.map((row) => row.primary)).toEqual("K P N T W J L A".split(" ").map((key) =>
+    expect(linux.bindings.map((row) => row.primary)).toEqual("K P N T W J L A S".split(" ").map((key) =>
       binding(`Key${key}`, { ctrl: true, alt: true, shift: true })))
     expect(macos.bindings.every((row) => row.aliases.length === 0)).toBe(true)
     expect(linux.bindings.every((row) => row.aliases.length === 0)).toBe(true)

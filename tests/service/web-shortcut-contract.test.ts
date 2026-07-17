@@ -1,7 +1,9 @@
 import { describe, expect, test } from "@test/api"
 import {
+  WEB_SCOPED_SHORTCUT_ACTION_IDS,
   WEB_SHORTCUT_ACTION_IDS,
   WEB_SHORTCUT_MAX_ALIASES,
+  WebScopedShortcutActionIdSchema,
   WebShortcutActionIdSchema,
   WebShortcutBindingSchema,
   WebShortcutGetRequestSchema,
@@ -10,9 +12,13 @@ import {
   WebShortcutSettingsSchema,
 } from "../../packages/protocol/src/web"
 import {
+  WEB_SCOPED_SHORTCUT_ACTION_METADATA,
   WEB_SHORTCUT_ACTION_METADATA,
   defaultShortcutSettings,
+  matchScopedShortcutEvent,
+  matchShortcutEvent,
 } from "../../packages/client/src/shortcuts"
+import { GlobalConfigSchema } from "../../packages/core/src/config"
 import {
   WEB_SHORTCUT_ACTION_IDS as CORE_WEB_SHORTCUT_ACTION_IDS,
   WEB_SHORTCUT_DEFAULTS,
@@ -44,8 +50,9 @@ describe("web shortcut protocol contract", () => {
       "terminal.previous",
       "terminal.next",
       "attention.next",
+      "workspace.stale",
     ])
-    expect(WEB_SHORTCUT_ACTION_IDS).toHaveLength(8)
+    expect(WEB_SHORTCUT_ACTION_IDS).toHaveLength(9)
     for (const actionId of WEB_SHORTCUT_ACTION_IDS) {
       expect(WebShortcutActionIdSchema.parse(actionId)).toBe(actionId)
     }
@@ -53,6 +60,9 @@ describe("web shortcut protocol contract", () => {
     expect(WebShortcutPlatformSchema.parse("macos")).toBe("macos")
     expect(WebShortcutPlatformSchema.parse("linux")).toBe("linux")
     expect(WebShortcutPlatformSchema.safeParse("windows").success).toBe(false)
+    expect(WEB_SCOPED_SHORTCUT_ACTION_IDS).toEqual(["workspace.stale.refresh"])
+    expect(WebScopedShortcutActionIdSchema.parse("workspace.stale.refresh")).toBe("workspace.stale.refresh")
+    expect(WebScopedShortcutActionIdSchema.safeParse("workspace.stale").success).toBe(false)
   })
 
   test("keeps protocol inventory and core-owned defaults in literal agreement", () => {
@@ -63,7 +73,46 @@ describe("web shortcut protocol contract", () => {
     for (const platform of ["macos", "linux"] as const) {
       const client = Object.fromEntries(defaultShortcutSettings(platform).bindings.map((row) => [row.action_id, row.primary]))
       expect(client).toEqual(WEB_SHORTCUT_DEFAULTS[platform])
+      expect(client["workspace.stale"]).toEqual(binding("KeyS", platform === "macos"
+        ? { ctrl: true, meta: true }
+        : { ctrl: true, alt: true, shift: true }))
     }
+    expect(WEB_SHORTCUT_ACTION_METADATA.find(({ actionId }) => actionId === "workspace.stale")).toMatchObject({
+      label: "Open stale workspaces",
+      defaultCode: "KeyS",
+      tuiKey: "s",
+    })
+  })
+
+  test("keeps refresh in one distinct active-view scoped registry", () => {
+    expect(WEB_SCOPED_SHORTCUT_ACTION_METADATA).toEqual([{
+      actionId: "workspace.stale.refresh",
+      scope: "stale-view",
+      label: "Refresh evidence",
+      accessibilityText: "Refresh stale workspace evidence",
+      web: { code: "KeyR", label: "R" },
+      tui: { key: "r" },
+    }])
+    const refreshEvent = {
+      type: "keydown",
+      code: "KeyR",
+      key: "r",
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    }
+    expect(matchScopedShortcutEvent(refreshEvent, "stale-view")).toMatchObject({
+      handled: true,
+      actionId: "workspace.stale.refresh",
+    })
+    expect(matchScopedShortcutEvent(refreshEvent, undefined)).toEqual({ handled: false, reason: "inactive-scope" })
+    expect(matchShortcutEvent(refreshEvent, defaultShortcutSettings("linux"))).toEqual({ handled: false, reason: "unmatched" })
+    expect(defaultShortcutSettings("linux").bindings.map(({ action_id }) => action_id)).not.toContain("workspace.stale.refresh")
+    expect(Object.keys(WEB_SHORTCUT_DEFAULTS.linux)).not.toContain("workspace.stale.refresh")
+    expect(GlobalConfigSchema.safeParse({
+      web: { shortcuts: { linux: { "workspace.stale.refresh": { primary: null } } } },
+    }).success).toBe(false)
   })
 
   test("accepts only normalized physical letter bindings", () => {
