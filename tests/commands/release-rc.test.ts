@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "@test/api"
-import { execSync } from "child_process"
-import { existsSync, readFileSync } from "fs"
+import { execSync, spawnSync } from "child_process"
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs"
 import { join } from "path"
 import {
   applyHostileGlobalGitEnv,
@@ -180,6 +180,105 @@ describe("v0.21.0 release candidate smoke", () => {
     expect(releaseWorkflow).toContain("npm run release:check")
     expect(releaseWorkflow).toContain("node scripts/pack-release.mjs")
     expect(releaseWorkflow).not.toContain("npm publish")
+  })
+})
+
+describe("Phase 127 pre-metadata release authority", () => {
+  const expectedValidationCalls = [
+    "run build:packages",
+    "run tui:build",
+    "run typecheck",
+    "run test:architecture",
+    "run test:deps",
+    "run test:vitest",
+    "run test:node",
+    "run test:tui",
+    "run coverage",
+    "run verify:gates",
+    "run audit:licenses",
+    "run audit:runtime",
+    "run check:packages",
+  ]
+  const existingPhaseDirectories = readdirSync(join(ROOT, ".planning", "phases"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+  let baseDir: string
+  let binDir: string
+  let npmLog: string
+  let gitLog: string
+  let networkLog: string
+
+  function writeRecorder(name: string, logVariable: string): void {
+    const executable = join(binDir, name)
+    writeFileSync(executable, `#!/bin/sh\nprintf '%s\\n' "$*" >> "$${logVariable}"\nexit 0\n`, { mode: 0o755 })
+  }
+
+  function logLines(path: string): string[] {
+    return readFileSync(path, "utf8").split("\n").filter(Boolean)
+  }
+
+  beforeEach(() => {
+    baseDir = makeTmpDir("phase127-release-authority")
+    binDir = join(baseDir, "bin")
+    npmLog = join(baseDir, "npm.log")
+    gitLog = join(baseDir, "git.log")
+    networkLog = join(baseDir, "network.log")
+    mkdir(baseDir, "bin")
+    write(baseDir, "package.json", `${JSON.stringify({ version: PACKAGE_JSON.version }, null, 2)}\n`)
+    write(baseDir, "CHANGELOG.md", `# Changelog\n\n## [${PACKAGE_JSON.version}]\n\nCurrent pre-metadata fixture.\n`)
+    write(baseDir, "npm.log", "")
+    write(baseDir, "git.log", "")
+    write(baseDir, "network.log", "")
+    writeRecorder("npm", "PHASE127_NPM_LOG")
+    writeRecorder("git", "PHASE127_GIT_LOG")
+    for (const command of ["gh", "curl", "wget"]) writeRecorder(command, "PHASE127_NETWORK_LOG")
+
+    for (const phase of existingPhaseDirectories) {
+      mkdir(baseDir, ".planning", "phases", phase)
+      write(baseDir, `.planning/phases/${phase}/phase127-preservation-sentinel`, `${phase}\n`)
+    }
+  })
+
+  afterEach(() => cleanup(baseDir))
+
+  test("repeated default validation records only local checks and preserves every planning phase directory", () => {
+    const releaseScript = join(ROOT, "scripts", "release-rc-check.mjs")
+    const env = {
+      ...process.env,
+      PATH: binDir,
+      PHASE127_NPM_LOG: npmLog,
+      PHASE127_GIT_LOG: gitLog,
+      PHASE127_NETWORK_LOG: networkLog,
+    }
+    const results = [
+      spawnSync(process.execPath, [releaseScript], { cwd: baseDir, env, encoding: "utf8" }),
+      spawnSync(process.execPath, [releaseScript], { cwd: baseDir, env, encoding: "utf8" }),
+    ]
+
+    for (const result of results) {
+      expect(result.error).toBeUndefined()
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+      expect(result.stderr).toBe("")
+      expect(result.stdout).toContain("Verification only. Pass --tag explicitly")
+      expect(result.stdout).toContain(`RC verification passed for ${PACKAGE_JSON.version}.`)
+    }
+
+    expect(logLines(npmLog)).toEqual([...expectedValidationCalls, ...expectedValidationCalls])
+    expect(logLines(gitLog)).toEqual([])
+    expect(logLines(networkLog)).toEqual([])
+    expect([...logLines(npmLog), ...logLines(gitLog), ...logLines(networkLog)].join("\n")).not.toMatch(
+      /(?:^|\s)(?:tag|push|publish)(?:\s|$)|release\s+create|workflow\s+(?:run|dispatch)|repository_dispatch|workflow_dispatch/i,
+    )
+
+    const retainedPhaseDirectories = readdirSync(join(baseDir, ".planning", "phases"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+    expect(retainedPhaseDirectories).toEqual(existingPhaseDirectories)
+    for (const phase of existingPhaseDirectories) {
+      expect(readFileSync(join(baseDir, ".planning", "phases", phase, "phase127-preservation-sentinel"), "utf8")).toBe(`${phase}\n`)
+    }
   })
 })
 
