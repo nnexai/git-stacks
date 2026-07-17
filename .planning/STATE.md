@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-07-PLAN.md
-last_updated: "2026-07-17T12:24:12.116Z"
+stopped_at: Completed 127-08-PLAN.md
+last_updated: "2026-07-17T13:24:08.482Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 07 web stale workspace overlay and canonical lifecycle integration completed
+last_activity_desc: Phase 127 Plan 08 OpenTUI stale workspace intelligence and canonical lifecycle integration completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 35
-  percent: 83
+  completed_plans: 36
+  percent: 86
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 8 of 14
+Plan: 9 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 07 web stale workspace overlay and canonical lifecycle integration completed
+Last activity: 2026-07-17 — Phase 127 Plan 08 OpenTUI stale workspace intelligence and canonical lifecycle integration completed
 
 ## Decisions
 
@@ -106,6 +106,11 @@ Last activity: 2026-07-17 — Phase 127 Plan 07 web stale workspace overlay and 
 - [Phase 127]: Keep stale evidence volatile and reuse it only while its revision matches the authoritative snapshot.
 - [Phase 127]: Render canonical Archive/Remove inventory and reveal Force Remove only after typed dirty reauthorization.
 - [Phase 127]: Reconcile normal workspace state and stale evidence once after terminal lifecycle completion without replaying mutation.
+- [Phase 127]: Keep the dedicated stale UIView as the sole owner of its navigation and action keys, with the App guard preceding every dashboard shortcut.
+- [Phase 127]: Reuse volatile stale evidence only at an exact authoritative revision; explicit Refresh always requests a forced service evaluation.
+- [Phase 127]: Observe canonical Open through the shared durable operation tracker and recover only by accepted operation identity, never by replaying an ambiguous submit.
+- [Phase 127]: Show only canonical Archive and Remove descriptors in stale Workspace actions; reveal Force Remove only after typed dirty authority and a fresh exact-revision inventory.
+- [Phase 127]: After each lifecycle terminal result, refresh authoritative workspace state and then stale evidence once before restoring presentation.
 
 ## Validated Inputs
 
@@ -181,9 +186,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P05 | 27 min | 2 tasks | 6 files |
 | Phase 127 P06 | 29m 57s | 3 tasks | 20 files |
 | Phase 127 P07 | 20min | 3 tasks | 6 files |
+| Phase 127 P08 | 50min | 3 tasks | 5 files |
 
 ## Session
 
-**Last session:** 2026-07-17T12:24:12.105Z
-**Stopped at:** Completed 127-07-PLAN.md
+**Last session:** 2026-07-17T13:22:16.673Z
+**Stopped at:** Completed 127-08-PLAN.md
 **Resume file:** None

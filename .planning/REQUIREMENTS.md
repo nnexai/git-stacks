@@ -66,11 +66,11 @@
 
 ## Stale Workspace Intelligence
 
-- [ ] **STALE-01:** A separate stale-workspace view identifies cleanup candidates using explainable signals such as merged/closed PR or MR, deleted remote branch, prolonged inactivity, or missing managed worktree.
-- [ ] **STALE-02:** Every candidate displays its triggering reasons and relevant timestamps; users can refresh evidence and open the workspace before deciding what to do.
+- [x] **STALE-01:** A separate stale-workspace view identifies cleanup candidates using explainable signals such as merged/closed PR or MR, deleted remote branch, prolonged inactivity, or missing managed worktree.
+- [x] **STALE-02:** Every candidate displays its triggering reasons and relevant timestamps; users can refresh evidence and open the workspace before deciding what to do.
 - [ ] **STALE-03:** Stale detection is suggestion-only and never archives, removes, closes terminals, discards worktrees, or changes workspace YAML automatically.
-- [ ] **STALE-04:** Archive and Remove are explicit follow-up actions using the same confirmation, terminal, dirty-worktree, and failure semantics defined above.
-- [ ] **STALE-05:** Forge/network failures and unavailable activity data remain visible as unknown evidence and cannot be treated as proof that a workspace is stale.
+- [x] **STALE-04:** Archive and Remove are explicit follow-up actions using the same confirmation, terminal, dirty-worktree, and failure semantics defined above.
+- [x] **STALE-05:** Forge/network failures and unavailable activity data remain visible as unknown evidence and cannot be treated as proof that a workspace is stale.
 
 ## Release Candidate Closure
 
