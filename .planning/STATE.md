@@ -5,10 +5,10 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-12-PLAN.md
-last_updated: "2026-07-17T15:06:39.685Z"
+stopped_at: Resumed corrective Plan 127-12 regression and candidate refreeze
+last_updated: "2026-07-17T18:57:50Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 12 exact-candidate evidence ledger and pending validation state completed
+last_activity_desc: Resumed post-fix regression and replacement exact-candidate preparation
 progress:
   total_phases: 5
   completed_phases: 4
@@ -208,6 +208,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-17T15:06:39.649Z
-**Stopped at:** Completed 127-12-PLAN.md
+**Last session:** 2026-07-17T18:57:50Z
+**Stopped at:** Session resumed; proceeding solo with web auto-launch reproduction and full post-fix regression
 **Resume file:** None
