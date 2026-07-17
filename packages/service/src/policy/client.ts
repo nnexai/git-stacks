@@ -68,6 +68,7 @@ export type ServiceEventObserver = (event: ServiceEvent) => void
 
 let cachedAccess: SecureRpcClient | undefined
 let accessRequest: Promise<SecureRpcClient> | undefined
+let accessGeneration = 0
 
 const OFFICIAL_SCOPES = [
   "snapshot.read", "operation.write", "event.read", "signal.read", "signal.dismiss",
@@ -90,7 +91,8 @@ async function authenticateLocalService() {
 async function authenticatedService(): Promise<SecureRpcClient> {
   if (cachedAccess) return cachedAccess
   if (!accessRequest) {
-    accessRequest = (async () => {
+    const requestGeneration = accessGeneration
+    const request = (async () => {
       const local = await authenticateLocalService()
       const descriptor = local.descriptor
       const authenticate = async (launchToken: string, targetId: string) => authenticateSecureCarrier(await connectLocalTls(descriptor.local_tls), {
@@ -110,10 +112,17 @@ async function authenticatedService(): Promise<SecureRpcClient> {
       }
       void authenticated.rpc.closed.then(() => { if (cachedAccess === authenticated.rpc) cachedAccess = undefined })
       return authenticated.rpc
-    })().then((access) => {
+    })().then(async (access) => {
+      if (requestGeneration !== accessGeneration) {
+        await access.close("service client closed during authentication")
+        throw new Error("Service client authentication was superseded by shutdown")
+      }
       cachedAccess = access
       return access
-    }).finally(() => { accessRequest = undefined })
+    }).finally(() => {
+      if (accessRequest === request) accessRequest = undefined
+    })
+    accessRequest = request
   }
   return accessRequest
 }
@@ -124,6 +133,7 @@ async function secureRequest<T>(
   options: { signal?: AbortSignal; scope?: SecureScope; idempotencyKey?: string; retry?: boolean } = {},
 ): Promise<T> {
   const { retry = true, ...requestOptions } = options
+  const requestGeneration = accessGeneration
   const attempts = retry ? 2 : 1
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -131,7 +141,7 @@ async function secureRequest<T>(
       return await rpc.request<T>(method, body, requestOptions)
     } catch (error) {
       cachedAccess = undefined
-      if (attempt === attempts - 1 || options.signal?.aborted) throw error
+      if (requestGeneration !== accessGeneration || attempt === attempts - 1 || options.signal?.aborted) throw error
     }
   }
   throw new Error("git-stacks secure service request did not produce a response")
@@ -279,10 +289,16 @@ export async function recoverLocalWebTransport(signal?: AbortSignal): Promise<{ 
 }
 
 export async function closeServiceClient(reason = "one-shot client complete"): Promise<void> {
+  accessGeneration += 1
   const rpc = cachedAccess
+  const pending = accessRequest
   cachedAccess = undefined
   accessRequest = undefined
-  await rpc?.close(reason)
+  const [closeResult] = await Promise.allSettled([
+    rpc?.close(reason),
+    pending?.then(() => undefined, () => undefined),
+  ])
+  if (closeResult.status === "rejected") throw closeResult.reason
 }
 
 export async function refreshDynamicEnvironment(
