@@ -13,6 +13,7 @@ import {
   WebOperationSummarySchema,
   WebForgeErrorDetailsSchema,
   WebSnapshotSchema,
+  WebStaleWorkspaceResponseSchema,
   WebWorkspaceActionInventorySchema,
   WorkspaceLifecyclePhaseSchema,
   type WebFileEntry,
@@ -21,6 +22,10 @@ import {
   type WebOperation,
   type WebOperationSummary,
   type WebSnapshot,
+  type WebStaleWorkspaceCaution,
+  type WebStaleWorkspaceConfirmedReason,
+  type WebStaleWorkspaceResponse,
+  type WebStaleWorkspaceUnknownEvidence,
   type WebWorkspaceActionInventory,
 } from "@git-stacks/protocol"
 
@@ -236,6 +241,108 @@ function operationFailureMessage(code: string, lifecycleKind?: string): string {
     request_timeout: "The operation timed out.",
     capacity_exceeded: "The service capacity limit was reached.",
   }[code] ?? "The operation failed."
+}
+
+function projectStaleConfirmedReason(reason: WebStaleWorkspaceConfirmedReason): WebStaleWorkspaceConfirmedReason {
+  switch (reason.code) {
+    case "merged":
+    case "closed":
+      return {
+        code: reason.code,
+        occurred_at: reason.occurred_at,
+        repository_id: reason.repository_id,
+        repository_name: reason.repository_name,
+        provider: reason.provider,
+      }
+    case "remote_branch_deleted":
+    case "managed_worktree_missing":
+      return {
+        code: reason.code,
+        occurred_at: reason.occurred_at,
+        repository_id: reason.repository_id,
+        repository_name: reason.repository_name,
+      }
+    case "inactive":
+      return { code: reason.code, occurred_at: reason.occurred_at }
+  }
+}
+
+function projectStaleUnknownEvidence(evidence: WebStaleWorkspaceUnknownEvidence): WebStaleWorkspaceUnknownEvidence {
+  switch (evidence.code) {
+    case "unsupported_host":
+    case "tool_unavailable":
+    case "authentication_required":
+    case "rate_limited":
+    case "request_timeout":
+    case "request_aborted":
+    case "provider_unavailable":
+    case "malformed_response":
+    case "output_limit_exceeded":
+      return {
+        code: evidence.code,
+        observed_at: evidence.observed_at,
+        repository_id: evidence.repository_id,
+        repository_name: evidence.repository_name,
+        provider: evidence.provider,
+      }
+    case "remote_check_failed":
+    case "worktree_inaccessible":
+    case "probe_superseded":
+      return {
+        code: evidence.code,
+        observed_at: evidence.observed_at,
+        repository_id: evidence.repository_id,
+        repository_name: evidence.repository_name,
+      }
+    case "invalid_provenance":
+    case "unsupported_provider":
+    case "activity_unavailable":
+      return { code: evidence.code, observed_at: evidence.observed_at }
+  }
+}
+
+function projectStaleCaution(caution: WebStaleWorkspaceCaution): WebStaleWorkspaceCaution {
+  switch (caution.code) {
+    case "dirty_worktree":
+    case "workspace_drift":
+      return {
+        code: caution.code,
+        repository_id: caution.repository_id,
+        repository_name: caution.repository_name,
+      }
+    case "ahead_of_remote":
+      return {
+        code: caution.code,
+        repository_id: caution.repository_id,
+        repository_name: caution.repository_name,
+        count: caution.count,
+      }
+    case "notes_present":
+      return { code: caution.code, count: caution.count }
+  }
+}
+
+export function projectWebStaleWorkspaceEvaluation(input: WebStaleWorkspaceResponse): WebStaleWorkspaceResponse {
+  return WebStaleWorkspaceResponseSchema.parse({
+    revision: input.revision,
+    checked_at: input.checked_at,
+    threshold_days: input.threshold_days,
+    candidates: input.candidates.map((candidate) => ({
+      workspace_id: candidate.workspace_id,
+      workspace_name: candidate.workspace_name,
+      activity_at: candidate.activity_at,
+      confirmed_reasons: candidate.confirmed_reasons.map(projectStaleConfirmedReason),
+      unknown_evidence: candidate.unknown_evidence.map(projectStaleUnknownEvidence),
+      cautions: candidate.cautions.map(projectStaleCaution),
+    })),
+    incomplete: input.incomplete.map((row) => ({
+      workspace_id: row.workspace_id,
+      workspace_name: row.workspace_name,
+      activity_at: row.activity_at,
+      unknown_evidence: row.unknown_evidence.map(projectStaleUnknownEvidence),
+      cautions: row.cautions.map(projectStaleCaution),
+    })),
+  })
 }
 
 export function projectWebActionInventory(actions: readonly CanonicalWorkspaceAction[]): WebWorkspaceActionInventory {

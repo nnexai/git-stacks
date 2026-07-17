@@ -32,6 +32,8 @@ import {
   WebNotesResponseSchema,
   WebOperationMutationSchema,
   WebOperationSchema,
+  WebStaleWorkspaceRequestSchema,
+  WebStaleWorkspaceResponseSchema,
   WebWorkspaceActionInventorySchema,
   WebWorkspaceMutationSchema,
   type OperationCancelResult,
@@ -43,6 +45,8 @@ import {
   type WebNotesResponse,
   type WebOperation,
   type WebOperationMutation,
+  type WebStaleWorkspaceRequest,
+  type WebStaleWorkspaceResponse,
   type WebWorkspaceActionInventory,
 } from "@git-stacks/protocol"
 import { ensureManagedServiceProcess } from "../main"
@@ -153,6 +157,17 @@ export async function fetchWorkspaceActionInventory(
 ): Promise<WebWorkspaceActionInventory> {
   const parsed = WebWorkspaceMutationSchema.parse(request)
   return WebWorkspaceActionInventorySchema.parse(await secureRequest("workspace.actions", parsed, {
+    signal,
+    scope: "snapshot.read",
+  }))
+}
+
+export async function fetchStaleWorkspaceEvaluation(
+  request: WebStaleWorkspaceRequest,
+  signal?: AbortSignal,
+): Promise<WebStaleWorkspaceResponse> {
+  const parsed = WebStaleWorkspaceRequestSchema.parse(request)
+  return WebStaleWorkspaceResponseSchema.parse(await secureRequest("workspace.stale.evaluate", parsed, {
     signal,
     scope: "snapshot.read",
   }))
