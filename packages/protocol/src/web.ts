@@ -325,6 +325,232 @@ export const WebSnapshotSchema = z.strictObject({
 })
 export type WebSnapshot = z.infer<typeof WebSnapshotSchema>
 
+export const WEB_STALE_WORKSPACE_LIMITS = Object.freeze({
+  workspaces: 16,
+  confirmed_reasons: 18,
+  unknown_evidence: 18,
+  cautions: 25,
+  identity_bytes: 96,
+  count: 2_147_483_647,
+})
+
+const WebStaleWorkspaceIdentitySchema = utf8BoundedString(WEB_STALE_WORKSPACE_LIMITS.identity_bytes, 1)
+  .refine((value) => !containsHostPath(value) && ![...value].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0
+    return codePoint < 32 || codePoint === 127
+  }), {
+    message: "Stale workspace identities must not contain host paths or control characters",
+  })
+const WebStaleWorkspaceProviderSchema = z.enum(["github", "gitlab"])
+const WebStaleWorkspaceRepositoryIdentity = {
+  repository_id: EntityIdSchema,
+  repository_name: WebStaleWorkspaceIdentitySchema,
+}
+const WebStaleWorkspaceUnscopedRepositoryIdentity = {
+  repository_id: z.undefined().optional(),
+  repository_name: z.undefined().optional(),
+}
+const WebStaleWorkspaceNoProvider = { provider: z.undefined().optional() }
+const WebStaleWorkspaceCountSchema = z.number().int().positive().max(WEB_STALE_WORKSPACE_LIMITS.count)
+
+export const WebStaleWorkspaceConfirmedReasonCodeSchema = z.enum([
+  "merged",
+  "closed",
+  "remote_branch_deleted",
+  "managed_worktree_missing",
+  "inactive",
+])
+export type WebStaleWorkspaceConfirmedReasonCode = z.infer<typeof WebStaleWorkspaceConfirmedReasonCodeSchema>
+export const WebStaleWorkspaceConfirmedReasonSchema = z.union([
+  z.strictObject({
+    code: z.enum(["merged", "closed"]),
+    occurred_at: TimestampSchema,
+    ...WebStaleWorkspaceRepositoryIdentity,
+    provider: WebStaleWorkspaceProviderSchema,
+  }),
+  z.strictObject({
+    code: z.enum(["remote_branch_deleted", "managed_worktree_missing"]),
+    occurred_at: TimestampSchema,
+    ...WebStaleWorkspaceRepositoryIdentity,
+    ...WebStaleWorkspaceNoProvider,
+  }),
+  z.strictObject({
+    code: z.literal("inactive"),
+    occurred_at: TimestampSchema,
+    ...WebStaleWorkspaceUnscopedRepositoryIdentity,
+    ...WebStaleWorkspaceNoProvider,
+  }),
+])
+export type WebStaleWorkspaceConfirmedReason = z.infer<typeof WebStaleWorkspaceConfirmedReasonSchema>
+
+export const WebStaleWorkspaceUnknownEvidenceCodeSchema = z.enum([
+  "invalid_provenance",
+  "unsupported_provider",
+  "unsupported_host",
+  "tool_unavailable",
+  "authentication_required",
+  "rate_limited",
+  "request_timeout",
+  "request_aborted",
+  "provider_unavailable",
+  "malformed_response",
+  "output_limit_exceeded",
+  "remote_check_failed",
+  "worktree_inaccessible",
+  "activity_unavailable",
+  "probe_superseded",
+])
+export type WebStaleWorkspaceUnknownEvidenceCode = z.infer<typeof WebStaleWorkspaceUnknownEvidenceCodeSchema>
+export const WebStaleWorkspaceUnknownEvidenceSchema = z.union([
+  z.strictObject({
+    code: z.enum([
+      "unsupported_host",
+      "tool_unavailable",
+      "authentication_required",
+      "rate_limited",
+      "request_timeout",
+      "request_aborted",
+      "provider_unavailable",
+      "malformed_response",
+      "output_limit_exceeded",
+    ]),
+    observed_at: TimestampSchema,
+    ...WebStaleWorkspaceRepositoryIdentity,
+    provider: WebStaleWorkspaceProviderSchema,
+  }),
+  z.strictObject({
+    code: z.enum(["remote_check_failed", "worktree_inaccessible", "probe_superseded"]),
+    observed_at: TimestampSchema,
+    ...WebStaleWorkspaceRepositoryIdentity,
+    ...WebStaleWorkspaceNoProvider,
+  }),
+  z.strictObject({
+    code: z.enum(["invalid_provenance", "unsupported_provider", "activity_unavailable"]),
+    observed_at: TimestampSchema,
+    ...WebStaleWorkspaceUnscopedRepositoryIdentity,
+    ...WebStaleWorkspaceNoProvider,
+  }),
+])
+export type WebStaleWorkspaceUnknownEvidence = z.infer<typeof WebStaleWorkspaceUnknownEvidenceSchema>
+
+export const WebStaleWorkspaceCautionCodeSchema = z.enum([
+  "dirty_worktree",
+  "ahead_of_remote",
+  "workspace_drift",
+  "notes_present",
+])
+export type WebStaleWorkspaceCautionCode = z.infer<typeof WebStaleWorkspaceCautionCodeSchema>
+export const WebStaleWorkspaceCautionSchema = z.union([
+  z.strictObject({
+    code: z.enum(["dirty_worktree", "workspace_drift"]),
+    ...WebStaleWorkspaceRepositoryIdentity,
+    count: z.undefined().optional(),
+  }),
+  z.strictObject({
+    code: z.literal("ahead_of_remote"),
+    ...WebStaleWorkspaceRepositoryIdentity,
+    count: WebStaleWorkspaceCountSchema,
+  }),
+  z.strictObject({
+    code: z.literal("notes_present"),
+    ...WebStaleWorkspaceUnscopedRepositoryIdentity,
+    count: WebStaleWorkspaceCountSchema,
+  }),
+])
+export type WebStaleWorkspaceCaution = z.infer<typeof WebStaleWorkspaceCautionSchema>
+
+function staleEvidenceKey(value: {
+  code: string
+  repository_id?: string
+  provider?: string
+  occurred_at?: string
+  observed_at?: string
+  count?: number
+}): string {
+  return [
+    value.code,
+    value.repository_id ?? "",
+    value.provider ?? "",
+    value.occurred_at ?? "",
+    value.observed_at ?? "",
+    value.count ?? "",
+  ].join(String.fromCharCode(0))
+}
+
+export const WebStaleWorkspaceCandidateSchema = z.strictObject({
+  workspace_id: EntityIdSchema,
+  workspace_name: WebStaleWorkspaceIdentitySchema,
+  activity_at: TimestampSchema.nullable(),
+  confirmed_reasons: z.array(WebStaleWorkspaceConfirmedReasonSchema)
+    .min(1)
+    .max(WEB_STALE_WORKSPACE_LIMITS.confirmed_reasons),
+  unknown_evidence: z.array(WebStaleWorkspaceUnknownEvidenceSchema)
+    .max(WEB_STALE_WORKSPACE_LIMITS.unknown_evidence),
+  cautions: z.array(WebStaleWorkspaceCautionSchema).max(WEB_STALE_WORKSPACE_LIMITS.cautions),
+}).superRefine(({ confirmed_reasons, unknown_evidence, cautions }, context) => {
+  for (const [path, rows] of [
+    ["confirmed_reasons", confirmed_reasons],
+    ["unknown_evidence", unknown_evidence],
+    ["cautions", cautions],
+  ] as const) {
+    if (new Set(rows.map(staleEvidenceKey)).size !== rows.length) {
+      context.addIssue({ code: "custom", path: [path], message: "Stale workspace evidence must be unique" })
+    }
+  }
+})
+export type WebStaleWorkspaceCandidate = z.infer<typeof WebStaleWorkspaceCandidateSchema>
+
+export const WebStaleWorkspaceIncompleteSchema = z.strictObject({
+  workspace_id: EntityIdSchema,
+  workspace_name: WebStaleWorkspaceIdentitySchema,
+  activity_at: TimestampSchema.nullable(),
+  unknown_evidence: z.array(WebStaleWorkspaceUnknownEvidenceSchema)
+    .min(1)
+    .max(WEB_STALE_WORKSPACE_LIMITS.unknown_evidence),
+  cautions: z.array(WebStaleWorkspaceCautionSchema).max(WEB_STALE_WORKSPACE_LIMITS.cautions),
+}).superRefine(({ unknown_evidence, cautions }, context) => {
+  if (new Set(unknown_evidence.map(staleEvidenceKey)).size !== unknown_evidence.length) {
+    context.addIssue({ code: "custom", path: ["unknown_evidence"], message: "Stale workspace unknown evidence must be unique" })
+  }
+  if (new Set(cautions.map(staleEvidenceKey)).size !== cautions.length) {
+    context.addIssue({ code: "custom", path: ["cautions"], message: "Stale workspace cautions must be unique" })
+  }
+})
+export type WebStaleWorkspaceIncomplete = z.infer<typeof WebStaleWorkspaceIncompleteSchema>
+
+export const WebStaleWorkspaceRequestSchema = z.strictObject({
+  expected_revision: RevisionSchema,
+  force_refresh: z.boolean(),
+})
+export type WebStaleWorkspaceRequest = z.infer<typeof WebStaleWorkspaceRequestSchema>
+
+export const WebStaleWorkspaceResponseSchema = z.strictObject({
+  revision: RevisionSchema,
+  checked_at: TimestampSchema,
+  threshold_days: z.literal(30),
+  candidates: z.array(WebStaleWorkspaceCandidateSchema).max(WEB_STALE_WORKSPACE_LIMITS.workspaces),
+  incomplete: z.array(WebStaleWorkspaceIncompleteSchema).max(WEB_STALE_WORKSPACE_LIMITS.workspaces),
+}).superRefine(({ candidates, incomplete }, context) => {
+  const candidateIds = new Set<string>()
+  for (const [index, candidate] of candidates.entries()) {
+    if (candidateIds.has(candidate.workspace_id)) {
+      context.addIssue({ code: "custom", path: ["candidates", index, "workspace_id"], message: "Stale candidates must be unique" })
+    }
+    candidateIds.add(candidate.workspace_id)
+  }
+  const incompleteIds = new Set<string>()
+  for (const [index, row] of incomplete.entries()) {
+    if (incompleteIds.has(row.workspace_id)) {
+      context.addIssue({ code: "custom", path: ["incomplete", index, "workspace_id"], message: "Incomplete stale rows must be unique" })
+    }
+    if (candidateIds.has(row.workspace_id)) {
+      context.addIssue({ code: "custom", path: ["incomplete", index, "workspace_id"], message: "A workspace cannot be both candidate and incomplete" })
+    }
+    incompleteIds.add(row.workspace_id)
+  }
+})
+export type WebStaleWorkspaceResponse = z.infer<typeof WebStaleWorkspaceResponseSchema>
+
 export const WebTerminalSchema = z.strictObject({
   id: WebTerminalIdSchema,
   workspace_id: EntityIdSchema,
