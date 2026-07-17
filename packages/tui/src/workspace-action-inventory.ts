@@ -1,4 +1,8 @@
-import { workspaceActionLabel } from "@git-stacks/client"
+import {
+  createStaleWorkspaceLoadCoordinator,
+  createStaleWorkspaceResponseGate,
+  workspaceActionLabel,
+} from "@git-stacks/client"
 import type { WebNotesResponse, WebWorkspaceAction, WebWorkspaceActionId } from "@git-stacks/protocol"
 
 export type TuiWorkspaceActionGroup = "Workspace" | "Git" | "Details" | "Lifecycle"
@@ -37,6 +41,18 @@ export function tuiWorkspaceActionRows(descriptors: readonly WebWorkspaceAction[
 export type WorkspaceActionInventoryToken = Readonly<{ generation: number; workspaceId: string }>
 
 export type WorkspaceNotesResponseToken = Readonly<{ generation: number; workspaceId: string; revision: string }>
+
+/** TUI adapter over the browser-safe shared generation/revision gate. */
+export function createStaleWorkspaceRequestGate() {
+  return createStaleWorkspaceResponseGate()
+}
+
+/** TUI adapter over the shared one-conflict load coordinator. */
+export function createStaleWorkspaceRequestCoordinator(
+  options: Parameters<typeof createStaleWorkspaceLoadCoordinator>[0],
+) {
+  return createStaleWorkspaceLoadCoordinator(options)
+}
 
 export function createWorkspaceNotesResponseGate() {
   let generation = 0

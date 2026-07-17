@@ -25,6 +25,7 @@ mock.module("@git-stacks/service/client", () => ({
 }))
 
 const { officialService } = await import("../../../packages/tui/src/official-service")
+const { createStaleWorkspaceRequestCoordinator } = await import("../../../packages/tui/src/workspace-action-inventory")
 
 describe("official TUI stale service bridge", () => {
   test("forwards the strict stale request and exact AbortSignal through the trusted service client", async () => {
@@ -40,13 +41,40 @@ describe("official TUI stale service bridge", () => {
     expect(fetchStaleWorkspaceEvaluation).toHaveBeenLastCalledWith(request, controller.signal)
   })
 
+  test("composes the shared one-conflict coordinator without a TUI retry loop", async () => {
+    const requests: Array<{ expected_revision: string; force_refresh: boolean }> = []
+    let reloads = 0
+    const coordinator = createStaleWorkspaceRequestCoordinator({
+      fetch: async (request) => {
+        requests.push(request)
+        if (requests.length === 1) throw Object.assign(new Error("workspace revision changed"), { code: "conflict" })
+        return PHASE127_CLIENT_RESPONSES.refreshed
+      },
+      reloadAuthoritative: async () => { reloads += 1; return "8" },
+    })
+
+    const result = await coordinator.load({ expectedRevision: "7", forceRefresh: true })
+    expect(result).toEqual({ status: "accepted", response: PHASE127_CLIENT_RESPONSES.refreshed })
+    expect(requests).toEqual([
+      { expected_revision: "7", force_refresh: true },
+      { expected_revision: "8", force_refresh: true },
+    ])
+    expect(reloads).toBe(1)
+  })
+
   test("keeps the service import isolated to the official adapter", async () => {
     const source = await Bun.file("packages/tui/src/official-service.ts").text()
+    const inventorySource = await Bun.file("packages/tui/src/workspace-action-inventory.ts").text()
     expect(source).toContain('from "@git-stacks/service/client"')
     expect(source).toContain("fetchStaleWorkspaceEvaluation")
     expect(source).not.toContain("@git-stacks/service/src")
     expect(source).not.toContain("@git-stacks/core")
     expect(source).not.toContain("node:fs")
     expect(source).not.toContain("node:child_process")
+    expect(inventorySource).toContain('from "@git-stacks/client"')
+    expect(inventorySource).toContain("createStaleWorkspaceResponseGate")
+    expect(inventorySource).toContain("createStaleWorkspaceLoadCoordinator")
+    expect(inventorySource).not.toContain("@git-stacks/service")
+    expect(inventorySource).not.toContain("@git-stacks/core")
   })
 })

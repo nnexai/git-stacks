@@ -170,6 +170,7 @@ export async function fetchStaleWorkspaceEvaluation(
   return WebStaleWorkspaceResponseSchema.parse(await secureRequest("workspace.stale.evaluate", parsed, {
     signal,
     scope: "snapshot.read",
+    retry: false,
   }))
 }
 
