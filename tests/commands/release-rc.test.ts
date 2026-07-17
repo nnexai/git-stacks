@@ -26,10 +26,52 @@ function repoRoot(): string {
   return join(import.meta.dirname, "..", "..")
 }
 
+type PackageManifest = {
+  name: string
+  version: string
+  bin?: Record<string, string>
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+}
+
+type PackageLock = {
+  packages: Record<string, PackageManifest & { workspaces?: string[] }>
+}
+
 const ROOT = repoRoot()
 const README = readFileSync(join(ROOT, "README.md"), "utf8")
 const CHANGELOG = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
-const PACKAGE_JSON = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { version: string; bin: Record<string, string> }
+const RC_VERSION = "0.22.0-rc.1"
+const RC_TAG = "v0.22.0-rc.1"
+const PACKAGE_MANIFEST_PATHS = [
+  "package.json",
+  "packages/protocol/package.json",
+  "packages/client/package.json",
+  "packages/core/package.json",
+  "packages/cli/package.json",
+  "packages/service/package.json",
+  "packages/web/package.json",
+  "packages/tui/package.json",
+] as const
+const INTERNAL_DEPENDENCY_SECTIONS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] as const
+
+function readJson<T>(relativePath: string): T {
+  return JSON.parse(readFileSync(join(ROOT, relativePath), "utf8")) as T
+}
+
+function internalDependencyEntries(manifest: PackageManifest): Array<[string, string]> {
+  return INTERNAL_DEPENDENCY_SECTIONS.flatMap((section) =>
+    Object.entries(manifest[section] ?? {}).filter(([name]) => name.startsWith("@git-stacks/")),
+  )
+}
+
+function lockPackageKey(manifestPath: string): string {
+  return manifestPath === "package.json" ? "" : manifestPath.slice(0, -"/package.json".length)
+}
+
+const PACKAGE_JSON = readJson<PackageManifest & { bin: Record<string, string> }>("package.json")
 
 function changelogEntry(version: string): string {
   const heading = `## [${version}]`
@@ -109,13 +151,55 @@ repos:
   return apiRepo
 }
 
-describe("v0.21.0 release candidate smoke", () => {
-  test("package, changelog, and README describe the Node package boundary", () => {
+describe("v0.22.0 release candidate metadata", () => {
+  test("root and seven workspace manifests use the exact Phase 127 RC graph", () => {
+    const manifests = PACKAGE_MANIFEST_PATHS.map((relativePath) => ({
+      relativePath,
+      manifest: readJson<PackageManifest>(relativePath),
+    }))
+    const versionMismatches = manifests
+      .filter(({ manifest }) => manifest.version !== RC_VERSION)
+      .map(({ relativePath, manifest }) => `${relativePath}:${manifest.version}`)
+    const rangeMismatches = manifests.flatMap(({ relativePath, manifest }) =>
+      internalDependencyEntries(manifest)
+        .filter(([, version]) => version !== RC_VERSION)
+        .map(([name, version]) => `${relativePath}:${name}:${version}`),
+    )
+
+    expect(manifests).toHaveLength(8)
+    expect(versionMismatches).toEqual([])
+    expect(rangeMismatches).toEqual([])
+    expect(PACKAGE_JSON.dependencies?.["@git-stacks/cli"]).toBe(RC_VERSION)
+    expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
+    expect(`v${PACKAGE_JSON.version}`).toBe(RC_TAG)
+  })
+
+  test("npm lockfile mirrors the exact root and workspace RC graph", () => {
+    const lock = readJson<PackageLock>("package-lock.json")
+    const mismatches: string[] = []
+
+    for (const manifestPath of PACKAGE_MANIFEST_PATHS) {
+      const manifest = readJson<PackageManifest>(manifestPath)
+      const lockKey = lockPackageKey(manifestPath)
+      const lockRecord = lock.packages[lockKey]
+      if (!lockRecord) {
+        mismatches.push(`${lockKey || "<root>"}:missing`)
+        continue
+      }
+      if (lockRecord.name !== manifest.name) mismatches.push(`${lockKey || "<root>"}:name:${lockRecord.name}`)
+      if (lockRecord.version !== RC_VERSION) mismatches.push(`${lockKey || "<root>"}:version:${lockRecord.version}`)
+      for (const [name, version] of internalDependencyEntries(lockRecord)) {
+        if (version !== RC_VERSION) mismatches.push(`${lockKey || "<root>"}:${name}:${version}`)
+      }
+    }
+
+    expect(mismatches).toEqual([])
+  })
+
+  test("historical v0.21 release notes retain the Node package boundary", () => {
     const rcEntry = changelogEntry("0.21.0-rc.6")
     const architectureEntry = changelogEntry("0.21.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.6")
-    expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
     expect(CHANGELOG.indexOf("## [0.21.0-rc.6]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.5]"))
     expect(rcEntry).toContain("follow-up release candidate")
     expect(rcEntry).toContain("event subscription")
