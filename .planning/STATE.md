@@ -5,10 +5,10 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Resumed corrective Plan 127-12 regression and candidate refreeze
-last_updated: "2026-07-17T19:05:06Z"
+stopped_at: Plan 127-13 blocking exact-SHA hosted/authenticated and physical/manual evidence checkpoints
+last_updated: "2026-07-17T19:13:47Z"
 last_activity: 2026-07-17
-last_activity_desc: Replacement exact candidate frozen after cold web launch and complete post-fix regression
+last_activity_desc: Replacement candidate reconciled; awaiting Plan 127-13 exact-SHA human evidence
 progress:
   total_phases: 5
   completed_phases: 4
@@ -23,8 +23,8 @@ progress:
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
 Plan: 13 of 14
-Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 12 exact-candidate evidence ledger and pending validation state completed
+Status: Blocked on Plan 127-13 human verification checkpoints
+Last activity: 2026-07-17 — Replacement candidate and ledger verified; hosted/authenticated and physical/manual evidence remains pending
 
 ## Decisions
 
@@ -208,6 +208,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-17T19:05:06Z
-**Stopped at:** Replacement exact candidate 233d294913bd4cd37602f6ef72f53cb960fb12d7 frozen; rebinding Plan 127-12 evidence
+**Last session:** 2026-07-17T19:13:47Z
+**Stopped at:** Plan 127-13 blocking exact-SHA hosted/authenticated and physical/manual evidence checkpoints for candidate 233d294913bd4cd37602f6ef72f53cb960fb12d7
 **Resume file:** None
