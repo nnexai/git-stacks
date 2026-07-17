@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 6/14 plans executed
+**Plans:** 7/14 plans executed
 
 Plans:
 **Wave 0**
@@ -169,7 +169,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 127-07-PLAN.md — Deliver the singleton responsive web stale-workspace overlay.
+- [x] 127-07-PLAN.md — Deliver the singleton responsive web stale-workspace overlay.
 - [ ] 127-08-PLAN.md — Deliver the dedicated width-tiered OpenTUI stale-workspace view.
 
 **Wave 6** *(blocked on Wave 5 completion)*

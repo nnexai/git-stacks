@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-06-PLAN.md
-last_updated: "2026-07-17T11:53:23.049Z"
+stopped_at: Completed 127-07-PLAN.md
+last_updated: "2026-07-17T12:24:12.116Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 06 shared stale client coordination, shortcuts, and trusted TUI adapter completed
+last_activity_desc: Phase 127 Plan 07 web stale workspace overlay and canonical lifecycle integration completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 34
-  percent: 80
+  completed_plans: 35
+  percent: 83
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 7 of 14
+Plan: 8 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 06 shared stale client coordination, shortcuts, and trusted TUI adapter completed
+Last activity: 2026-07-17 — Phase 127 Plan 07 web stale workspace overlay and canonical lifecycle integration completed
 
 ## Decisions
 
@@ -103,6 +103,9 @@ Last activity: 2026-07-17 — Phase 127 Plan 06 shared stale client coordination
 - [Phase 127]: Stale response acceptance requires the newest generation and exact expected revision; typed conflict reloads authoritative state once and retries once.
 - [Phase 127]: workspace.stale is persisted/global, while workspace.stale.refresh is stale-view scoped only and never enters persistence, collision ownership, or browser-global dispatch.
 - [Phase 127]: TUI stale evaluation uses the official service adapter and shared client coordinator; the service client disables hidden transport retry.
+- [Phase 127]: Keep stale evidence volatile and reuse it only while its revision matches the authoritative snapshot.
+- [Phase 127]: Render canonical Archive/Remove inventory and reveal Force Remove only after typed dirty reauthorization.
+- [Phase 127]: Reconcile normal workspace state and stale evidence once after terminal lifecycle completion without replaying mutation.
 
 ## Validated Inputs
 
@@ -177,9 +180,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P04 | 19 min | 2 tasks | 4 files |
 | Phase 127 P05 | 27 min | 2 tasks | 6 files |
 | Phase 127 P06 | 29m 57s | 3 tasks | 20 files |
+| Phase 127 P07 | 20min | 3 tasks | 6 files |
 
 ## Session
 
-**Last session:** 2026-07-17T11:53:23.038Z
-**Stopped at:** Completed 127-06-PLAN.md
+**Last session:** 2026-07-17T12:24:12.105Z
+**Stopped at:** Completed 127-07-PLAN.md
 **Resume file:** None
