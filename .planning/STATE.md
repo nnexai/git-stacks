@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.22.0
 milestone_name: Workspace Productivity
-current_phase: 126
-current_phase_name: Web Workflow and Forge-Source Parity
+current_phase: 127
+current_phase_name: Stale Workspace Intelligence and RC Closure
 status: in_progress
-stopped_at: Phase 126 complete; stopped before Phase 127 per autonomous --to 126 boundary
-last_updated: "2026-07-17T04:06:32.000Z"
+stopped_at: Phase 127 planning complete; 14 plans ready to execute
+last_updated: "2026-07-17T06:18:02.281Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 126 completed with full local gates and Phase 127 live/hosted/manual handoff
+last_activity_desc: Phase 127 planning complete — 14 plans ready with explicit human evidence and release-stop boundaries
 progress:
   total_phases: 5
   completed_phases: 4
@@ -21,10 +21,10 @@ progress:
 
 ## Current Position
 
-Phase: 126 — Web Workflow and Forge-Source Parity
-Plan: 8 of 8
-Status: Complete; autonomous run stopped before Phase 127
-Last activity: 2026-07-17 — Full local gates passed and Phase 127 live/hosted/manual handoff was preserved
+Phase: 127 — Stale Workspace Intelligence and RC Closure
+Plan: 0 of 14
+Status: Ready to execute
+Last activity: 2026-07-17 — Phase 127 planning complete
 
 ## Decisions
 
@@ -136,7 +136,7 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Operator Next Steps
 
-- Stop here. When explicitly requested, begin Phase 127 using `126-PHASE127-HANDOFF.md`; retain its hosted/live/manual pre-tag gate and do not tag, push, publish, or release without separate authorization.
+- Execute Phase 127 from Wave 0 using the 14 validated plans. Preserve the hosted/authenticated/physical/manual checkpoints and do not tag, push, publish, create a release, or dispatch release-only workflows without separate explicit authorization.
 
 ## Performance Metrics
 
@@ -153,6 +153,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-17T04:06:32.000Z
-**Stopped at:** Phase 126 complete; do not begin Phase 127 in this run
-**Resume file:** None — Phase 126 continuation was consumed
+**Last session:** 2026-07-17T06:18:02.281Z
+**Stopped at:** Phase 127 planning complete; ready to execute Wave 0
+**Resume file:** .planning/phases/127-stale-workspace-intelligence-and-rc-closure/127-01-PLAN.md

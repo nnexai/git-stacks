@@ -143,6 +143,58 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
+**Plans:** 14 plans
+
+Plans:
+**Wave 0**
+
+- [ ] 127-01-PLAN.md — Create provider, policy, cache, revision, and no-mutation RED contracts.
+- [ ] 127-02-PLAN.md — Create web, TUI, conformance, architecture, and release RED contracts.
+
+**Wave 1** *(blocked on Wave 0 completion)*
+
+- [ ] 127-03-PLAN.md — Add strict stale DTOs, shortcut IDs, and GitHub/GitLab status probes.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 127-04-PLAN.md — Implement qualification, ranking, bounded evaluation, and volatile network cache.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 127-05-PLAN.md — Wire the revision-first secure route, projection, service lifetime, and trusted client.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 127-06-PLAN.md — Add shared presentation, generations, retry, shortcuts, and TUI adapter seams.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 127-07-PLAN.md — Deliver the singleton responsive web stale-workspace overlay.
+- [ ] 127-08-PLAN.md — Deliver the dedicated width-tiered OpenTUI stale-workspace view.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 127-09-PLAN.md — Close deterministic cross-client, architecture, ASVS, build, and test gates.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 127-10-PLAN.md — Move all manifests, exact internal ranges, and lockfile to 0.22.0-rc.1.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 127-11-PLAN.md — Add stale/RC documentation and run validation-only release checks.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 127-12-PLAN.md — Freeze the candidate SHA and create the honest evidence ledger.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 127-13-PLAN.md — Run explicit hosted/authenticated and physical/manual evidence checkpoints.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 127-14-PLAN.md — Reconcile exact-SHA human evidence and derive final validation status.
 
 **Success criteria:**
 
@@ -160,7 +212,7 @@ Plans:
 | 124 | User Shell and Environment Authority | 7 | Complete    |
 | 125 | Terminal-Safe Keyboard Navigation | 13 | Complete    |
 | 126 | Web Workflow and Forge-Source Parity | 9 | Complete    |
-| 127 | Stale Workspace Intelligence and RC Closure | 7 | Not started |
+| 127 | Stale Workspace Intelligence and RC Closure | 7 | Planned    |
 
 ## Scope control
 

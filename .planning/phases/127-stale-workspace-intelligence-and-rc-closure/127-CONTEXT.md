@@ -16,37 +16,37 @@ This phase does not add automatic cleanup, a client-owned stale policy, a new CL
 ## Implementation Decisions
 
 ### Qualification and Ranking
-- Use a fixed 30-day inactivity threshold for the first release candidate; do not add configuration or migration scope.
-- A workspace qualifies with at least one confirmed positive reason: canonical change merged or closed, a confirmed repo-scoped deleted remote branch, a missing managed worktree, or activity older than the threshold.
-- Rank transparently rather than with an opaque score: more confirmed reasons first, then stronger terminal evidence, then inactivity-only candidates, then oldest activity, then stable name/ID tie-breaking.
-- Keep branch evidence repository-scoped and never imply that one missing branch makes the whole workspace safe to remove. Dirty/ahead/drift/notes are visible cautions only and neither prove nor suppress staleness.
+- **D-01:** Use a fixed 30-day inactivity threshold for the first release candidate; do not add configuration or migration scope.
+- **D-02:** A workspace qualifies with at least one confirmed positive reason: canonical change merged or closed, a confirmed repo-scoped deleted remote branch, a missing managed worktree, or activity older than the threshold.
+- **D-03:** Rank transparently rather than with an opaque score: more confirmed reasons first, then stronger terminal evidence, then inactivity-only candidates, then oldest activity, then stable name/ID tie-breaking.
+- **D-04:** Keep branch evidence repository-scoped and never imply that one missing branch makes the whole workspace safe to remove. Dirty/ahead/drift/notes are visible cautions only and neither prove nor suppress staleness.
 
 ### Evidence, Refresh, and Unknowns
-- Fetch stale evidence through a separate revision-bound lazy service projection; do not add network work to the base snapshot or introduce background polling.
-- Make view-level Refresh the primary operation. A row retry is optional only if it reuses the same evidence policy and code path.
-- Cache network evidence in volatile memory for five minutes. Explicit Refresh bypasses the cache, and probe results are never persisted to workspace YAML.
-- Require at least one confirmed positive reason for candidate ranking. Failed evidence remains `unknown`; unknown-only workspaces appear separately as evaluation incomplete and never among stale candidates.
-- Use authoritative `activity_at` for inactivity, provider event timestamps for merged/closed changes, and observation timestamps such as “confirmed missing at” for deleted branches or missing worktrees rather than fabricating event times.
-- Revision mismatch fails closed and reloads authoritative state before any retry.
+- **D-05:** Fetch stale evidence through a separate revision-bound lazy service projection; do not add network work to the base snapshot or introduce background polling.
+- **D-06:** Make view-level Refresh the primary operation. A row retry is optional only if it reuses the same evidence policy and code path.
+- **D-07:** Cache network evidence in volatile memory for five minutes. Explicit Refresh bypasses the cache, and probe results are never persisted to workspace YAML.
+- **D-08:** Require at least one confirmed positive reason for candidate ranking. Failed evidence remains `unknown`; unknown-only workspaces appear separately as evaluation incomplete and never among stale candidates.
+- **D-09:** Use authoritative `activity_at` for inactivity, provider event timestamps for merged/closed changes, and observation timestamps such as “confirmed missing at” for deleted branches or missing worktrees rather than fabricating event times.
+- **D-10:** Revision mismatch fails closed and reloads authoritative state before any retry.
 
 ### Forge Status and Provider Scope
-- Query change status only when validated persisted `workspace.source` provenance supplies provider, host, repository, change type, and number.
-- Do not infer PR/MR identity from branch names or remotes. Workspaces without provenance still receive activity, missing-worktree, and remote-branch evidence.
-- Emit distinct `merged` and `closed` reason codes with provider timestamps; both qualify under STALE-01.
-- Keep the Phase 126 GitHub/GitLab baseline. Authentication, rate limiting, malformed metadata, unsupported hosts/providers, and provider unavailability are sanitized unknown outcomes; Gitea remains deferred.
+- **D-11:** Query change status only when validated persisted `workspace.source` provenance supplies provider, host, repository, change type, and number.
+- **D-12:** Do not infer PR/MR identity from branch names or remotes. Workspaces without provenance still receive activity, missing-worktree, and remote-branch evidence.
+- **D-13:** Emit distinct `merged` and `closed` reason codes with provider timestamps; both qualify under STALE-01.
+- **D-14:** Keep the Phase 126 GitHub/GitLab baseline. Authentication, rate limiting, malformed metadata, unsupported hosts/providers, and provider unavailability are sanitized unknown outcomes; Gitea remains deferred.
 
 ### Product Surface and Follow-up Actions
-- Deliver required web and TUI surfaces only; do not add the exploratory `git-stacks stale` CLI command in this phase.
-- Web uses a singleton, scrollable stale overlay adjacent to Archived Workspaces with contained focus and in-place loading, error, refresh, candidate, and incomplete-evaluation states.
-- TUI uses a dedicated keyboard-first `UIView`, not the minimal archived dialog, so multiple reasons, timestamps, unknowns, cautions, and richer navigation remain legible.
-- Open invokes the existing canonical workspace action and selects/navigates only after authoritative success.
-- Show Refresh and Open directly. Expose Archive and Remove through canonical service descriptors and unchanged confirmations; Force Remove appears only after a fresh service inventory permits it.
-- After lifecycle operations, reconcile the stale view and normal workspace state from the authoritative revision. New entry/refresh shortcuts must use the canonical shortcut registry rather than client-local bindings.
+- **D-15:** Deliver required web and TUI surfaces only; do not add the exploratory `git-stacks stale` CLI command in this phase.
+- **D-16:** Web uses a singleton, scrollable stale overlay adjacent to Archived Workspaces with contained focus and in-place loading, error, refresh, candidate, and incomplete-evaluation states.
+- **D-17:** TUI uses a dedicated keyboard-first `UIView`, not the minimal archived dialog, so multiple reasons, timestamps, unknowns, cautions, and richer navigation remain legible.
+- **D-18:** Open invokes the existing canonical workspace action and selects/navigates only after authoritative success.
+- **D-19:** Show Refresh and Open directly. Expose Archive and Remove through canonical service descriptors and unchanged confirmations; Force Remove appears only after a fresh service inventory permits it.
+- **D-20:** After lifecycle operations, reconcile the stale view and normal workspace state from the authoritative revision. New entry/refresh shortcuts must use the canonical shortcut registry rather than client-local bindings.
 
 ### Release and Verification Boundary
-- Prepare lockstep package versions, changelog, migration notes, shortcut reference, configured-shell documentation, package checks, and supported-host evidence for `0.22.0-rc.1` / `v0.22.0-rc.1`.
-- Preserve the Phase 126 handoff boundary: deterministic tests do not substitute for hosted receipts, physical browser/xterm interaction, interactive OpenTUI validation, responsive screenshots, authenticated GitHub/GitLab checks, or human cross-client parity approval.
-- Do not tag, push, publish packages, create a release, or trigger release-only workflows without separate explicit authorization.
+- **D-21:** Prepare lockstep package versions, changelog, migration notes, shortcut reference, configured-shell documentation, package checks, and supported-host evidence for `0.22.0-rc.1` / `v0.22.0-rc.1`.
+- **D-22:** Preserve the Phase 126 handoff boundary: deterministic tests do not substitute for hosted receipts, physical browser/xterm interaction, interactive OpenTUI validation, responsive screenshots, authenticated GitHub/GitLab checks, or human cross-client parity approval.
+- **D-23:** Do not tag, push, publish packages, create a release, or trigger release-only workflows without separate explicit authorization.
 
 ### Claude's Discretion
 - Exact sanitized DTO names, internal cache structure, component factoring, visual labels, and registry-selected shortcut bindings may follow established package conventions.
