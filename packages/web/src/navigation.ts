@@ -240,12 +240,9 @@ export function createWebOverlayFocusCoordinator(options: WebOverlayFocusCoordin
 
   return {
     activate(target) {
-      if (isCoordinatedReturnTarget(target)) {
-        target.activate()
-        return
-      }
       pending = undefined
-      focusEpoch += 1
+      if (isCoordinatedReturnTarget(target)) target.activate()
+      else focusEpoch += 1
     },
     invokeFromElement(invoker, invoke, resolve) {
       if (!invoker) {
@@ -267,9 +264,8 @@ export function createWebOverlayFocusCoordinator(options: WebOverlayFocusCoordin
       return {
         kind: "coordinated-overlay-focus",
         activate() {
-          if (activated) return
           activated = true
-          if (epoch === undefined) epoch = ++focusEpoch
+          epoch = ++focusEpoch
         },
         restore(ownsFocus = alwaysOwnsFocus) {
           if (!activated) this.activate()

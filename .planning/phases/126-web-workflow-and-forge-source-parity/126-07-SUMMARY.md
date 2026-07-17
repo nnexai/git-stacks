@@ -85,7 +85,7 @@ coverage:
     rationale: "Phase 127 intentionally owns physical keyboard, real xterm, screenshot, reconnect, and hosted forge approval before tagging."
 
 duration: 22min
-completed: 2026-07-16
+completed: 2026-07-17
 status: complete
 ---
 
@@ -205,7 +205,7 @@ Overlay generations and focus-ownership predicates cancel stale primary and term
 
 Integration DOM/controller coverage executes the same exported production overlay-runtime factory used by `app.ts`, plus the production binder, canonical workspace registry callback, placement-aware row resolver, coordinator, and singleton overlay API. It covers Notes, Files, and safe-cancel confirmation close from both scope and rerendered row origins; replacement item reacquisition; removed item/menu/group/row fallback; duplicate-label placement; unusable and focus-failing targets; requested-to-current terminal fallback; nested terminal cancellation; stale restore ownership; direct-overlay epoch invalidation; non-overlay scope actions; compatible replacement; and Rename-cancel followed by Create.
 
-Final automated evidence: 55 focused tests passed across `web-workspace-actions`, `web-keyboard-navigation`, and `web-keyboard-overlays`; `npm run web:build` passed; web, client, and protocol workspace typechecks passed; both `npm run test:deps` and `npm run test:architecture` passed; and `git diff --check` passed. An isolated file-keystore browser fixture additionally observed scope Notes, Files, and Remove-cancel restoring the exact originating item/menu state, right-click Notes restoring the connected replacement row with the same stable identities, and rapid Notes-close followed by Create retaining the newer modal/input focus. The fixture, browser session, service, screenshot, and temporary dependency links were removed before commit. Broader physical-keyboard and real-xterm approval remains the Phase 127 manual verification boundary.
+Final automated evidence: 57 focused tests passed from `/tmp/git-stacks-126-07-review-fix` across `web-workspace-actions`, `web-keyboard-navigation`, and `web-keyboard-overlays`; `npm run web:build` passed; web, client, and protocol workspace typechecks passed; both `npm run test:deps` and `npm run test:architecture` passed; and `git diff --check` passed. The final production-path regressions prove that every compatible coordinated replacement advances focus ownership and cancels a queued stale restore, Notes Retry reloads inside the existing overlay without replacing or losing its scope return target, and duplicate-label rows execute the full invocation → rerender → overlay-close path before restoring the exact organization placement. An isolated file-keystore browser fixture additionally observed scope Notes, Files, and Remove-cancel restoring the exact originating item/menu state, right-click Notes restoring the connected replacement row with the same stable identities, and rapid Notes-close followed by Create retaining the newer modal/input focus. Broader physical-keyboard and real-xterm approval remains the Phase 127 manual verification boundary.
 
 ## User Setup Required
 
@@ -225,4 +225,4 @@ None for local implementation. Authenticated provider access and live browser/Op
 
 ---
 *Phase: 126-web-workflow-and-forge-source-parity*
-*Completed: 2026-07-16*
+*Completed: 2026-07-17*

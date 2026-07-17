@@ -7,7 +7,7 @@ import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracke
 import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
 import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
-import { createWebOverlayRuntime, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
+import { bindInPlaceOverlayRetry, createWebOverlayRuntime, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
   document.documentElement.replaceChildren()
@@ -1742,7 +1742,7 @@ async function showWorkspaceNotes(workspace: Workspace): Promise<void> {
       view.body.replaceChildren()
       const error = element("div", "detail-error", "Workspace notes could not be loaded. Retry without changing stored notes.")
       const retry = button("Retry workspace notes", "button primary")
-      retry.addEventListener("click", () => { void reload() })
+      bindInPlaceOverlayRetry(retry, reload)
       view.body.append(error, retry)
       view.setPrimaryFocus(() => retry.focus())
       retry.focus()

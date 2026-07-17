@@ -3,6 +3,7 @@ import { createWorkspaceActionRegistry, defaultShortcutSettings } from "../../pa
 import type { WebShortcutMutation, WebWorkspaceAction, WebWorkspaceActionId } from "../../packages/protocol/src/web"
 import { readFile } from "node:fs/promises"
 import {
+  bindInPlaceOverlayRetry,
   createSingletonOverlayController,
   createWebOverlayRuntime,
   mountFuzzyOverlay,
@@ -410,6 +411,79 @@ describe("web singleton keyboard overlays", () => {
     expect(fixture.terminalFocuses).toEqual([])
   })
 
+  test("invalidates a queued coordinated restore when a compatible overlay replaces the active surface", () => {
+    const fixture = scopeFocusHarness()
+    let returnTarget: ReturnType<typeof fixture.focusCoordinator.takeReturnTarget> | undefined
+    fixture.bind("workspace.notes.list", () => {
+      returnTarget = fixture.focusCoordinator.takeReturnTarget("term-requested")
+      const opened = fixture.controller.open({
+        id: "workspace-notes",
+        title: "Workspace notes",
+        closeLabel: "Close workspace notes",
+        returnTarget,
+      })
+      if (opened.kind !== "opened") throw new Error("Notes overlay did not open")
+      const note = fixture.document.createElement("textarea")
+      opened.view.body.append(note as unknown as HTMLElement)
+      note.focus()
+    })
+    fixture.item.focus()
+    fixture.item.dispatch("click")
+    if (!returnTarget) throw new Error("Coordinated return target was not captured")
+
+    returnTarget.restore()
+    const replacement = fixture.controller.open({
+      id: "workspace-files",
+      title: "Workspace file status",
+      closeLabel: "Close workspace file status",
+      returnTarget: "term-current",
+    })
+    expect(replacement.kind).toBe("opened")
+    if (replacement.kind !== "opened") throw new Error("Replacement overlay did not open")
+    const replacementControl = fixture.document.createElement("button")
+    replacement.view.body.append(replacementControl as unknown as HTMLElement)
+    replacementControl.focus()
+
+    fixture.flushFrame()
+    expect(fixture.menu.hidden).toBe(true)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(fixture.document.activeElement).toBe(replacementControl)
+
+    replacement.view.close()
+    fixture.flushFrames()
+    expect(fixture.menu.hidden).toBe(false)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(fixture.document.activeElement).toBe(fixture.item)
+  })
+
+  test("retries Notes in place and preserves the production scope return target", () => {
+    const fixture = scopeFocusHarness()
+    const view = openScopeOverlay(fixture)
+    const retry = fixture.document.createElement("button")
+    retry.textContent = "Retry workspace notes"
+    view.body.append(retry as unknown as HTMLElement)
+    retry.focus()
+    let reloads = 0
+    bindInPlaceOverlayRetry(retry as unknown as HTMLButtonElement, () => {
+      reloads += 1
+      const composer = fixture.document.createElement("textarea")
+      view.body.replaceChildren(composer as unknown as HTMLElement)
+      composer.focus()
+    })
+
+    retry.dispatch("click")
+    expect(reloads).toBe(1)
+    expect(fixture.controller.activeSurface()).toBe("scope:workspace.notes.list")
+    expect(fixture.document.body.querySelectorAll(".modal-backdrop")).toHaveLength(1)
+    expect(fixture.menu.hidden).toBe(true)
+
+    view.close()
+    fixture.flushFrames()
+    expect(fixture.menu.hidden).toBe(false)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(fixture.document.activeElement).toBe(fixture.item)
+  })
+
   test("restores a production-wired scope confirmation after safe cancellation", async () => {
     const fixture = scopeFocusHarness()
     let keep: FakeElement | undefined
@@ -458,21 +532,65 @@ describe("web singleton keyboard overlays", () => {
     expect(fixture.document.activeElement).toBe(fixture.item)
   })
 
-  test("reacquires the exact duplicate-label workspace-row placement", () => {
+  test("restores the exact duplicate-label placement through invocation, rerender, and overlay close", () => {
     const fixture = scopeFocusHarness()
     const navigation = fixture.document.createElement("nav")
-    const labelA = fixture.document.createElement("button")
-    const labelB = fixture.document.createElement("button")
-    for (const [row, placement] of [[labelA, "label:A"], [labelB, "label:B"]] as const) {
+    const workspaceRow = (placement: string) => {
+      const row = fixture.document.createElement("button")
       row.setAttribute("data-workspace-id", focusWorkspaceId)
       row.setAttribute("data-repository-id", "repo-stable")
       row.setAttribute("data-workspace-placement", placement)
-      navigation.append(row)
+      return row
     }
+    const originalA = workspaceRow("label:A")
+    const originalB = workspaceRow("label:B")
+    navigation.append(originalA, originalB)
     fixture.document.body.append(navigation)
+    const resolveInvoker = () => findWorkspaceRow(
+      fixture.document as unknown as Document,
+      focusWorkspaceId,
+      "repo-stable",
+      "label:B",
+    )
 
-    expect(findWorkspaceRow(fixture.document as unknown as Document, focusWorkspaceId, "repo-stable", "label:B")).toBe(labelB)
-    expect(findWorkspaceRow(fixture.document as unknown as Document, focusWorkspaceId, "repo-stable", "label:A")).toBe(labelA)
+    let view: OverlayView | undefined
+    const registry = createWorkspaceActionRegistry([
+      focusDescriptor("workspace.notes.list"),
+    ], {
+      "workspace.notes.list": async () => {
+        const opened = fixture.controller.open({
+          id: "duplicate-label-notes",
+          title: "Workspace notes",
+          closeLabel: "Close workspace notes",
+          returnTarget: fixture.focusCoordinator.takeReturnTarget("term-requested"),
+        })
+        if (opened.kind !== "opened") throw new Error("Duplicate-label overlay did not open")
+        view = opened.view
+        const composer = fixture.document.createElement("textarea")
+        opened.view.body.append(composer as unknown as HTMLElement)
+        composer.focus()
+        return { kind: "terminal" }
+      },
+    } as never)
+    const action = workspaceActionMenuRows(registry)[0]!
+    originalB.focus()
+    fixture.focusCoordinator.invokeFromElement(
+      resolveInvoker(),
+      () => { void action.callback() },
+      resolveInvoker,
+    )
+    expect(view).toBeDefined()
+
+    navigation.replaceChildren()
+    const replacementB = workspaceRow("label:B")
+    const replacementA = workspaceRow("label:A")
+    navigation.append(replacementB, replacementA)
+    view!.close()
+    fixture.flushFrames()
+
+    expect(fixture.document.activeElement).toBe(replacementB)
+    expect(fixture.document.activeElement).not.toBe(replacementA)
+    expect(fixture.terminalFocuses).toEqual([])
   })
 
   test("reacquires rerendered workspace-row invokers for Notes, Files, and confirmation close", async () => {

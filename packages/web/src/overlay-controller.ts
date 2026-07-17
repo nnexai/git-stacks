@@ -200,6 +200,10 @@ export function createWebOverlayRuntime(document: Document, options: WebOverlayF
   return { focusCoordinator, overlayController }
 }
 
+export function bindInPlaceOverlayRetry(control: HTMLButtonElement, reload: () => void | Promise<void>): void {
+  control.addEventListener("click", () => { void reload() })
+}
+
 export type FuzzyOverlayOptions<T> = {
   inputLabel: string
   emptyHeading: string
