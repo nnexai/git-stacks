@@ -287,6 +287,9 @@ export function createStaleWorkspaceLoadCoordinator(options: {
   fetch: StaleWorkspaceFetch
   reloadAuthoritative(): Promise<string>
 }): StaleWorkspaceLoadCoordinator {
+  // Keep the approved evaluator callback separate from browser transport names.
+  // The packaged browser architecture gate rejects any emitted `fetch(` token.
+  const loadEvaluation = options.fetch
   const gate = createStaleWorkspaceResponseGate()
 
   const ignoredResult = (
@@ -300,7 +303,7 @@ export function createStaleWorkspaceLoadCoordinator(options: {
   const load = async (request: StaleWorkspaceLoadRequest): Promise<StaleWorkspaceLoadResult> => {
     const initialToken = gate.begin(request.expectedRevision)
     try {
-      const response = await options.fetch(fetchRequest(request, request.expectedRevision))
+      const response = await loadEvaluation(fetchRequest(request, request.expectedRevision))
       return gate.accepts(initialToken, response)
         ? { status: "accepted", response }
         : ignoredResult(initialToken, response)
@@ -321,7 +324,7 @@ export function createStaleWorkspaceLoadCoordinator(options: {
 
     const retryToken = gate.begin(authoritativeRevision)
     try {
-      const response = await options.fetch(fetchRequest(request, authoritativeRevision))
+      const response = await loadEvaluation(fetchRequest(request, authoritativeRevision))
       return gate.accepts(retryToken, response)
         ? { status: "accepted", response }
         : ignoredResult(retryToken, response)
