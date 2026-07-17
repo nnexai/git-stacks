@@ -5,10 +5,10 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: in_progress
-stopped_at: Phase 127 planning complete; 14 plans ready to execute
-last_updated: "2026-07-17T06:18:02.281Z"
+stopped_at: Phase 127 targeted planning revision validated; 14 plans ready to execute
+last_updated: "2026-07-17T08:13:17.010Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 planning complete — 14 plans ready with explicit human evidence and release-stop boundaries
+last_activity_desc: Phase 127 targeted planning revision validated — 14 plans across Waves 0-11 with dependency, decision, source, and validation coverage green
 progress:
   total_phases: 5
   completed_phases: 4
@@ -23,8 +23,8 @@ progress:
 
 Phase: 127 — Stale Workspace Intelligence and RC Closure
 Plan: 0 of 14
-Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 planning complete
+Status: Ready to execute validated revision
+Last activity: 2026-07-17 — Phase 127 targeted planning revision validated
 
 ## Decisions
 
@@ -153,6 +153,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-17T06:18:02.281Z
-**Stopped at:** Phase 127 planning complete; ready to execute Wave 0
+**Last session:** 2026-07-17T08:13:17.010Z
+**Stopped at:** Phase 127 targeted planning revision validated; ready to execute Wave 0
 **Resume file:** .planning/phases/127-stale-workspace-intelligence-and-rc-closure/127-01-PLAN.md

@@ -148,16 +148,16 @@ Plans:
 Plans:
 **Wave 0**
 
-- [ ] 127-01-PLAN.md — Create provider, policy, cache, revision, and no-mutation RED contracts.
-- [ ] 127-02-PLAN.md — Create web, TUI, conformance, architecture, and release RED contracts.
+- [ ] 127-01-PLAN.md — Create guarded-import runtime Zod, provider, abortable remote-branch, policy, cache, revision, and no-mutation RED contracts.
+- [ ] 127-02-PLAN.md — Create guarded-import web, TUI, conformance, authority RED contracts and an isolated named hermetic pre-metadata no-outward-release-action fence.
 
 **Wave 1** *(blocked on Wave 0 completion)*
 
-- [ ] 127-03-PLAN.md — Add strict stale DTOs, shortcut IDs, and GitHub/GitLab status probes.
+- [ ] 127-03-PLAN.md — Add strict stale DTOs and GitHub/GitLab read-only status probes, turning the runtime schema matrix green.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 127-04-PLAN.md — Implement qualification, ranking, bounded evaluation, and volatile network cache.
+- [ ] 127-04-PLAN.md — Implement qualification/ranking over one captured read model, abortable bounded network observations, and volatile cache.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -165,7 +165,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 127-06-PLAN.md — Add shared presentation, generations, retry, shortcuts, and TUI adapter seams.
+- [ ] 127-06-PLAN.md — Add shared presentation/generations/retry/TUI seams plus atomic protocol/core/client global stale-entry and distinct scoped-refresh registries.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -174,27 +174,27 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 127-09-PLAN.md — Close deterministic cross-client, architecture, ASVS, build, and test gates.
+- [ ] 127-09-PLAN.md — Close deterministic cross-client, architecture, ASVS, build, coverage, and pre-metadata regression gates.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 127-10-PLAN.md — Move all manifests, exact internal ranges, and lockfile to 0.22.0-rc.1.
+- [ ] 127-10-PLAN.md — Add immediate manifest/lock RED assertions, then move all manifests, exact internal ranges, and lockfile to 0.22.0-rc.1.
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 127-11-PLAN.md — Add stale/RC documentation and run validation-only release checks.
+- [ ] 127-11-PLAN.md — Add immediate changelog/docs RED assertions and stale/RC documentation, then run the first complete test and validation-only release gates.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 127-12-PLAN.md — Freeze the candidate SHA and create the honest evidence ledger.
+- [ ] 127-12-PLAN.md — Freeze the candidate SHA and create the strict canonical JSON row/subcase ledger with every external/manual class exact-SHA PENDING.
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 127-13-PLAN.md — Run explicit hosted/authenticated and physical/manual evidence checkpoints.
+- [ ] 127-13-PLAN.md — Run the complete hosted/authenticated forge-shell-runtime and physical/manual lifecycle-parity evidence checkpoints.
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 127-14-PLAN.md — Reconcile exact-SHA human evidence and derive final validation status.
+- [ ] 127-14-PLAN.md — Reconcile exact-SHA row/subcase approvals with immutable ledger/ancestry checks and derive final validation, prohibition, security, and release-stop status.
 
 **Success criteria:**
 

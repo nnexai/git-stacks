@@ -59,7 +59,7 @@
 
 | ID | Description | Research Support |
 |----|-------------|------------------|
-| STALE-01 | A separate stale-workspace view identifies cleanup candidates using explainable signals such as merged/closed PR or MR, deleted remote branch, prolonged inactivity, or missing managed worktree. | Use a lazy `snapshot.read` service route fed by authoritative core state, a read-only GitHub/GitLab status probe, `isBranchGoneOnRemote()`, `getWorkspaceStatus()`, and `workspaceActivityAt()`. [VERIFIED: codebase] |
+| STALE-01 | A separate stale-workspace view identifies cleanup candidates using explainable signals such as merged/closed PR or MR, deleted remote branch, prolonged inactivity, or missing managed worktree. | Use one lazy `snapshot.read` route that captures an authoritative revision/read model once, derives local evidence from that model, and calls dedicated bounded AbortSignal-aware GitHub/GitLab and remote-branch observers. [VERIFIED: codebase] |
 | STALE-02 | Every candidate displays its triggering reasons and relevant timestamps; users can refresh evidence and open the workspace before deciding what to do. | Return one bounded atomic response containing ordered candidates, every confirmed reason, unknowns, cautions, `activity_at`, reason timestamps, `checked_at`, and revision; render it through the approved singleton web overlay and dedicated TUI `UIView`. [VERIFIED: codebase] |
 | STALE-03 | Stale detection is suggestion-only and never archives, removes, closes terminals, discards worktrees, or changes workspace YAML automatically. | Keep the evaluator read-only, cache only volatile probe outcomes, and expose no mutation from evaluation or refresh. Lifecycle changes remain explicit canonical operations. [VERIFIED: codebase] |
 | STALE-04 | Archive and Remove are explicit follow-up actions using the same confirmation, terminal, dirty-worktree, and failure semantics defined above. | Reuse `deriveWorkspaceActionInventory()`, `workspace.actions`, `createWorkspaceActionRegistry()`, and existing lifecycle reconciliation. Never infer action availability from stale reasons. [VERIFIED: codebase] |
@@ -76,7 +76,7 @@ The evaluator should classify each workspace into exactly one of three outcomes:
 
 RC closure is a separate final workstream after product and deterministic test completion. The repository already provides lockstep package checks, RC validation, dry-run package construction, a dispatchable non-release Build and test workflow, and hard tag/publish workflow boundaries. Phase 127 must collect the remaining exact-commit hosted and human receipts but stop before tag, push, publication, GitHub Release creation, or release-only workflow activation. [VERIFIED: codebase]
 
-**Primary recommendation:** Implement protocol → read-only core probes → service evaluator/cache/route → shared adapters → web/TUI surfaces → deterministic security/conformance tests → RC metadata/docs → hosted/live/manual evidence, with no release side effects. [VERIFIED: codebase]
+**Primary recommendation:** Implement protocol → read-only bounded core probes → service evaluator/cache/route over one captured read model → shared adapters → web/TUI surfaces → deterministic security/conformance tests → RC metadata/docs → hosted/live/manual evidence, with no tag, push, publish, GitHub Release, or release-only workflow side effect. [VERIFIED: codebase]
 
 ## Architectural Responsibility Map
 
@@ -170,9 +170,9 @@ Web toolbar/shortcut                         TUI [s] / dedicated UIView
                  /        |       \          -> client reloads snapshot
                 /         |        \            and retries once
                v          v         v
-       local evidence   network evidence   canonical cautions
-       activity/status  forge + remote     dirty/ahead/files/notes
-       recomputed now   5-minute memory    recomputed now
+       captured local model   network evidence   captured cautions
+       activity/status        forge + remote     dirty/ahead/files/notes
+       one revision build     5-minute memory    same revision build
                 \         |        /
                  \        v       /
                   classify each workspace
@@ -201,9 +201,10 @@ This flow keeps entry points, trusted processing, decision branches, external pr
 
 ```text
 packages/
-├── protocol/src/web.ts                         # bounded stale DTOs + shortcut IDs
+├── protocol/src/web.ts                         # bounded stale DTOs + global/scoped shortcut IDs
 ├── core/src/integrations/forge-change-status.ts # read-only GitHub/GitLab status probe
-├── core/src/git.ts                             # reuse repo-scoped branch evidence
+├── core/src/integrations/remote-branch-status.ts # bounded abortable repo-scoped branch evidence
+├── core/src/{config,web-shortcuts}.ts           # persisted global stale-entry authority only
 ├── core/src/concurrency.ts                     # reuse mapLimited
 ├── service/src/policy/stale-workspaces.ts      # policy, ranking, cache, atomic result
 ├── service/src/secure/router.ts                # revision-bound snapshot.read route
@@ -220,7 +221,9 @@ packages/
 
 tests/
 ├── lib/core/forge-change-status.test.ts
+├── lib/core/remote-branch-status.test.ts
 ├── lib/service/stale-workspaces.test.ts
+├── service/web-stale-workspaces-schema.test.ts
 ├── service/web-stale-workspaces.test.ts
 ├── service/phase127-cross-client-conformance.test.ts
 ├── tui/dashboard/StaleWorkspaces.test.tsx
@@ -233,13 +236,13 @@ Names may follow local conventions, but the ownership boundaries should remain a
 
 | File / symbol | Phase 127 responsibility |
 |---------------|--------------------------|
-| `packages/protocol/src/web.ts` / `WebWorkspaceMutationSchema`, shortcut constants | Add strict stale request/response schemas; reuse entity, revision, timestamp, URL-safe text, and client-model bounds; extend shortcut vocabulary in lockstep. [VERIFIED: codebase] |
+| `packages/protocol/src/web.ts` / stale schemas and shortcut constants | Add strict stale request/response schemas; add persisted/global `workspace.stale` separately from scoped `workspace.stale.refresh`; keep both vocabularies exhaustive without placing refresh in global settings. [VERIFIED: codebase] |
 | `packages/protocol/src/service.ts` / `RevisionSchema`, `TimestampSchema`, `CLIENT_MODEL_LIMITS` | Reuse shared primitives and cap candidate/incomplete/reason arrays. Current bounds include 16 workspaces and 8 repositories per workspace. [VERIFIED: codebase] |
 | `packages/core/src/config.ts` / `WorkspaceSourceSchema` | Treat persisted forge source as input only after stricter Phase 127 compatibility checks; Gitea and provider/change-type mismatches become unknown. [VERIFIED: codebase] |
 | `packages/core/src/integrations/forge-source-resolver.ts` / `runForgeCommand` | Reuse timeout, output cap, abort, no-prompt, process-group cleanup, and sanitized failure patterns; do not reuse the resolver's open-only semantic contract. [VERIFIED: codebase] |
 | `packages/core/src/integrations/forge-change-status.ts` / new closed union | Return `merged`, `closed`, `open`, or sanitized `unknown`; never expose stdout/stderr, argv, tokens, or raw exceptions. [VERIFIED: codebase] |
-| `packages/core/src/git.ts` / `isBranchGoneOnRemote()` | Preserve `present` / `missing` / `error`; map only `missing` to a confirmed reason and map `error` to sanitized unknown. [VERIFIED: codebase] |
-| `packages/core/src/workspace-status.ts` / `getWorkspaceStatus()` | Confirm missing only for managed worktree mode with `exists === false`; degraded/inaccessible status remains unknown. [VERIFIED: codebase] |
+| `packages/core/src/integrations/remote-branch-status.ts` / new observer | Use the established injected command-runner shape with fixed `git ls-remote` argv, timeout/output bounds, AbortSignal, exit 0 present, exit 2 missing, and all other outcomes sanitized unknown. Do not call the existing non-abortable helper from the evaluator. [VERIFIED: codebase] |
+| Captured authoritative catalog/read model | Confirm missing only for managed worktree mode with `exists === false`; degraded/inaccessible status remains unknown. Derive local facts from the route's one revision build rather than calling `getWorkspaceStatus()` a second time. [VERIFIED: codebase] |
 | `packages/core/src/concurrency.ts` / `mapLimited()` | Bound provider/remote fan-out and preserve input-order result association. [VERIFIED: codebase] |
 | `packages/service/src/policy/snapshot.ts` / `workspaceActivityAt()` | Reuse authoritative `last_opened` then `created` fallback; do not add provider probing to snapshot construction. [VERIFIED: codebase] |
 | `packages/service/src/policy/core-state.ts` / `createCoreStateProvider().build()` | Supply definitions and projections from one revision-consistent trusted generation. [VERIFIED: codebase] |
@@ -251,7 +254,7 @@ Names may follow local conventions, but the ownership boundaries should remain a
 | `packages/service/src/web/projection.ts` | Parse/allowlist the browser response and add path/secret/raw-error canary tests. [VERIFIED: codebase] |
 | `packages/client/src/workspace-actions.ts` / `createWorkspaceActionRegistry()` | Invoke Open/Archive/Remove with existing confirmation and one-shot latch behavior. [VERIFIED: codebase] |
 | `packages/client/src/presentation.ts` / `relativeTime()` | Share human time labels; exact UTC timestamps remain in DTO/UI detail. [VERIFIED: codebase] |
-| `packages/client/src/shortcuts.ts` | Register `stale.open` with canonical platform defaults and a context-only refresh action with no browser-global chord. [VERIFIED: codebase] |
+| `packages/core/src/{config,web-shortcuts}.ts` and `packages/client/src/shortcuts.ts` | Add rebindable/unbindable global `workspace.stale` through protocol/core/client parity; keep `workspace.stale.refresh` in a distinct exhaustive scoped registry with no persisted setting, conflict owner, settings row, or browser-global chord. [VERIFIED: codebase] |
 | `packages/web/src/overlay-controller.ts` / `createSingletonOverlayController()` | Own one overlay instance, contained focus, Escape/backdrop, and exact focus restoration. [VERIFIED: codebase] |
 | `packages/web/src/app.ts` / refresh generations, lifecycle reconciliation | Add toolbar entry and stale state machine; retain prior data on refresh failure; accept only current generation/revision; reuse canonical lifecycle functions. [VERIFIED: codebase] |
 | `packages/tui/src/types.ts` / `UIView` | Add a dedicated stale-workspaces discriminant with origin/selection/response state. [VERIFIED: codebase] |
@@ -298,7 +301,7 @@ Recommended unknown codes are finite protocol enums such as `unsupported_provide
 
 ### Pattern 3: Network-Only TTL Cache with Race-Safe Writes
 
-**What:** Cache forge and remote-branch outcomes for 300,000 ms; recompute activity, worktree state, notes, file drift, dirty, and ahead state on every evaluation. [VERIFIED: codebase]
+**What:** Cache forge and remote-branch outcomes for 300,000 ms; each route request builds authoritative activity, worktree, notes, file-drift, dirty, and ahead facts once, and the evaluator derives local evidence from that captured revision model without a second scan. [VERIFIED: codebase]
 
 **When to use:** Normal initial/reopen requests may read fresh entries; explicit Refresh sets `force_refresh` and bypasses reads. [VERIFIED: codebase]
 
@@ -307,7 +310,7 @@ Prescriptive cache behavior:
 2. Key remote evidence by stable internal repository identity plus remote/ref identity; paths may remain internal probe input but never enter the DTO. [VERIFIED: codebase]
 3. Deduplicate concurrent ordinary misses with one in-flight promise per key. [VERIFIED: codebase]
 4. A forced refresh starts a new key generation; only the newest generation may commit a cache value. [VERIFIED: codebase]
-5. A superseded request may finish for its caller, but it cannot overwrite the cache; web/TUI generation gates prevent its response from replacing newer presentation. [VERIFIED: codebase]
+5. A superseded request may finish for its caller, but it cannot overwrite the cache; an aborted request cannot commit cache state; web/TUI generation gates prevent either result from replacing newer presentation. [VERIFIED: codebase]
 6. Cache failure outcomes too, for the same short TTL, to avoid hammering an unavailable provider; explicit refresh still bypasses them. [VERIFIED: codebase]
 7. Destroy the cache on service shutdown; never serialize it. [VERIFIED: codebase]
 
@@ -410,7 +413,7 @@ Use `.github/workflows/node-runtime-matrix.yml` for hosted receipts: it is dispa
 
 ### Recommended Implementation Order
 
-1. **Protocol contract:** stale request/response/reason/unknown/caution schemas, bounds, and shortcut IDs. This lets all later layers compile against one vocabulary. [VERIFIED: codebase]
+1. **Protocol contract:** stale request/response/reason/unknown/caution schemas and bounds. Shortcut IDs wait until the atomic protocol/core/client global/scoped registry change so exhaustive records never become incomplete. [VERIFIED: codebase]
 2. **Core probes:** add the read-only forge status adapter; preserve current remote/worktree unions; test argv, timeout, strict parsing, provider compatibility, and sanitization. [VERIFIED: codebase]
 3. **Service policy:** implement classification, observation timestamps, cautions, lexicographic ranking, five-minute cache, race-safe cache generations, and bounded fan-out. [VERIFIED: codebase]
 4. **Route/composition:** wire one service-lifetime evaluator into `main.ts`, add the `snapshot.read` secure route, and enforce revision-before-probe. [VERIFIED: codebase]
@@ -442,7 +445,7 @@ Use `.github/workflows/node-runtime-matrix.yml` for hosted receipts: it is dispa
 |---------|-------------|-------------|-----|
 | DTO validation | Ad hoc object checks | Zod strict schemas in protocol/core | Existing boundaries reject extra and malformed fields consistently. [VERIFIED: codebase] |
 | Provider process execution | `exec`, shell strings, or client subprocesses | `runForgeCommand` pattern | It already provides argv-only execution, timeouts, caps, abort, no-prompt, and cleanup. [VERIFIED: codebase] |
-| Remote ref interpretation | Parse human Git output | `isBranchGoneOnRemote()` / `git ls-remote --exit-code` | Typed exit semantics distinguish missing from operational failure. [VERIFIED: codebase] |
+| Remote ref interpretation | Parse human Git output or call the existing non-abortable helper directly | Dedicated injected `remote-branch-status` adapter using bounded `git ls-remote --exit-code` argv | Typed exit semantics distinguish missing from failure, AbortSignal/timeout/output bounds apply, and raw output never reaches policy. [VERIFIED: codebase] |
 | Concurrent probe limiter | New dependency or unbounded `Promise.all` | `@git-stacks/core/concurrency` `mapLimited()` | Existing canonical helper is sufficient and preserves input ordering. [VERIFIED: codebase] |
 | Action availability/confirmation | Stale-specific Archive/Remove buttons with local policy | `deriveWorkspaceActionInventory()` + `createWorkspaceActionRegistry()` | Prevents confirmation and Force Remove divergence. [VERIFIED: codebase] |
 | Overlay focus management | New modal stack | `createSingletonOverlayController()` | Existing controller handles singleton identity, Tab, Escape, backdrop, and focus restoration. [VERIFIED: codebase] |
@@ -613,22 +616,16 @@ The script performs local validation and only creates `v0.22.0-rc.1` when `--tag
 |---|-------|---------|---------------|
 | — | None. Architectural claims were verified against the repository, and provider API claims are cited to official documentation. | — | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Where should hosted/manual receipts be indexed?**
-   - What we know: Phase 126's handoff requires exact candidate commit SHA, workflow URL, safe receipts, screenshots, and human approval before any release claim. [VERIFIED: codebase]
-   - What's unclear: The repository does not yet define one canonical Phase 127 receipt index filename or storage layout. [VERIFIED: codebase]
-   - Recommendation: Plan one non-product evidence artifact in the Phase 127 planning directory that links exact-SHA hosted runs and records pass/missing status without secrets, paths, or raw provider output. [VERIFIED: codebase]
+1. **Canonical hosted/manual receipt index — RESOLVED**
+   - The canonical Phase 127 evidence ledger is `.planning/phases/127-stale-workspace-intelligence-and-rc-closure/127-RECEIPTS.md`. Its single marker-delimited JSON source of truth binds exact row IDs and immutable required-subcase arrays for deterministic, hosted, authenticated, live-service, physical, visual, interactive, and human-parity evidence to one immutable candidate SHA while excluding secrets, machine paths, raw provider output, and release authorization. [VERIFIED: planning decision]
 
-2. **Which configured self-hosted GitHub/GitLab hosts are part of the release claim?**
-   - What we know: GitHub.com and GitLab.com are baseline providers; the handoff says every supported configured self-hosted host included in the release claim also needs receipts. [VERIFIED: codebase]
-   - What's unclear: No concrete self-hosted host list is present in Phase 127 context. [VERIFIED: codebase]
-   - Recommendation: Treat GitHub.com/GitLab.com as mandatory and record self-hosted coverage as missing/not-claimed unless the operator supplies a configured host. Do not infer or probe hosts. [VERIFIED: codebase]
+2. **Configured self-hosted GitHub/GitLab release claim — RESOLVED**
+   - GitHub.com and GitLab.com remain the mandatory baseline. Self-hosted GitHub/GitLab hosts are `NOT_CLAIMED` unless the operator supplies an explicit supported-host list; only then may exact-SHA receipts for each named host be required and reviewed. Hosts are never inferred or probed. [VERIFIED: planning decision]
 
-3. **How will authenticated GitLab evidence run on this machine?**
-   - What we know: `glab` is currently missing; `gh` 2.96.0 is installed. [VERIFIED: environment audit]
-   - What's unclear: Whether the operator will install/authenticate `glab` locally or run the receipt on another safe host. [VERIFIED: environment audit]
-   - Recommendation: Keep deterministic injected-runner tests unblocked, but add an explicit human checkpoint before the authenticated GitLab evidence gate. [VERIFIED: environment audit]
+3. **Authenticated GitLab evidence environment — RESOLVED**
+   - Because `glab` is not available locally, authenticated GitLab evidence must route through the blocking Plan 127-13 human checkpoint or another separately authorized environment. Planning and execution must not install or authenticate tooling implicitly; unavailable evidence remains `PENDING`. [VERIFIED: planning decision]
 
 ## Environment Availability
 
@@ -639,7 +636,7 @@ The script performs local validation and only creates `v0.22.0-rc.1` when `--tag
 | Bun | Optional TUI build/tests | ✓ | 1.3.14 | No fallback; use only TUI commands. [VERIFIED: environment audit] |
 | Git | Remote-branch probe and repository tests | ✓ | 2.55.0 | Inject fixture probe for deterministic unit tests only. [VERIFIED: environment audit] |
 | `gh` | Authenticated GitHub status/live receipts | ✓ | 2.96.0 | Inject command runner for deterministic tests; live evidence still needs authentication. [VERIFIED: environment audit] |
-| `glab` | Authenticated GitLab status/live receipts | ✗ | — | Inject command runner for deterministic tests; install/authenticate or use another safe host for live receipt. [VERIFIED: environment audit] |
+| `glab` | Authenticated GitLab status/live receipts | ✗ | — | Inject command runner for deterministic tests; live proof requires Plan 127-13's blocking checkpoint or another separately authorized environment. [VERIFIED: environment audit] |
 | GitHub Actions supported runners | REL-01/host evidence | External | Defined in workflow | Dispatch Build and test for exact candidate SHA; unavailable cells remain missing evidence. [VERIFIED: codebase] |
 
 **Missing dependencies with no fallback:**
@@ -669,14 +666,14 @@ The script performs local validation and only creates `v0.22.0-rc.1` when `--tag
 | STALE-03 | Evaluation/refresh performs no YAML, terminal, worktree, archive, or remove mutation. | unit/architecture | `node --test tests/architecture/phase127-stale-authority.test.mjs && npx vitest run tests/lib/service/stale-workspaces.test.ts` | ❌ Wave 0 |
 | STALE-04 | Archive/Remove descriptors, confirmation, dirty blocker, Force Remove gate, and reconcile path remain canonical. | integration/conformance | `npx vitest run tests/service/phase127-cross-client-conformance.test.ts tests/lib/service/workspace-action-authority.test.ts` plus `npm run test:tui` | ❌ Wave 0 for Phase 127 conformance; existing authority test ✅ |
 | STALE-05 | Auth/tool/rate/timeout/malformed/degraded/activity failures remain unknown; unknown-only rows are incomplete. | unit/projection | `npx vitest run tests/lib/core/forge-change-status.test.ts tests/lib/service/stale-workspaces.test.ts tests/service/web-stale-workspaces.test.ts` | ❌ Wave 0 |
-| REL-01 | Lockstep `0.22.0-rc.1`, changelog/docs, package contents, local gates, supported-host workflow receipts. | script/hosted/manual | `npm run release:check` plus exact-SHA Build and test workflow | Existing scripts/workflow ✅; metadata/evidence updates pending |
-| REL-02 | Local preparation has no tag/push/publish/release side effect. | architecture/script review | `node --test tests/architecture/release-publish.test.mjs tests/commands/release-rc.test.ts` | ✅ update expectations to `0.22.0-rc.1` |
+| REL-01 | Lockstep `0.22.0-rc.1`, changelog/docs, package contents, local gates, supported-host workflow receipts. | script/hosted/manual | `npm run release:check` after manifests and docs, plus exact-SHA Build and test workflow | Existing scripts/workflow ✅; staged metadata/docs/evidence updates pending |
+| REL-02 | Local preparation has no tag/push/publish/release side effect. | architecture/script review | `node --test tests/architecture/release-publish.test.mjs` and `npx vitest run tests/commands/release-rc.test.ts -t "Phase 127 pre-metadata release authority"` | Existing historical temp-tag fixture excluded from the Wave 0 focused run; manifest assertions stage in Plan 127-10 and docs assertions in Plan 127-11 |
 
 ### Required Deterministic Test Matrix
 
 | Domain | Required fixtures/assertions |
 |--------|------------------------------|
-| Protocol | Strict extra-key rejection; finite reason/unknown/caution enums; 16-workspace and per-row bounds; revision and timestamp parsing; no raw error/path fields. [VERIFIED: codebase] |
+| Protocol | Top-level and nested strict extra-key rejection; nested collection/string bounds; positive revision and valid timestamp parsing; finite reason/unknown/caution/action enums; rejection of path, raw-error, command, argv, stdout, stderr, credential, and environment fields. [VERIFIED: codebase] |
 | Forge probe | GitHub merged, GitHub closed, GitHub open; GitLab merged, GitLab closed, GitLab open; Gitea unsupported; provider/type mismatch; missing CLI; auth; rate limit; timeout; malformed/oversized JSON; abort; host argv; no raw output. [VERIFIED: codebase] |
 | Remote branch | Exit 0 present, exit 2 missing, other exit/timeout unknown; one repository missing does not alter sibling evidence. [CITED: https://git-scm.com/docs/git-ls-remote] |
 | Worktree | Managed missing qualifies; existing/degraded/inaccessible is not misclassified; observation time is `checked_at`. [VERIFIED: codebase] |
@@ -709,7 +706,7 @@ The script performs local validation and only creates `v0.22.0-rc.1` when `--tag
 
 The dispatchable Build and test workflow exposes the exact `github.sha` in artifact names and shell receipt content. GitHub Actions APIs expose workflow runs, jobs, conclusions, head SHA, and artifacts, so the receipt index should retain the run URL/ID, `head_sha`, job names/conclusions, artifact names, and checksums of downloaded safe artifacts. [CITED: https://docs.github.com/en/rest/actions/workflow-runs] [CITED: https://docs.github.com/en/rest/actions/workflow-jobs] [CITED: https://docs.github.com/en/rest/actions/artifacts]
 
-Do not trigger a release workflow to obtain evidence. Dispatch only `node-runtime-matrix.yml` for the exact candidate commit; the tag-triggered artifact workflow and release-published publish workflow remain out of bounds. [VERIFIED: codebase]
+Do not trigger any workflow implicitly while executing these plans. If the user separately authorizes hosted evidence collection, `node-runtime-matrix.yml` is the only eligible non-release workflow for the exact candidate commit; the tag-triggered artifact workflow and release-published publish workflow remain out of bounds. [VERIFIED: codebase]
 
 ### Sampling Rate
 - **Per task commit:** focused Vitest file(s), relevant `node --test` architecture file, or `npm run test:tui` for TUI changes. [VERIFIED: codebase]
@@ -718,13 +715,15 @@ Do not trigger a release workflow to obtain evidence. Dispatch only `node-runtim
 - **Phase gate:** `npm run release:check` without `--tag`, then exact-SHA hosted and manual evidence gates. [VERIFIED: codebase]
 
 ### Wave 0 Gaps
-- [ ] `tests/lib/core/forge-change-status.test.ts` — provider status unions, argv, parse, and sanitization for STALE-01/05.
-- [ ] `tests/lib/service/stale-workspaces.test.ts` — qualification, timestamps, unknown separation, ranking, TTL, refresh, races, and revisions for STALE-01/02/03/05.
-- [ ] `tests/service/web-stale-workspaces.test.ts` — secure route/projection/browser state for STALE-02/05.
-- [ ] `tests/service/phase127-cross-client-conformance.test.ts` — shared order, labels, actions, and reconciliation for STALE-02/04.
-- [ ] `tests/tui/dashboard/StaleWorkspaces.test.tsx` — dedicated view layouts and keyboard behavior for STALE-02/04/05.
+- [ ] `tests/helpers/phase127-stale-fixtures.ts` and `tests/service/web-stale-workspaces-schema.test.ts` — guarded-import runtime Zod RED matrix for strict nested objects, bounds, revisions/timestamps, finite enums, and disclosure fields.
+- [ ] `tests/lib/core/forge-change-status.test.ts` — provider status unions, argv, parse, timeout/abort, and sanitization for STALE-01/05.
+- [ ] `tests/lib/core/remote-branch-status.test.ts` — fixed argv, exit 0/2/error, timeout/output/AbortSignal, sanitization, and cancellation-safe outcomes.
+- [ ] `tests/lib/service/stale-workspaces.test.ts` — qualification, timestamps, captured local read model, unknown separation, ranking, TTL, refresh, races, abort, and revisions for STALE-01/02/03/05.
+- [ ] `tests/service/web-stale-workspaces.test.ts` — guarded-import secure route/projection/browser state for STALE-02/05.
+- [ ] `tests/service/phase127-cross-client-conformance.test.ts` — guarded-import shared order, labels, actions, shortcuts, and reconciliation for STALE-02/04.
+- [ ] `tests/tui/dashboard/StaleWorkspaces.test.tsx` — isolated-runner dedicated view layouts and keyboard behavior for STALE-02/04/05.
 - [ ] `tests/architecture/phase127-stale-authority.test.mjs` — forbid client provider/Git/mutation authority and disclosure for STALE-03/05.
-- [ ] Update `tests/commands/release-rc.test.ts` and release architecture expectations for `0.22.0-rc.1`.
+- [ ] Keep `tests/architecture/release-publish.test.mjs` and the uniquely named `Phase 127 pre-metadata release authority` suite in `tests/commands/release-rc.test.ts` green for the hermetic pre-metadata no-outward-release-action/default-package/planning-tree fence. The Wave 0 Vitest command must filter to that suite, exclude the historical temp-repository tag fixture, and assert the fake Git shim records no `git tag` request; current RC manifest assertions begin in Plan 127-10 and docs assertions in Plan 127-11.
 - [ ] Add safe fixture factories for core state, provider outcomes, clock advancement, and stale response rows.
 
 ## Security Domain
@@ -755,7 +754,7 @@ Do not trigger a release workflow to obtain evidence. Dispatch only `node-runtim
 | Confused-deputy lifecycle action from stale reason | Elevation/Tampering | Stale evaluator has no mutation capability; clients use service descriptors and unchanged confirmations. [VERIFIED: codebase] |
 | Cross-repository evidence confusion | Tampering | Keep repository ID/name on branch/worktree reasons and cache keys; never infer workspace-wide safety. [VERIFIED: codebase] |
 | False stale verdict from unavailable evidence | Repudiation/Tampering | Three-state unions, unknown-only incomplete section, confirmed-reason qualification requirement. [VERIFIED: codebase] |
-| Supply-chain/release side effect during validation | Tampering | No new package; exact pins and package checks; release check without `--tag`; do not trigger tag/release workflows. [VERIFIED: codebase] |
+| Outward release-authority side effect during validation | Tampering | No new package; exact pins and package checks; hermetic no-tag command-plan tests; real release check without `--tag`; do not tag, push, publish, create a GitHub Release, or trigger release-only workflows. Ordinary local build/coverage outputs are allowed. [VERIFIED: codebase] |
 
 ### Security Verification Checklist
 
