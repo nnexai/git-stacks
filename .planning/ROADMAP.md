@@ -143,7 +143,7 @@ Plans:
 **Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
 **Depends on:** Phase 126
 **Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
-**Plans:** 9/14 plans executed
+**Plans:** 10/14 plans executed
 
 Plans:
 **Wave 0**
@@ -178,7 +178,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 127-10-PLAN.md — Add immediate manifest/lock RED assertions, then move all manifests, exact internal ranges, and lockfile to 0.22.0-rc.1.
+- [x] 127-10-PLAN.md — Add immediate manifest/lock RED assertions, then move all manifests, exact internal ranges, and lockfile to 0.22.0-rc.1.
 
 **Wave 8** *(blocked on Wave 7 completion)*
 

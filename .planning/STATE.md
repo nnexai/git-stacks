@@ -5,16 +5,16 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Completed 127-09-PLAN.md
-last_updated: "2026-07-17T14:01:45.092Z"
+stopped_at: Completed 127-10-PLAN.md
+last_updated: "2026-07-17T14:17:19.313Z"
 last_activity: 2026-07-17
-last_activity_desc: Phase 127 Plan 09 deterministic stale workspace and pre-metadata RC verification completed
+last_activity_desc: Phase 127 Plan 10 exact RC manifest and lockfile graph completed
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 42
-  completed_plans: 37
-  percent: 88
+  completed_plans: 38
+  percent: 90
 ---
 
 # Project State
@@ -22,9 +22,9 @@ progress:
 ## Current Position
 
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
-Plan: 10 of 14
+Plan: 11 of 14
 Status: Ready to execute
-Last activity: 2026-07-17 — Phase 127 Plan 09 deterministic stale workspace and pre-metadata RC verification completed
+Last activity: 2026-07-17 — Phase 127 Plan 10 exact RC manifest and lockfile graph completed
 
 ## Decisions
 
@@ -113,6 +113,10 @@ Last activity: 2026-07-17 — Phase 127 Plan 09 deterministic stale workspace an
 - [Phase 127]: After each lifecycle terminal result, refresh authoritative workspace state and then stale evidence once before restoring presentation.
 - [Phase 127]: A-EDGE-STALE-03 is deterministically closed only because runtime mutation sentinels and hostile read-only capability proofs are both green; hosted and human evidence remains pending.
 - [Phase 127]: Pre-metadata Node verification runs with Bun absent from PATH, while OpenTUI uses only the isolated `npm run test:tui` launcher; `npm test` and `release:check` remain Plan 127-11 work.
+- [Phase 127]: Current RC assertions target 0.22.0-rc.1 while retained v0.21 evidence is explicitly historical and Plan 127-11 documentation remains out of scope.
+- [Phase 127]: All eight manifests and every internal @git-stacks range are exact 0.22.0-rc.1; lock regeneration admitted only expected RC metadata changes.
+- [Phase 127]: The root default production graph remains CLI-only and cannot reach the optional TUI, Bun, or OpenTUI packages.
+- [Phase 127]: Plan 127-10 advances REL-01 and REL-02 evidence without completing them; documentation, exact-SHA external evidence, and release authorization remain later-plan work.
 
 ## Validated Inputs
 
@@ -190,9 +194,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 127 P07 | 20min | 3 tasks | 6 files |
 | Phase 127 P08 | 50min | 3 tasks | 5 files |
 | Phase 127 P09 | 7min | 3 tasks | 4 files |
+| Phase 127 P10 | 8min | 3 tasks | 11 files |
 
 ## Session
 
-**Last session:** 2026-07-17T14:01:45.081Z
-**Stopped at:** Completed 127-09-PLAN.md
+**Last session:** 2026-07-17T14:17:19.283Z
+**Stopped at:** Completed 127-10-PLAN.md
 **Resume file:** None
