@@ -16,6 +16,7 @@ import {
   WebPrioritiesSchema,
   WebSignalAcknowledgeSchema,
   WebSignalDismissSchema,
+  WebStaleWorkspaceRequestSchema,
   WebTerminalCreateSchema,
   WebTerminalRenameSchema,
   WebWorkspaceMutationSchema,
@@ -39,7 +40,7 @@ import {
 } from "@git-stacks/core/web-shortcuts"
 
 import type { EventBroker, EventSubscription } from "../policy/event-broker.js"
-import { CoreMutationSchemas, EditTargetRequestSchema, type CoreMutationName } from "../policy/core-contract.js"
+import { CoreMutationSchemas, EditTargetRequestSchema, type CoreMutationName, type CoreState } from "../policy/core-contract.js"
 import type { CoreStateProvider } from "../policy/core-state.js"
 import type { CoreMutationAdapter, OperationExecution, OperationRegistry, OperationWebContext, WorkspaceCreateMutation } from "../policy/operations.js"
 import type { SnapshotAdapter } from "../snapshot-adapter.js"
@@ -58,6 +59,7 @@ import {
   projectWebOperationSummary,
   projectWebSignal,
   projectWebSnapshot,
+  projectWebStaleWorkspaceEvaluation,
   projectWebTerminalSignals,
 } from "../web/projection.js"
 import { WebTerminalManager } from "../web/terminal-manager.js"
@@ -66,6 +68,7 @@ import type { WorkspaceLifecycleAdmission } from "../policy/workspace-lifecycle-
 import type { DynamicEnvironmentStore } from "../policy/dynamic-environment.js"
 import { deriveWorkspaceActionInventory } from "../policy/workspace-actions.js"
 import type { ForgeSourceReviewAuthority } from "../policy/forge-source-review.js"
+import type { StaleWorkspaceEvaluator, StaleWorkspaceReadModel } from "../policy/stale-workspace-evaluator.js"
 
 type DynamicEnvironmentParseResult =
   | { success: true; data: DynamicEnvironmentRefresh }
@@ -85,6 +88,7 @@ export interface SecureServiceRouterOptions {
   broker?: EventBroker
   mutations?: Partial<Record<CoreMutationName, CoreMutationAdapter>> & Record<string, Mutation | CoreMutationAdapter | undefined>
   core?: CoreStateProvider
+  staleWorkspaceEvaluator?: Pick<StaleWorkspaceEvaluator, "evaluate">
   workspaceFileStatus?: (workspace: string) => WorkspaceFileStatusView | Promise<WorkspaceFileStatusView>
   workspaceNotes?: (workspace: string, limit: number) => WorkspaceNotesSnapshot | Promise<WorkspaceNotesSnapshot>
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
@@ -125,12 +129,20 @@ function coded(message: string, code: string, details?: unknown): Error {
   return Object.assign(new Error(message), { code, ...(details === undefined ? {} : { details }) })
 }
 
+function freezeStaleReadModel<T>(value: T, seen = new WeakSet<object>()): T {
+  if (!value || typeof value !== "object" || seen.has(value as object)) return value
+  seen.add(value as object)
+  for (const nested of Object.values(value as Record<string, unknown>)) freezeStaleReadModel(nested, seen)
+  return Object.freeze(value)
+}
+
 const methodScopes: Record<string, SecureScope> = {
   "service.discovery": "snapshot.read",
   "core.state": "snapshot.read",
   "core.workspace.files": "snapshot.read",
   "core.workspace.notes": "snapshot.read",
   "workspace.actions": "snapshot.read",
+  "workspace.stale.evaluate": "snapshot.read",
   "workspace.notes.list": "snapshot.read",
   "workspace.files.inspect": "snapshot.read",
   "forge.source.resolve": "operation.write",
@@ -187,7 +199,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
     this.workspaceLifecycle = options.workspaceLifecycle ?? options.createWorkspaceLifecycle?.(this.terminals)
   }
 
-  async request(context: SecureSessionContext, request: SecureRequest): Promise<unknown> {
+  async request(context: SecureSessionContext, request: SecureRequest, signal?: AbortSignal): Promise<unknown> {
     this.options.onActivity?.()
     if (request.method === "environment.refresh") return this.refreshDynamicEnvironment(context, request.body)
     const required = methodScopes[request.method]
@@ -249,6 +261,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
         return this.options.core.notes(body.workspace, 5)
       }
       case "workspace.actions": return this.workspaceActions(context, body)
+      case "workspace.stale.evaluate": return this.staleWorkspaceEvaluation(body, signal)
       case "workspace.notes.list": return this.workspaceNotes(body)
       case "workspace.files.inspect": return this.workspaceFiles(body)
       case "forge.source.resolve": {
@@ -545,6 +558,88 @@ export class SecureServiceRouter implements SecureSessionHandler {
     const selected = snapshots.find((item) => item.workspace.id === parsed.data.workspace_id)
     if (!selected) throw coded("Workspace not found", "not_found")
     return { parsed: parsed.data, selected, revision, generatedAt: catalog?.generated_at ?? selected.generated_at }
+  }
+
+  private async staleReadModel(state: CoreState, signal?: AbortSignal): Promise<StaleWorkspaceReadModel> {
+    const workspaces: StaleWorkspaceReadModel["workspaces"][number][] = []
+    for (const { definition, projection } of state.workspaces) {
+      signal?.throwIfAborted()
+      const statusByRepository = new Map((projection.status ?? []).map((status) => [status.repository_id, status]))
+      const projectedByName = new Map(projection.repositories.map((repository) => [repository.name, repository]))
+      const repositories = definition.repos.map((repository) => {
+        const projected = projectedByName.get(repository.name)
+        if (!projected || (repository.id !== undefined && repository.id !== projected.id) || repository.mode !== projected.mode) {
+          throw new Error("Stale workspace repository identity is unavailable")
+        }
+        const repositoryId = projected.id
+        const status = statusByRepository.get(repositoryId)
+        if (status && (status.name !== repository.name || status.mode !== repository.mode)) {
+          throw new Error("Stale workspace repository status is inconsistent")
+        }
+        return {
+          id: repositoryId,
+          name: repository.name,
+          mode: repository.mode,
+          exists: status?.exists ?? false,
+          degraded: status?.degraded ?? true,
+          dirty: status?.dirty ?? false,
+          ahead: status?.ahead ?? 0,
+          drifted: repository.mode === "worktree"
+            && status?.exists === true
+            && status.degraded !== true
+            && status.branch !== definition.branch,
+          main_path: repository.main_path,
+          branch: definition.branch,
+        }
+      })
+      const notesCount = this.options.core?.noteCount
+        ? await this.options.core.noteCount(definition.name)
+        : 0
+      workspaces.push({
+        id: definition.id ?? projection.id,
+        name: definition.name,
+        created: definition.created,
+        ...(definition.last_opened === undefined ? {} : { last_opened: definition.last_opened }),
+        ...(definition.source === undefined ? {} : { source: structuredClone(definition.source) }),
+        notes_count: notesCount,
+        repositories,
+      })
+    }
+    return freezeStaleReadModel({ revision: state.revision, workspaces })
+  }
+
+  private async staleWorkspaceEvaluation(body?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const parsed = WebStaleWorkspaceRequestSchema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid stale workspace evaluation request", "invalid_request")
+    if (!this.options.core || !this.options.staleWorkspaceEvaluator) {
+      throw coded("Stale workspace evaluation is unavailable", "capability_unavailable")
+    }
+
+    let state: CoreState
+    try {
+      state = await this.options.core.build(signal)
+    } catch {
+      if (signal?.aborted) throw coded("Stale workspace evaluation was cancelled", "request_aborted")
+      throw coded("Authoritative workspace state could not be read", "operation_failed")
+    }
+    if (state.revision !== parsed.data.expected_revision) {
+      throw coded("Authoritative snapshot revision is stale", "conflict")
+    }
+
+    try {
+      const readModel = await this.staleReadModel(state, signal)
+      signal?.throwIfAborted()
+      const evaluated = await this.options.staleWorkspaceEvaluator.evaluate({
+        expected_revision: parsed.data.expected_revision,
+        read_model: readModel,
+        force_refresh: parsed.data.force_refresh,
+        signal,
+      })
+      return projectWebStaleWorkspaceEvaluation(evaluated)
+    } catch {
+      if (signal?.aborted) throw coded("Stale workspace evaluation was cancelled", "request_aborted")
+      throw coded("Stale workspace evaluation could not be completed", "operation_failed")
+    }
   }
 
   private async workspaceActions(context: SecureSessionContext, body?: Record<string, unknown>): Promise<unknown> {

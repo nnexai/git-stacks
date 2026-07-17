@@ -11,6 +11,11 @@ import { EventBroker } from "./policy/event-broker"
 import { createWorkspaceMutationAdapters, OperationRegistry, type WorkspaceCreateMutation } from "./policy/operations"
 import { createCoreStateProvider } from "./policy/core-state"
 import { createWorkspaceChangeMonitor } from "./policy/workspace-change-monitor"
+import {
+  createStaleWorkspaceEvaluator,
+  type StaleWorkspaceEvaluator,
+  type StaleWorkspaceEvaluatorOptions,
+} from "./policy/stale-workspace-evaluator"
 import { CLIENT_MODEL_LIMITS, type Operation, type Signal, type SignalDismissal, type WorkspaceCreationCatalog } from "@git-stacks/protocol"
 import { getWorkspaceCreationCatalog } from "@git-stacks/core/workspace-creation"
 import { setWorkspacePins } from "@git-stacks/core/workspace-pins"
@@ -187,6 +192,12 @@ export interface ManagedServiceOptions {
   workspaceCreate?: WorkspaceCreateMutation
   dynamicEnvironment?: DynamicEnvironmentStore
   parseDynamicEnvironmentRefresh?: SecureServiceRouterOptions["parseDynamicEnvironmentRefresh"]
+  staleWorkspaceEvaluator?: Pick<StaleWorkspaceEvaluator, "evaluate">
+  staleWorkspaceEvaluatorOptions?: StaleWorkspaceEvaluatorOptions
+}
+
+export function createStaleWorkspaceRuntimeComposition(options: StaleWorkspaceEvaluatorOptions = {}) {
+  return { staleWorkspaceEvaluator: createStaleWorkspaceEvaluator(options) }
 }
 
 export function createWebShortcutRuntimeComposition() {
@@ -452,6 +463,9 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
     const mutationAdapters = createWorkspaceMutationAdapters()
     const core = createCoreStateProvider(snapshot)
+    const { staleWorkspaceEvaluator } = options.staleWorkspaceEvaluator
+      ? { staleWorkspaceEvaluator: options.staleWorkspaceEvaluator }
+      : createStaleWorkspaceRuntimeComposition(options.staleWorkspaceEvaluatorOptions)
     const workspaceFileStatus = (workspaceName: string) => {
       const workspace = readWorkspace(workspaceName)
       return getWorkspaceFileStatusView(workspace, join(getTasksDir(readGlobalConfig().workspace_root), workspace.name), { verbose: true })
@@ -512,6 +526,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       ...(exposure?.enabled ? { remoteExposure: { bindHost: exposure.bind_host, advertiseHost: exposure.advertise_host, port: exposure.port } } : {}),
       mutations: mutationAdapters,
       core,
+      staleWorkspaceEvaluator,
       workspaceFileStatus,
       workspaceNotes: (workspaceName, limit) => getWorkspaceNotesSnapshot(workspaceName, { limit }),
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],

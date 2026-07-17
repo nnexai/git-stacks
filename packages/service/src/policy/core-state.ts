@@ -17,7 +17,7 @@ import {
   type EditTargetRequest,
 } from "./core-contract"
 import { SnapshotBusyError, workspaceActivityAt } from "./snapshot"
-import { listWorkspaceNotes, type WorkspaceNoteRecord } from "@git-stacks/core/notes"
+import { getWorkspaceNoteSummary, listWorkspaceNotes, type WorkspaceNoteRecord } from "@git-stacks/core/notes"
 import type { ArchivedWorkspaceSummary, WorkspaceCatalog, WorkspaceSnapshotResponse } from "@git-stacks/protocol"
 
 type CoreSnapshotSource = {
@@ -29,6 +29,7 @@ type CoreSnapshotSource = {
 export interface CoreStateProvider {
   build(signal?: AbortSignal): Promise<CoreState>
   editTarget(request: EditTargetRequest): EditTarget
+  noteCount(workspace: string): Promise<number>
   notes(workspace: string, limit?: number): Promise<WorkspaceNoteRecord[]>
 }
 
@@ -84,6 +85,11 @@ export function createCoreStateProvider(snapshot: CoreSnapshotSource): CoreState
       const path = request.kind === "workspace" ? workspaceFilePath(request.name) : templatePath(request.name)
       if (!existsSync(path)) throw new Error(`${request.kind} '${request.name}' not found`)
       return EditTargetSchema.parse({ kind: request.kind, name: request.name, path })
+    },
+
+    async noteCount(workspace) {
+      workspaceFilePath(workspace)
+      return (await getWorkspaceNoteSummary(workspace)).count
     },
 
     notes(workspace, limit = 5) {
