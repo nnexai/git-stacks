@@ -1,0 +1,173 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-17T18:38:20.323Z",
+  "phase": "127",
+  "phase_name": "Stale Workspace Intelligence and RC Closure",
+  "phase_dir": ".planning/phases/127-stale-workspace-intelligence-and-rc-closure",
+  "plan": 12,
+  "task": 1,
+  "total_tasks": 2,
+  "status": "paused",
+  "branch": "planning/phase-127-revision-1",
+  "head_before_handoff": "9d319c3243b594d3a3d71c15a51234099419a8e7",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Execute Phase 127 Plans 127-01 through 127-12",
+      "status": "done",
+      "commit": "24a2ebfe"
+    },
+    {
+      "id": 2,
+      "name": "Preserve authoritative catalogs larger than 16 workspaces while retaining the 16-workspace creation admission policy",
+      "status": "done",
+      "commit": "42d92518"
+    },
+    {
+      "id": 3,
+      "name": "Fix OpenTUI preload, orphan-text startup, renderer ownership, and fatal terminal cleanup",
+      "status": "done",
+      "commit": "e5a59502"
+    },
+    {
+      "id": 4,
+      "name": "Prevent superseded service authentication from repopulating closed client access",
+      "status": "done",
+      "commit": "9d319c32"
+    },
+    {
+      "id": 5,
+      "name": "Repeat Plan 127-12 regression and exact-candidate freeze after post-freeze fixes",
+      "status": "in_progress",
+      "progress": "Focused catalog, TUI PTY, authentication shutdown, Vitest, TUI, build, package typecheck, architecture, and secure-frame checks are green. The complete post-fix regression and a replacement exact-SHA freeze have not been run."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 6,
+      "name": "Reproduce the web auto-launch environment-refresh failure from a fresh build and determine whether it remains actionable",
+      "status": "not_started"
+    },
+    {
+      "id": 7,
+      "name": "Run the complete post-fix regression: npm test, npm run typecheck, npm run coverage, and npm run release:check without --tag",
+      "status": "not_started"
+    },
+    {
+      "id": 8,
+      "name": "Freeze a new clean exact candidate SHA and supersede all f7bdca75 receipt, validation, summary, and state references",
+      "status": "not_started"
+    },
+    {
+      "id": 9,
+      "name": "Obtain Plan 127-13 exact-SHA hosted/authenticated and physical/manual evidence",
+      "status": "not_started"
+    },
+    {
+      "id": 10,
+      "name": "Run Plan 127-14 reconciliation only after both Plan 127-13 checkpoints pass",
+      "status": "not_started"
+    },
+    {
+      "id": 11,
+      "name": "Complete milestone audit, completion, and cleanup",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "The recorded candidate f7bdca75f2545664251e88b233693b67fd37ee5c predates three runtime fixes and is superseded as the intended RC candidate.",
+      "type": "technical",
+      "workaround": "Run the full regression on a clean post-handoff tree, freeze a replacement SHA, and reset every exact-SHA external/manual row to PENDING for that replacement."
+    },
+    {
+      "description": "Plan 127-13 hosted/authenticated and physical/manual evidence remains unavailable by explicit user choice.",
+      "type": "human_action",
+      "workaround": "Keep every external/manual receipt PENDING and do not create 127-13-SUMMARY.md or start Plan 127-14 until complete safe evidence exists for the replacement candidate."
+    },
+    {
+      "description": "A first web launch returned LocalEnvironmentPreparationError until the service was started separately; the later snapshot failure was fixed, but the initial auto-launch observation has not been reproduced from a fresh build.",
+      "type": "technical",
+      "workaround": "Rebuild, ensure no managed service is running, retry node packages/cli/dist/index.js web, and investigate the actual launch path if it still fails. Do not blame Node 26 without evidence."
+    },
+    {
+      "description": "Release authority is absent.",
+      "type": "human_action",
+      "workaround": "Do not tag, push, publish packages, create a GitHub Release, or dispatch release-only workflows. Separate explicit authorization is required for any such action."
+    }
+  ],
+  "blocking_constraints": [
+    {
+      "name": "flat-agent-cap",
+      "severity": "blocking",
+      "description": "The prior 'up to 5 agents' allowance was violated by recursive fan-out that created hundreds of agents and the user stopped it.",
+      "mitigation": "Resume solo. Do not launch an agent or workflow unless the user explicitly authorizes it again. Any future numeric cap counts all nested and recursively spawned work, not only top-level calls."
+    },
+    {
+      "name": "exact-sha-evidence-reset",
+      "severity": "blocking",
+      "description": "Runtime defects were found after the old candidate freeze, so old exact-SHA deterministic and human evidence cannot approve the repaired source.",
+      "mitigation": "Complete a fresh full regression, freeze a new clean SHA, mark the old candidate superseded, and keep all hosted/authenticated/manual evidence PENDING for the new SHA."
+    },
+    {
+      "name": "release-authority-boundary",
+      "severity": "blocking",
+      "description": "Feature and candidate validation do not authorize an outward release action.",
+      "mitigation": "Never tag, push, publish, create a release, or dispatch a release workflow without a new explicit operator instruction."
+    },
+    {
+      "name": "node-floor-not-ceiling",
+      "severity": "advisory",
+      "description": "Node 24 was incorrectly treated as the only supported runtime when the user confirmed Node 26 also works.",
+      "mitigation": "Treat Node 24 as the supported minimum/default validation target, not a maximum; diagnose failures from evidence rather than version assumption."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Supply complete safe hosted runtime, configured shell/SSH-agent, authenticated GitHub/GitLab status, and forge same/fork/recovery receipts for the replacement exact candidate SHA.",
+      "context": "Plan 127-13 Task 1; the user chose to keep this evidence pending.",
+      "blocking": true
+    },
+    {
+      "action": "Perform complete live lifecycle, physical browser/xterm, responsive screenshot, interactive OpenTUI, and human cross-client parity validation for the replacement exact candidate SHA.",
+      "context": "Plan 127-13 Task 2; current automated PTY coverage does not substitute for this evidence.",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Keep CLIENT_MODEL_LIMITS.workspaces at 16 only for workspace-creation admission; authoritative active, archived, stale, pin, and priority read/projection sets are not truncated.",
+      "rationale": "The 16-row service-client policy must not make existing larger catalogs unreadable or silently incomplete.",
+      "phase": "127"
+    },
+    {
+      "decision": "Fix the TUI through correct @opentui/solid preload and explicit CliRenderer ownership rather than papering over false Show branches with fallback nodes.",
+      "rationale": "Solid's server runtime emitted an empty raw string, and an internally owned renderer leaked raw/alternate-screen state when mounting failed.",
+      "phase": "127"
+    },
+    {
+      "decision": "Use access generations so closeServiceClient supersedes an in-flight authentication request.",
+      "rationale": "A late authentication result must not reopen cached access after shutdown.",
+      "phase": "127"
+    },
+    {
+      "decision": "Keep all Plan 127-13 external/manual evidence pending and stop before Plan 127-14.",
+      "rationale": "The user explicitly selected pending evidence rather than authorizing hosted/authenticated checks or accepting incomplete evidence.",
+      "phase": "127"
+    },
+    {
+      "decision": "Treat Node 24 as the supported floor/default test target, not the exclusive runtime.",
+      "rationale": "The user confirmed the application also works on Node 26.",
+      "phase": "127"
+    },
+    {
+      "decision": "Preserve the no-release-action boundary.",
+      "rationale": "No tag, push, package publication, GitHub Release, or release-workflow dispatch has been authorized.",
+      "phase": "127"
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Read and acknowledge every blocking constraint in .continue-here.md, resume solo, consume the one-shot handoff, reproduce the web auto-launch observation from a fresh build, then run the complete regression before freezing a replacement exact candidate. Do not start Plan 127-13 or any outward release action.",
+  "context_notes": "Phase 127 Plans 127-01 through 127-12 are implemented, but the old candidate ledger is obsolete after commits 42d92518, e5a59502, and 9d319c32. Before this handoff the branch planning/phase-127-revision-1 was clean at 9d319c3243b594d3a3d71c15a51234099419a8e7. STATE.md, 127-RECEIPTS.md, 127-VALIDATION.md, and 127-12-SUMMARY.md still name f7bdca75f2545664251e88b233693b67fd37ee5c and must not be treated as current approval. No 127-13-SUMMARY.md or 127-14-SUMMARY.md exists. No managed service, web, or TUI process and no async-job manifest was observed at pause. Placeholder scans of existing Phase 127 summaries found only narrative statements saying no placeholders were introduced, not incomplete summary content. Focused post-fix gates are green, but npm test, full typecheck, coverage, and release:check still need one final run on the replacement candidate source."
+}
