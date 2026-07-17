@@ -156,13 +156,14 @@ Sanitized reasons may name authentication required, rate limiting, unsupported p
 
 ### Lifecycle Confirmation Copy
 
-Archive, Remove, and Force Remove reuse the Phase 123/126 canonical labels, inventories, focus defaults, and confirmation behavior unchanged.
+Archive, Remove, and Force Remove reuse the Phase 123/126 canonical authority, inventory, focus defaults, exact-name requirements, return behavior, and one-shot submission semantics. Phase 127 explicitly replaces generic safe labels with the noun-bearing copy below in both clients.
 
-| Action | Contract |
-|--------|----------|
-| Archive workspace | No confirmation. Execute through the canonical descriptor, stop/confirm terminals, reconcile, and retain the existing `Undo archive` affordance. |
-| Remove workspace | `Remove {workspace}?` plus the established terminals, managed worktrees, workspace directory, and YAML definition inventory. Initial focus is the safe `Keep workspace`; destructive CTA is `Remove workspace`. |
-| Force Remove | Available only from a fresh service inventory after the typed dirty-worktree block. Copy remains `Type {workspace} to confirm irreversible removal.` with exact case-sensitive matching and `Force Remove {workspace}`. |
+| State | Web copy | TUI copy | Preserved behavior |
+|-------|----------|----------|--------------------|
+| Archive workspace | No confirmation; retain `Undo archive`. | No confirmation; retain `[u] Undo archive`. | Execute through the canonical descriptor, stop and confirm terminals, reconcile authoritative state, and expose the existing reversible Undo affordance. |
+| Remove confirmation | Safe action `Keep workspace`; destructive action `Remove workspace`. | Safe hint `[n/Esc] Keep workspace`; destructive hint `[y] Remove workspace`. | Show `Remove {workspace}?` plus the established terminals, managed worktrees, workspace directory, and YAML definition inventory. Initial focus remains on the safe action. |
+| Dirty-removal blocker | Safe action `Back to workspace actions`; conditional destructive action `Review Force Remove`. | Safe hint `[Esc] Back to workspace actions`; conditional destructive hint `[f] Review Force Remove`. | Name every blocking repository, preserve the typed dirty-worktree result, and expose Force Remove review only when the fresh service inventory authorizes it. |
+| Force Remove confirmation | Safe action `Back to removal review`; destructive action `Force Remove {workspace}`. | Safe hint `[Esc] Back to removal review`; destructive hint `[Enter] Force Remove` only after an exact match. | Show `Type {workspace} to confirm irreversible removal.`, require the exact case-sensitive current name, retain the review state on mismatch, and submit once. |
 
 No stale-view copy may weaken terminal shutdown, dirty-worktree, stale-revision, exact-name, or failure semantics. Detection never closes terminals, archives, removes, or modifies YAML by itself.
 
@@ -172,10 +173,10 @@ No stale-view copy may weaken terminal shutdown, dirty-worktree, stale-revision,
 
 ### Entry and Shortcut Placement
 
-- Add a visible web toolbar control labelled `Stale` immediately adjacent to `Archived`. It uses a compact existing toolbar button, a `?`/clock-style monochrome glyph only as decoration, `aria-label="Stale workspaces"`, and the normal focus ring. It does not use warning color merely because candidates exist; warning may appear only as a written count badge when confirmed candidates are present.
+- Add a visible web toolbar control labelled `Stale workspaces` immediately adjacent to `Archived` wherever the full label fits. At compact widths, retain the existing icon-sized toolbar treatment with `aria-label="Stale workspaces"` and `title="Stale workspaces"`; a `?`/clock-style monochrome glyph is decorative only. The control does not use warning color merely because candidates exist; warning may appear only as a written count badge when confirmed candidates are present.
 - Add `Open stale workspaces` to keyboard help and shortcut settings through the canonical shortcut registry. Default web bindings are `Ctrl+Command+S` on macOS and `Ctrl+Alt+Shift+S` on Linux. The binding remains rebindable/unbindable and must pass existing collision validation and xterm pre-processing.
 - Add context-scoped `Refresh stale evidence` to the same registry. Inside the stale view its presentation key is `R`; it has no browser-global default, avoiding browser reload and terminal interception. TUI presents the shared action as `[r] Refresh evidence`.
-- Add `[s] Stale` to the TUI workspace-list help bar and `Keybindings` help. The TUI renderer consumes the shared action metadata rather than defining a private label or callback.
+- Add `[s] Stale workspaces` to the TUI workspace-list help bar and `Keybindings` help wherever width permits; the width-tiered compact footer may use `[s] Stale`. The TUI renderer consumes the shared action metadata rather than defining a private label or callback.
 - Repeated entry shortcuts refocus the existing stale view. Repeated refresh keys while a refresh is in flight do nothing and never queue another probe.
 
 ### Web Singleton Overlay
@@ -225,7 +226,7 @@ No stale-view copy may weaken terminal shutdown, dirty-worktree, stale-revision,
 - `Open workspace` invokes the existing canonical Open descriptor. It submits once and selects/navigates only after authoritative success.
 - Web keeps the stale overlay visible and the row action busy while Open is pending. On success, close the overlay, select the authoritative workspace/repository, and focus the valid target. On failure, keep the overlay and row intact, restore the Open control, and render the documented inline error.
 - TUI shows `Opening {workspace}…` in the dedicated view. On success, return to the normal Workspaces view with the authoritative workspace selected. On failure, return to the same stale row with the documented error.
-- Archive and Remove invoke the exact Phase 123 lifecycle paths. They never inherit authority from stale evidence. Confirmation, progress, terminal shutdown, dirty blockers, Force Remove eligibility, one-shot submission, and recovery remain unchanged.
+- Archive and Remove invoke the exact Phase 123 lifecycle paths. They never inherit authority from stale evidence. Confirmation authority, inventory, focus defaults, progress, terminal shutdown, dirty blockers, Force Remove eligibility, return behavior, one-shot submission, and recovery remain unchanged; visible safe actions and TUI hints use the explicit noun-bearing labels in `Lifecycle Confirmation Copy`.
 - After any lifecycle terminal state, refresh authoritative normal workspace state and stale evidence before settling presentation. A successful Archive/Remove removes or reclassifies the row according to the new authoritative response. Unrelated candidate selection remains stable when its stable ID still exists.
 - If authoritative reconciliation fails after a terminal operation result, keep actions locked and show the existing Retry-refresh recovery. Never replay the lifecycle mutation.
 
