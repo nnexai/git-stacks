@@ -129,6 +129,12 @@ describe("Phase 124 user-shell adapter RED contract", () => {
       })
       expect(plan.argv[0]).toBe(fixture.executable)
       expect(plan.mode).toBe("command")
+      if (fixture.family === "zsh") {
+        expect(plan.bootstrap).toContain('builtin eval -- "$__gs_command"')
+        expect(plan.bootstrap).not.toContain('command eval -- "$__gs_command"')
+      } else if (fixture.family === "bash") {
+        expect(plan.bootstrap).toContain('command eval -- "$__gs_command"')
+      }
     }
   })
 

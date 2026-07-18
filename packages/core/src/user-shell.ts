@@ -109,7 +109,7 @@ const DEFAULT_EXECUTION_DEPENDENCIES: UserShellExecutionDependencies = {
   },
 }
 
-const POSIX_BOOTSTRAP = [
+const POSIX_BOOTSTRAP_PREFIX = [
   "__gs_ready=$1",
   "__gs_ack=$2",
   "__gs_environment=$3",
@@ -119,8 +119,10 @@ const POSIX_BOOTSTRAP = [
   "> \"$__gs_ready\" || command exit 126",
   "while [[ ! -e \"$__gs_ack\" ]]; do command sleep 0.01; done",
   "command rm -f -- \"$__gs_ready\" \"$__gs_ack\"",
-  "command eval -- \"$__gs_command\"",
-].join("\n")
+]
+
+const BASH_BOOTSTRAP = [...POSIX_BOOTSTRAP_PREFIX, "command eval -- \"$__gs_command\""].join("\n")
+const ZSH_BOOTSTRAP = [...POSIX_BOOTSTRAP_PREFIX, "builtin eval -- \"$__gs_command\""].join("\n")
 
 const FISH_BOOTSTRAP = [
   "set -l __gs_ready $argv[1]",
@@ -261,7 +263,11 @@ export function buildUserShellBootstrap(
   }
 
   const paths = requireCommandBootstrapPaths(options)
-  const bootstrap = shell.family === "fish" ? FISH_BOOTSTRAP : POSIX_BOOTSTRAP
+  const bootstrap = shell.family === "fish"
+    ? FISH_BOOTSTRAP
+    : shell.family === "zsh"
+      ? ZSH_BOOTSTRAP
+      : BASH_BOOTSTRAP
   const commonArguments = [
     paths.readinessPath,
     paths.acknowledgementPath,
