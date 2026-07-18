@@ -1,6 +1,6 @@
 {
   "name": "@git-stacks/cli",
-  "version": "0.22.0-rc.1",
+  "version": "0.22.0-rc.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -30,10 +30,10 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@git-stacks/core": "0.22.0-rc.1",
-    "@git-stacks/protocol": "0.22.0-rc.1",
-    "@git-stacks/service": "0.22.0-rc.1",
-    "@git-stacks/web": "0.22.0-rc.1",
+    "@git-stacks/core": "0.22.0-rc.2",
+    "@git-stacks/protocol": "0.22.0-rc.2",
+    "@git-stacks/service": "0.22.0-rc.2",
+    "@git-stacks/web": "0.22.0-rc.2",
     "@logtape/logtape": "^2.0.5",
     "commander": "^14.0.3",
     "yaml": "^2.8.3",

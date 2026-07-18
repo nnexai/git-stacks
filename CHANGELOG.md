@@ -8,6 +8,27 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.2] - 2026-07-18
+
+### Fixed
+
+- Fish terminals now receive a bounded Primary Device Attributes response during pre-attachment startup, avoiding the ten-second capability-query timeout while preserving the browser terminal as the long-lived responder.
+- Service-owned terminal initialization and shutdown now handle invalid working directories, process groups, and failure notification promptly without leaving shells or configured commands stuck.
+- The optional TUI removes multiple selected workspaces serially against fresh revisions and restores terminal state promptly when quitting, including after completed commands or launcher failures.
+- Browser agent activity treats `completed` as attention, keeps `working` presence visible, acknowledges completed/waiting/failed state only when the exact terminal is activated, and returns the post-ack projection immediately.
+
+### Changed
+
+- Browser terminal tabs and aggregated workspace rows share deduplicated provider symbols; tabs no longer display a numeric attention badge.
+
+### Release Candidate
+
+This follow-up candidate fixes Fish PTY startup, TUI lifecycle and batch-removal regressions, and browser agent-attention behavior found during rc.1 testing.
+
+0.22.0-rc.2 / v0.22.0-rc.2; npm prerelease publication uses next
+
+---
+
 ## [0.22.0-rc.1] - 2026-07-17
 
 ### Added
