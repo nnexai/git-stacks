@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { resolve } from "node:path"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { settleTuiCleanup } from "../../../packages/tui/src/run"
 
 const launcher = resolve("packages/tui/dist/index.js")
 const directRun = resolve("packages/tui/dist/run.js")
+const cliLauncher = resolve("packages/cli/dist/index.js")
 const ptyFixture = resolve("tests/helpers/tui-launcher-pty.mjs")
 
-type Scenario = "runtime" | "fatal" | "q" | "ctrl-c" | "sigint" | "sigterm" | "direct"
+type Scenario = "runtime" | "fatal" | "q" | "ctrl-c" | "sigint" | "sigterm" | "direct" | "dashboard-q"
 interface FixtureResult {
   output: string
   ptyExitCode: number
@@ -14,9 +18,15 @@ interface FixtureResult {
   childAlive?: boolean
 }
 
-async function runFixture(scenario: Scenario, target = launcher): Promise<FixtureResult> {
-  const child = Bun.spawn(["node", ptyFixture, scenario, process.execPath, target], {
+async function runFixture(
+  scenario: Scenario,
+  target = launcher,
+  args: string[] = [],
+  environment: Record<string, string> = {},
+): Promise<FixtureResult> {
+  const child = Bun.spawn(["node", ptyFixture, scenario, process.execPath, target, ...args], {
     cwd: "/tmp",
+    env: { ...process.env, ...environment },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -56,6 +66,14 @@ function expectAlternateScreenRestored(output: string): void {
 }
 
 describe("published TUI launcher", () => {
+  test("bounds a client cleanup that does not settle", async () => {
+    const startedAt = Date.now()
+    const settled = await settleTuiCleanup(new Promise(() => {}), 25)
+
+    expect(settled).toBe(false)
+    expect(Date.now() - startedAt).toBeLessThan(250)
+  })
+
   test("loads the reactive runtime from /tmp and mounts a false Show without orphan text", async () => {
     const fixture = await runFixture("runtime")
 
@@ -89,6 +107,47 @@ describe("published TUI launcher", () => {
       expectAlternateScreenRestored(fixture.output)
     })
   }
+
+  test("outer git-stacks manage exits when the fullscreen TUI exits", async () => {
+    const fixture = await runFixture("q", cliLauncher, ["manage"])
+
+    expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
+    expect(fixture.durationMs).toBeLessThan(3_000)
+    expectAlternateScreenRestored(fixture.output)
+  })
+
+  test("real dashboard exits promptly after q while its managed service remains detached", async () => {
+    const root = mkdtempSync(join(tmpdir(), "git-stacks-dashboard-exit-"))
+    const configDir = join(root, "config")
+    const workspaceRoot = join(root, "workspace-root")
+    const environment = {
+      GIT_STACKS_CONFIG_DIR: configDir,
+      GIT_STACKS_KEY_STORE: "file",
+    }
+    mkdirSync(join(configDir, "workspaces"), { recursive: true })
+    mkdirSync(join(configDir, "templates"), { recursive: true })
+    mkdirSync(join(configDir, "notes"), { recursive: true })
+    mkdirSync(workspaceRoot, { recursive: true })
+    writeFileSync(join(configDir, "config.yml"), `workspace_root: ${workspaceRoot}\n`)
+    writeFileSync(join(configDir, "registry.yml"), "[]\n")
+
+    try {
+      const fixture = await runFixture("dashboard-q", cliLauncher, ["manage"], environment)
+
+      expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
+      expect(fixture.durationMs).toBeLessThan(5_000)
+      expectAlternateScreenRestored(fixture.output)
+    } finally {
+      const stop = Bun.spawn([process.execPath, cliLauncher, "service", "stop"], {
+        cwd: root,
+        env: { ...process.env, ...environment },
+        stdout: "ignore",
+        stderr: "ignore",
+      })
+      await stop.exited
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 
   for (const [scenario, signal] of [["sigint", "SIGINT"], ["sigterm", "SIGTERM"]] as const) {
     test(`external ${signal} exits promptly and restores raw and alternate-screen state`, async () => {

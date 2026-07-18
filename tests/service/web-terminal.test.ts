@@ -404,7 +404,7 @@ describe("service-owned web terminal", () => {
     }
   })
 
-  test("initializes a real interactive Fish PTY before terminal capability replies are available", async () => {
+  test("reaches a real Fish prompt before browser terminal capability replies are available", async () => {
     const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
     if (!fish) return
     const manager = new WebTerminalManager({
@@ -426,6 +426,70 @@ describe("service-owned web terminal", () => {
       rows: 24,
     })
     expect(terminal.state).toBe("running")
+    await sleep(100)
+    const { sent } = attach(manager, terminal.id)
+    await waitFor(() => sent.some((item) => item instanceof Uint8Array
+      && new TextDecoder().decode(item.slice(9)).includes("\u001b]133;B")), 2_000)
+    const output = sent
+      .filter((item): item is Uint8Array => item instanceof Uint8Array)
+      .map((frame) => new TextDecoder().decode(frame.slice(9)))
+      .join("")
+    expect(output).not.toContain("Primary Device Attribute query")
+    expect(output).not.toContain("\u001b[0c")
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+  })
+
+  test("answers Fish DA1 before browser attachment without replaying the consumed query", async () => {
+    const writes: string[] = []
+    let dataListener: (data: string) => void = () => undefined
+    let emitPtyData: (data: string) => void = () => undefined
+    let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
+    const spawn: PtyFactory = (argv) => {
+      const bootstrap = argv[argv.indexOf("--init-command") + 1]
+      const readyPath = bootstrap?.match(/> '([^']+\/ready)'/)?.[1]
+      expect(readyPath).toBeDefined()
+      writeFileSync(readyPath!, "ready")
+      emitPtyData = (data) => dataListener(data)
+      return {
+        pid: 920_001,
+        write(data) { writes.push(data) },
+        resize: () => undefined,
+        kill: () => queueMicrotask(() => exitListener({ exitCode: 0 })),
+        onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
+        onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/usr/bin/fish", "--interactive"], cwd: process.cwd(), environment: {},
+        initialization: { kind: "post-init-environment", shell: "fish" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn)
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    emitPtyData("startup-prefix\u001b[")
+    emitPtyData("0cstartup-suffix")
+    await waitFor(() => writes.includes("\u001b[?1;2c"))
+
+    const { sent } = attach(manager, terminal.id)
+    const output = sent
+      .filter((item): item is Uint8Array => item instanceof Uint8Array)
+      .map((frame) => new TextDecoder().decode(frame.slice(9)))
+      .join("")
+    expect(output).toContain("startup-prefix")
+    expect(output).toContain("startup-suffix")
+    expect(output).not.toContain("\u001b[0c")
+    expect(writes).toEqual(["\u001b[?1;2c"])
+
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 

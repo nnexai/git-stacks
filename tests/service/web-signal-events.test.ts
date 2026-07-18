@@ -37,6 +37,21 @@ describe("web signal events", () => {
     expect(connectEvents).not.toContain("refreshSignals()")
   })
 
+  test("acknowledges only explicit exact-terminal activation and renders synchronized tab providers", () => {
+    const selectPair = appSource.slice(appSource.indexOf("function selectPair"), appSource.indexOf("const confirmedForceNames"))
+    const refresh = appSource.slice(appSource.indexOf("async function refreshSignals"), appSource.indexOf("async function loadTerminals"))
+    const tabs = appSource.slice(appSource.indexOf("function renderTabs"), appSource.indexOf("function selectTerminal"))
+    expect(selectPair).toContain("refreshSignals()")
+    expect(selectPair).not.toContain("acknowledgeTerminalSignals")
+    expect(refresh).toMatch(/refreshSignals[\s\S]*"signals\.list"/)
+    expect(refresh).toMatch(/acknowledgeTerminalSignals[\s\S]*"signals\.acknowledge"/)
+    expect(appSource).toMatch(/function selectTerminal[\s\S]*acknowledgeTerminalSignals\(terminal\.meta\.surface_id\)/)
+    expect(tabs).toMatch(/deduplicateProviderSessions\(signals\.filter[\s\S]*meta\.surface_id[\s\S]*providerStack\(tabSessions\)/)
+    expect(tabs).not.toContain("attentionCount(")
+    expect(tabs).not.toMatch(/element\("span", "badge"/)
+    expect(appSource.match(/providerStack\(/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+
   test("keeps live replacements, dismissals, idle tombstones, and stale replays coherent", () => {
     const state = new SignalState()
     const dismissed = new Set<string>()

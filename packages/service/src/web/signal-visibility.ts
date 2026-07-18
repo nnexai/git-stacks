@@ -9,6 +9,7 @@ export class SignalVisibilityTracker {
     let acknowledged = 0
     for (const signal of signals) {
       if (signal.kind !== "activity" || signal.surface_id !== surfaceId) continue
+      if (signal.state !== "waiting" && signal.state !== "completed" && signal.state !== "failed") continue
       seen.set(this.activityLane(signal), this.activityVersion(signal))
       acknowledged += 1
     }

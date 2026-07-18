@@ -118,6 +118,7 @@ let currentState = coreState([
   workspace({ id: UUIDS.target, name: "target", pinned: true, priority: 100 }),
 ])
 let reloadedState = currentState
+let reloadSequence: typeof currentState[] = []
 let lifecycleScenario: "success" | "dirty" | "stale" | "terminal-failure" = "success"
 let forceAuthorized = false
 let callOrder: string[] = []
@@ -203,9 +204,10 @@ const fetchWebOperationMock = mock(async (): Promise<WebOperation> => ({
 }))
 
 const fetchCoreStateMock = mock(async () => {
-  callOrder.push(`reload:${reloadedState.revision}`)
-  currentState = reloadedState
-  return reloadedState
+  const nextState = reloadSequence.shift() ?? reloadedState
+  callOrder.push(`reload:${nextState.revision}`)
+  currentState = nextState
+  return nextState
 })
 
 const lifecycleMutationMock = mock(async (
@@ -393,6 +395,7 @@ beforeEach(() => {
   lifecycleScenario = "success"
   forceAuthorized = false
   callOrder = []
+  reloadSequence = []
   lifecycleMutationMock.mockClear()
   fetchCoreStateMock.mockClear()
   fetchStaleWorkspaceEvaluationMock.mockClear()
@@ -598,11 +601,15 @@ describe("integration: archived workspaces and safe removal", () => {
     expect(lifecycleMutationMock).not.toHaveBeenCalled()
   })
 
-  test("does not collapse a multi-workspace Remove selection to one arbitrary target", async () => {
+  test("confirms and serially removes every selected workspace with a fresh revision", async () => {
     const initial = coreState([
       workspace({ id: UUIDS.target, name: "remove-alpha" }),
       workspace({ id: UUIDS.other, name: "remove-beta" }),
     ], [], "12")
+    reloadSequence = [
+      coreState([workspace({ id: UUIDS.other, name: "remove-beta" })], [], "13"),
+      coreState([], [], "14"),
+    ]
     const { mockInput, renderOnce, captureCharFrame } = await renderApp(initial)
 
     mockInput.pressKey(" ")
@@ -611,12 +618,27 @@ describe("integration: archived workspaces and safe removal", () => {
     await renderOnce()
 
     expect(captureCharFrame()).toContain("2 selected")
-    expect(captureCharFrame()).toContain("Remove one workspace at a time")
+    expect(captureCharFrame()).toContain("[r] Remove All")
     mockInput.pressKey("r")
     await renderOnce()
+    expect(captureCharFrame()).toContain("Remove 2 workspaces")
+    expect(captureCharFrame()).toContain("remove-alpha")
+    expect(captureCharFrame()).toContain("remove-beta")
     expect(lifecycleMutationMock).not.toHaveBeenCalled()
-    expect(captureCharFrame()).not.toContain("Remove remove-alpha")
-    expect(captureCharFrame()).not.toContain("Remove remove-beta")
+
+    mockInput.pressKey("y")
+    await settle(renderOnce)
+    expect(lifecycleMutationMock.mock.calls.map((call) => call[0])).toEqual([
+      { kind: "workspace.remove", workspace_id: UUIDS.target, expected_revision: "12" },
+      { kind: "workspace.remove", workspace_id: UUIDS.other, expected_revision: "13" },
+    ])
+    expect(callOrder).toEqual([
+      "submit:workspace.remove:12",
+      "reload:13",
+      "submit:workspace.remove:13",
+      "reload:14",
+    ])
+    expect(captureCharFrame()).toContain("Removed all 2 selected workspaces")
   })
 
   test("offers exact-name Force Remove only for a typed dirty result", async () => {

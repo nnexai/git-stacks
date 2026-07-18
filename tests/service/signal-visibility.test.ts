@@ -41,12 +41,12 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 }
 
 describe("secure browser signal visibility", () => {
-  test("acknowledges only the current exact-surface lifecycle for one authenticated principal", () => {
+  test("acknowledges only attention lifecycle on the current exact surface for one authenticated principal", () => {
     const visibility = new SignalVisibilityTracker()
     const working = activity("working", "2026-07-14T10:00:00.000Z")
 
-    expect(visibility.acknowledgeSurface("browser-1", surfaceId, [working])).toBe(1)
-    expect(visibility.visibleSignals("browser-1", [working])).toEqual([])
+    expect(visibility.acknowledgeSurface("browser-1", surfaceId, [working])).toBe(0)
+    expect(visibility.visibleSignals("browser-1", [working])).toEqual([working])
     expect(visibility.visibleSignals("browser-2", [working])).toEqual([working])
 
     const completed = activity("completed", "2026-07-14T10:00:01.000Z")
@@ -56,6 +56,31 @@ describe("secure browser signal visibility", () => {
 
     const nextRun = activity("working", "2026-07-14T10:00:02.000Z")
     expect(visibility.visibleSignals("browser-1", [nextRun])).toEqual([nextRun])
+  })
+
+  test("returns the post-ack projection while retaining working presence", async () => {
+    const working = activity("working", "2026-07-14T10:00:00.000Z")
+    const completed = { ...activity("completed", "2026-07-14T10:00:01.000Z"), source: "claude" as const, id: "sig_1123456789abcdef" }
+    const router = new SecureServiceRouter({
+      snapshot: {
+        buildAll: async () => [{ workspace: { id: workspaceId } }] as never,
+        buildWorkspace: async () => { throw new Error("unused") },
+      },
+      signalProjection: async () => ({ signals: [working, completed], dismissed: [], sequence: "2", unread: [], overflow: 0 }),
+    })
+    ;(router.terminals as unknown as { surfaceIds(principalId: string): Set<string> }).surfaceIds = () => new Set([surfaceId])
+    const context = {
+      sessionId: "session-1", principalId: "browser-1", targetId: "target-1", origin: "local", mode: "browser",
+      scopes: ["signal.dismiss"], sendEvent: async () => undefined,
+    } as never
+
+    const projection = await router.request(context, {
+      method: "signals.acknowledge", body: { surface_id: surfaceId },
+    } as never) as { acknowledged: number; signals: Signal[] }
+
+    expect(projection.acknowledged).toBe(1)
+    expect(projection.signals.map(({ source, state }) => ({ source, state }))).toEqual([{ source: "codex", state: "working" }])
+    await router.stop()
   })
 
   test("filters live browser signals by the principal's terminal and active workspace visibility", async () => {

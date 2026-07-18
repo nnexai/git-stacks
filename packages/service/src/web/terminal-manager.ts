@@ -33,6 +33,7 @@ type Attachment = { socket: TerminalAttachment; ack: bigint; pressured: boolean;
 export interface PtyProcess {
   readonly pid: number
   cancelSequence?(): void
+  releasePreAttachment?(): void
   write(data: string): void
   resize(columns: number, rows: number): void
   kill(signal?: string): void
@@ -196,19 +197,59 @@ function ptyInitializationLaunch(
     : { argv: [...argv], injectBootstrap: true }
 }
 
-function bufferPty(processHandle: PtyProcess): PtyProcess {
+const PRIMARY_DEVICE_ATTRIBUTES_QUERY = "\u001b[0c"
+const XTERM_PRIMARY_DEVICE_ATTRIBUTES_RESPONSE = "\u001b[?1;2c"
+
+function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = false): PtyProcess {
   const dataListeners = new Set<(data: string) => void>()
   const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
   const pendingData: string[] = []
+  let preAttachment = answerPrimaryDeviceAttributes
+  let negotiationPending = ""
   let pendingExit: { exitCode: number; signal?: number } | undefined
-  processHandle.onData((data) => dataListeners.size ? dataListeners.forEach((listener) => listener(data)) : pendingData.push(data))
+  const emitData = (data: string) => {
+    if (!data) return
+    if (dataListeners.size) dataListeners.forEach((listener) => listener(data))
+    else pendingData.push(data)
+  }
+  processHandle.onData((data) => {
+    if (!preAttachment) { emitData(data); return }
+    let input = negotiationPending + data
+    negotiationPending = ""
+    let output = ""
+    while (input) {
+      const query = input.indexOf(PRIMARY_DEVICE_ATTRIBUTES_QUERY)
+      if (query >= 0) {
+        output += input.slice(0, query)
+        processHandle.write(XTERM_PRIMARY_DEVICE_ATTRIBUTES_RESPONSE)
+        input = input.slice(query + PRIMARY_DEVICE_ATTRIBUTES_QUERY.length)
+        continue
+      }
+      let held = 0
+      for (let size = Math.min(input.length, PRIMARY_DEVICE_ATTRIBUTES_QUERY.length - 1); size > 0; size -= 1) {
+        if (PRIMARY_DEVICE_ATTRIBUTES_QUERY.startsWith(input.slice(-size))) { held = size; break }
+      }
+      output += input.slice(0, input.length - held)
+      negotiationPending = input.slice(input.length - held)
+      break
+    }
+    emitData(output)
+  })
   processHandle.onExit((event) => {
+    emitData(negotiationPending)
+    negotiationPending = ""
     pendingExit = event
     for (const listener of exitListeners) listener(event)
   })
   return {
     pid: processHandle.pid,
     cancelSequence: () => processHandle.cancelSequence?.(),
+    releasePreAttachment: () => {
+      if (!preAttachment) return
+      preAttachment = false
+      emitData(negotiationPending)
+      negotiationPending = ""
+    },
     write: (data) => processHandle.write(data),
     resize: (columns, rows) => processHandle.resize(columns, rows),
     kill: (signal) => processHandle.kill(signal),
@@ -398,7 +439,7 @@ export class WebTerminalManager {
               cols: input.cols,
               rows: input.rows,
               name: "xterm-256color",
-            }))
+            }), initialization?.shell === "fish")
             if (initialization) {
               const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
               try {
@@ -425,23 +466,7 @@ export class WebTerminalManager {
       } catch (error) {
         throw Object.assign(new Error(`PTY allocation failed: ${(error as Error).message}`), { status: 409, code: "capability_unavailable" })
       }
-      child.onData((data) => {
-        if (!session) return
-        const sanitized = filter.push(new TextEncoder().encode(data))
-        if (sanitized.length) this.output(session, sanitized)
-      })
-      child.onExit(({ exitCode }) => {
-        resolveExit(exitCode)
-        if (!session) return
-        const remaining = filter.flush()
-        if (remaining.length) this.output(session, remaining)
-        session.state = "ended"
-        session.exitCode = exitCode
-        session.endedAt = this.now()
-        this.sendControl(session, { type: "exit", code: exitCode })
-        this.notifyActive()
-      })
-      session = {
+      const activeSession: Session = {
         id,
         principalId,
         workspaceId: input.workspace_id,
@@ -464,9 +489,24 @@ export class WebTerminalManager {
         filter,
         agentSessions: new Map(),
       }
-      this.sessions.set(id, session)
+      session = activeSession
+      child.onData((data) => {
+        const sanitized = filter.push(new TextEncoder().encode(data))
+        if (sanitized.length) this.output(activeSession, sanitized)
+      })
+      child.onExit(({ exitCode }) => {
+        resolveExit(exitCode)
+        const remaining = filter.flush()
+        if (remaining.length) this.output(activeSession, remaining)
+        activeSession.state = "ended"
+        activeSession.exitCode = exitCode
+        activeSession.endedAt = this.now()
+        this.sendControl(activeSession, { type: "exit", code: exitCode })
+        this.notifyActive()
+      })
+      this.sessions.set(id, activeSession)
       this.notifyActive()
-      return this.project(session)
+      return this.project(activeSession)
     } finally {
       admission.release()
     }
@@ -853,6 +893,7 @@ export class WebTerminalManager {
     const session = this.sessions.get(socket.data.sessionId)
     if (!session || session.principalId !== socket.data.principalId) { socket.close(1008, "Unknown terminal"); return }
     if (session.attachment && session.attachment.socket !== socket) session.attachment.socket.close(4001, "Taken over")
+    session.process.releasePreAttachment?.()
     session.attachment = { socket, ack: session.earliestCursor > 0n ? session.earliestCursor - 1n : 0n, pressured: false, streaming: socket.data.streaming }
     socket.send(JSON.stringify({ type: "ready", terminal: this.project(session), reset: true, streaming: session.attachment.streaming }))
     if (session.attachment.streaming) for (const chunk of session.chunks) this.sendChunk(session, chunk)

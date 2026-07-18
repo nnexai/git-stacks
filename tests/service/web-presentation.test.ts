@@ -84,9 +84,9 @@ describe("web signal presentation", () => {
     }).success).toBe(false)
   })
 
-  test("separates attention from recent activity without treating activity as unread", () => {
+  test("treats completed lifecycle as attention without treating working activity as unread", () => {
     expect(signalGroup(base)).toBe("recent-activity")
-    expect(signalGroup({ ...base, state: "completed" })).toBe("recent-activity")
+    expect(signalGroup({ ...base, state: "completed" })).toBe("needs-attention")
     expect(signalGroup({ ...base, state: "waiting" })).toBe("needs-attention")
     expect(signalGroup({ ...base, state: "failed" })).toBe("needs-attention")
     expect(signalGroup({ ...base, kind: "notification", state: undefined })).toBe("needs-attention")
@@ -111,7 +111,7 @@ describe("web signal presentation", () => {
 
     expect(sessions.map(({ source, state }) => ({ source, state }))).toEqual([
       { source: "copilot", state: "waiting" },
-      { source: "codex", state: "working" },
+      { source: "codex", state: "completed" },
     ])
   })
 

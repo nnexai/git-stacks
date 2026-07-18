@@ -94,6 +94,18 @@ function providerBadge(source: string, className = "provider-chip"): HTMLElement
   node.setAttribute("aria-label", providerName(source))
   return node
 }
+function providerStack(sessions: Signal[]): HTMLElement | undefined {
+  if (!sessions.length) return undefined
+  const providers = element("span", "provider-stack")
+  for (const signal of sessions.slice(0, 3)) {
+    const provider = providerBadge(signal.source, `provider-chip${signal.state === "waiting" ? " awaiting" : ""}${signal.state === "completed" ? " completed" : ""}${signal.state === "failed" ? " failed" : ""}`)
+    provider.title = `${providerName(signal.source)} · ${lifecycleLabel(signal)}`
+    provider.setAttribute("aria-label", provider.title)
+    providers.append(provider)
+  }
+  if (sessions.length > 3) providers.append(element("span", "provider-chip overflow", `+${sessions.length - 3}`))
+  return providers
+}
 
 type ContextAction = { label: string; run: () => void; disabled?: boolean; disabledReason?: string; destructive?: boolean; group?: string }
 type CanonicalContextAction = ContextAction & { actionId: WebWorkspaceActionId }
@@ -907,9 +919,6 @@ function canonicalContextActions(workspace: Workspace): CanonicalContextAction[]
   }))
 }
 
-function attentionCount(workspaceId: string, repositoryId?: string, surfaceId?: string): number {
-  return signals.filter((signal) => matchesSignalScope(signal, workspaceId, repositoryId, surfaceId) && signalGroup(signal) === "needs-attention").length
-}
 function pairActive(workspaceId: string, repositoryId: string): boolean {
   const commandRunning = [...terminalViews.values()].some((view) => view.meta.workspace_id === workspaceId && view.meta.repository_id === repositoryId && Boolean(view.meta.command_id) && view.meta.state !== "ended")
   return commandRunning || signals.some((signal) => matchesSignalScope(signal, workspaceId, repositoryId) && isBackgroundActivity(signal))
@@ -1000,17 +1009,8 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   const status = element("span", "workspace-status")
   if (repository.additions) status.append(element("span", "git-additions", `+${repository.additions}`))
   if (repository.removals) status.append(element("span", "git-removals", `-${repository.removals}`))
-  if (sessions.length) {
-    const providers = element("span", "provider-stack")
-    for (const signal of sessions.slice(0, 3)) {
-      const provider = providerBadge(signal.source, `provider-chip${signal.state === "waiting" ? " awaiting" : ""}${signal.state === "completed" ? " completed" : ""}${signal.state === "failed" ? " failed" : ""}`)
-      provider.title = `${providerName(signal.source)} · ${lifecycleLabel(signal)}`
-      provider.setAttribute("aria-label", provider.title)
-      providers.append(provider)
-    }
-    if (sessions.length > 3) providers.append(element("span", "provider-chip overflow", `+${sessions.length - 3}`))
-    status.append(providers)
-  }
+  const providers = providerStack(sessions)
+  if (providers) status.append(providers)
   if (working || running) {
     const activity = element("span", "activity-marker")
     activity.title = working ? "Agent working" : "Configured command running"
@@ -1206,9 +1206,12 @@ function renderTabs(): void {
     close.setAttribute("aria-label", `Close ${meta.title}`)
     close.disabled = meta.state === "closing"
     close.addEventListener("click", (event) => { event.stopPropagation(); void view.close() })
-    tab.append(dot, title)
-    const attention = attentionCount(meta.workspace_id, meta.repository_id, meta.surface_id)
-    if (attention) tab.append(element("span", "badge", String(attention)))
+    const tabSessions = deduplicateProviderSessions(signals.filter((signal) =>
+      matchesSignalScope(signal, meta.workspace_id, meta.repository_id, meta.surface_id)))
+    const tabProviders = providerStack(tabSessions)
+    tab.append(dot)
+    if (tabProviders) tab.append(tabProviders)
+    tab.append(title)
     tab.append(close)
     tab.addEventListener("click", () => selectTerminal(meta.id))
     tab.addEventListener("contextmenu", (event) => {
@@ -1245,8 +1248,9 @@ function renderTabs(): void {
 function selectTerminal(id: string, focus = true): void {
   activeTerminalId = id
   renderTabs()
-  if (focus) terminalViews.get(id)?.focusInput()
-  void refreshSignals()
+  const terminal = terminalViews.get(id)
+  if (focus) terminal?.focusInput()
+  if (terminal) void acknowledgeTerminalSignals(terminal.meta.surface_id)
 }
 
 function renderSignals(): void {
@@ -1257,7 +1261,7 @@ function renderSignals(): void {
   const count = document.querySelector<HTMLElement>("#signal-count")!
   count.textContent = String(needsAttention.length)
   count.hidden = needsAttention.length === 0
-  document.querySelector("#signal-label")!.textContent = unread ? `Signal: ${unread} unread · Needs input` : "Signals"
+  document.querySelector("#signal-label")!.textContent = unread ? `Signal: ${unread} unread · Needs attention` : "Signals"
   signalToggle.classList.toggle("attention", needsAttention.length > 0)
   signalToggle.setAttribute("aria-label", needsAttention.length ? `Signal inbox: ${needsAttention.length} need attention` : "Signal inbox")
 
@@ -1270,7 +1274,7 @@ function renderSignals(): void {
   appendHeading("Needs attention", needsAttention.length)
   if (!needsAttention.length) {
     const empty = element("div", "signal-empty")
-    empty.append(element("strong", "", "No signals need attention"), element("span", "", "Waiting and failed agent sessions and unread notifications will appear here."))
+    empty.append(element("strong", "", "No signals need attention"), element("span", "", "Waiting, completed, and failed agent sessions and unread notifications will appear here."))
     signalsNode.append(empty)
   }
   for (const signal of needsAttention) {
@@ -1313,7 +1317,7 @@ function renderSignals(): void {
   }
   appendHeading("Recent activity", recentActivity.length)
   const recent = element("div", "signal-empty compact")
-  if (recentActivity.length) recent.append(element("span", "", "Working and completed sessions stay summarized on their workspace rows."))
+  if (recentActivity.length) recent.append(element("span", "", "Working sessions stay summarized on their workspace rows and terminal tabs."))
   else recent.append(element("strong", "", "No recent activity"), element("span", "", "Agent and automation activity for this workspace will appear here."))
   signalsNode.append(recent)
 }
@@ -2287,6 +2291,7 @@ function renderSignalProjection(): void {
     .map(({ journal_sequence: _, ...signal }) => signal)
   renderSignals()
   renderNav()
+  renderTabs()
 }
 
 function replaceSignalProjection(projection: SignalSnapshot): void {
@@ -2314,10 +2319,15 @@ function applySignalEvent(signal: Signal | SignalDismissal, sequence: string): v
 async function refreshSignals(): Promise<void> {
   const generation = ++signalRefreshGeneration
   try {
-    const active = activeTerminalId ? terminalViews.get(activeTerminalId)?.meta : undefined
-    const projection = active
-      ? await api<SignalSnapshot>("signals.acknowledge", { surface_id: active.surface_id }, { scope: "signal.dismiss" })
-      : await api<SignalSnapshot>("signals.list", undefined, { scope: "signal.read" })
+    const projection = await api<SignalSnapshot>("signals.list", undefined, { scope: "signal.read" })
+    if (generation !== signalRefreshGeneration) return
+    replaceSignalProjection(projection)
+  } catch {}
+}
+async function acknowledgeTerminalSignals(surfaceId: string): Promise<void> {
+  const generation = ++signalRefreshGeneration
+  try {
+    const projection = await api<SignalSnapshot>("signals.acknowledge", { surface_id: surfaceId }, { scope: "signal.dismiss" })
     if (generation !== signalRefreshGeneration) return
     replaceSignalProjection(projection)
   } catch {}

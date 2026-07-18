@@ -467,7 +467,8 @@ export class SecureServiceRouter implements SecureSessionHandler {
     const visible = projection.signals.filter((signal) => !dismissed.has(signal.id))
     const activeVisible = await this.visibleSignals(principalId, visible)
     const acknowledged = this.principals.acknowledgeSurface(principalId, parsed.data.surface_id, activeVisible)
-    return { ...projection, acknowledged, signals: activeVisible.map((signal) => projectWebSignal(signal)) }
+    const remainingVisible = this.principals.visibleSignals(principalId, activeVisible)
+    return { ...projection, acknowledged, signals: remainingVisible.map((signal) => projectWebSignal(signal)) }
   }
 
   private async activeWorkspaceIds(): Promise<Set<string>> {

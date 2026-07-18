@@ -1,7 +1,7 @@
 import { spawn as spawnPty } from "node-pty"
 
-const [scenario, executable, target] = process.argv.slice(2)
-if (!scenario || !executable || !target) throw new Error("usage: tui-launcher-pty.mjs <scenario> <executable> <target>")
+const [scenario, executable, ...targetArgs] = process.argv.slice(2)
+if (!scenario || !executable || targetArgs.length === 0) throw new Error("usage: tui-launcher-pty.mjs <scenario> <executable> <target> [args...]")
 
 function quote(value) {
   return `'${value.replaceAll("'", `'"'"'`)}'`
@@ -106,7 +106,7 @@ async function runPty(shellCommand, environment, drive) {
   }
 }
 
-const childCommand = `${quote(executable)} ${quote(target)}`
+const childCommand = [executable, ...targetArgs].map(quote).join(" ")
 let shellCommand
 let environment = {}
 let drive
@@ -127,6 +127,16 @@ switch (scenario) {
     drive = async ({ terminal, waitFor }) => {
       await waitFor("initial stale view")
       terminal.write(scenario === "q" ? "q" : "")
+    }
+    break
+  case "dashboard-q":
+    shellCommand = resultWrapper(childCommand)
+    drive = async ({ terminal, waitFor }) => {
+      await waitFor("[1 Workspaces]", 8_000)
+      // Exercise shutdown after the dashboard's snapshot, signal projection,
+      // and long-lived event subscription have had time to connect.
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+      terminal.write("q")
     }
     break
   case "sigint":

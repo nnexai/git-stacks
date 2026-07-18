@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
-import { For, createSignal, onMount } from "solid-js"
+import { For, Show, createSignal, onMount } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 
 import { CenteredDialog } from "./CenteredDialog"
@@ -30,6 +30,40 @@ export function WorkspaceRemovalDialog(props: ConfirmProps) {
         <text fg="white">    - workspace directory</text>
         <text fg="white">    - YAML definition</text>
         <text fg="gray">{"\n"}  [y] Remove workspace  [n/Esc] Keep workspace</text>
+      </box>
+    </CenteredDialog>
+  )
+}
+
+type BatchConfirmProps = {
+  workspaceNames: readonly string[]
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+export function WorkspaceBatchRemovalDialog(props: BatchConfirmProps) {
+  const [settled, setSettled] = createSignal(false)
+  const visibleNames = () => props.workspaceNames.slice(0, 8)
+  const remaining = () => Math.max(0, props.workspaceNames.length - visibleNames().length)
+  useKeyboard((key) => {
+    if (settled()) return
+    if (key.name === "y") { setSettled(true); props.onConfirm(); return }
+    if (key.name === "n" || key.name === "escape") { setSettled(true); props.onCancel() }
+  })
+
+  return (
+    <CenteredDialog title={`Remove ${props.workspaceNames.length} workspaces`} size="large">
+      <box flexDirection="column" paddingTop={1} paddingLeft={1}>
+        <text fg="yellow">  Remove all selected workspaces permanently?</text>
+        <For each={visibleNames()}>
+          {(name) => <text fg="white">    - {name}</text>}
+        </For>
+        <Show when={remaining() > 0}>
+          <text fg="gray">    ... and {remaining()} more</text>
+        </Show>
+        <text fg="white">{"\n"}  Each removal independently checks terminals, managed worktrees,</text>
+        <text fg="white">  workspace directory, YAML definition, authorization, and revision.</text>
+        <text fg="gray">{"\n"}  [y] Remove selected workspaces  [n/Esc] Keep workspaces</text>
       </box>
     </CenteredDialog>
   )

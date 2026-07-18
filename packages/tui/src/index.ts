@@ -17,7 +17,15 @@ try {
   const mode = launchMode()
   const { runDashboard } = await import("./run.js")
   await runDashboard(mode)
-  if (mode === "runtime-probe") console.log("git-stacks-tui renderer probe: reactive")
+  if (mode === "runtime-probe") {
+    await new Promise((resolve) => {
+      process.stdout.write("git-stacks-tui renderer probe: reactive\n", () => resolve(undefined))
+    })
+  }
+  // This file is the executable boundary. Renderer and owned client cleanup
+  // are complete (or bounded) at this point; do not let unrelated async work
+  // from a completed command keep the user's foreground shell occupied.
+  process.exit(0)
 } catch (error) {
   // runDashboard does not reject until renderer, core-state, and service-client
   // cleanup has completed. Print one bounded diagnostic, then terminate any

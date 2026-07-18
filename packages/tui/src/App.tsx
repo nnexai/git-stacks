@@ -31,6 +31,7 @@ import { RemoveBlockedView } from "./RemoveBlockedView"
 import { CenteredDialog } from "./CenteredDialog"
 import { ArchivedWorkspacesDialog, ArchivedWorkspaceUndoDialog } from "./ArchivedWorkspacesDialog"
 import {
+  WorkspaceBatchRemovalDialog,
   WorkspaceDirtyBlockedDialog,
   WorkspaceForceRemoveDialog,
   WorkspaceRemovalDialog,
@@ -1087,6 +1088,69 @@ export default function App() {
     } else {
       setView({ view: "list" })
     }
+  }
+
+  async function executeWorkspaceRemovalBatch(targets: readonly WorkspaceLifecycleTarget[]): Promise<void> {
+    resetCommandOutput()
+    setSelected(new Set<string>())
+    setView({ view: "progress", message: `Removing ${targets.length} workspaces...` })
+    let failures = 0
+    let stoppedEarly = false
+
+    for (let index = 0; index < targets.length; index += 1) {
+      const original = targets[index]!
+      const target = currentLifecycleTarget(original.id)
+      if (!target) {
+        failures += 1
+        appendSystemLine(`SKIP [${original.name}]: Workspace is no longer active.`)
+        continue
+      }
+      const descriptor = await authorizeCurrentWorkspaceAction(target, "workspace.remove")
+      const revision = core.state()?.revision
+      if (!descriptor || descriptor.confirmation !== "confirm" || !revision) {
+        failures += 1
+        appendSystemLine(`BLOCKED [${target.name}]: Remove is no longer authorized.`)
+        continue
+      }
+
+      appendSystemLine(`Removing ${target.name}...`)
+      try {
+        await officialService.runWorkspaceLifecycleMutation({
+          kind: "workspace.remove",
+          workspace_id: target.id,
+          expected_revision: revision,
+        }, {
+          onOperation: (operation) => {
+            if (operation.state === "running" && operation.progress.message) {
+              appendSystemLine(`[${target.name}] ${operation.progress.message}`)
+            }
+          },
+        })
+        appendSystemLine(`Removed ${target.name}.`)
+      } catch (error) {
+        failures += 1
+        const failure = lifecycleFailure(error)
+        const dirty = dirtyRemovalContext(failure.details)
+        appendSystemLine(dirty
+          ? `BLOCKED [${target.name}]: Dirty worktrees remain; remove it individually to review Force Remove.`
+          : `FAILED [${target.name}]: ${failure.message}`)
+      }
+
+      try {
+        await reconcileLifecycleState({ preserveCursor: true })
+      } catch {
+        const notAttempted = targets.length - index - 1
+        failures += notAttempted
+        stoppedEarly = true
+        appendSystemLine(`Authoritative refresh failed; ${notAttempted} remaining workspace${notAttempted === 1 ? " was" : "s were"} not attempted.`)
+        break
+      }
+    }
+
+    appendSystemLine(failures === 0
+      ? `Removed all ${targets.length} selected workspaces.`
+      : `${failures}/${targets.length} selected workspace removal${failures === 1 ? "" : "s"} did not complete${stoppedEarly ? " before the batch stopped" : ""}.`)
+    finishCommandOutput(failures === 0 ? "success" : "failed")
   }
 
   async function runWorkspaceMutation(
@@ -2418,6 +2482,7 @@ export default function App() {
       v.view === "archived-workspaces"
       || v.view === "archive-undo"
       || v.view === "remove-confirm"
+      || v.view === "batch-remove-confirm"
       || v.view === "dirty-remove-blocked"
       || v.view === "force-remove-name"
     ) return
@@ -2579,10 +2644,11 @@ export default function App() {
           return
         }
         if (key.name === "r") {
-          if (selected().size > 1) return
-          const selectedName = [...selected()][0]
-          const target = lifecycleTarget(entries().find((entry) => entry.workspace.name === selectedName))
-          if (target) setView({ view: "remove-confirm", target })
+          const targets = [...selected()]
+            .map((name) => lifecycleTarget(entries().find((entry) => entry.workspace.name === name)))
+            .filter((target): target is WorkspaceLifecycleTarget => Boolean(target))
+          if (targets.length === 1) setView({ view: "remove-confirm", target: targets[0]! })
+          else if (targets.length > 1) setView({ view: "batch-remove-confirm", targets })
           return
         }
       }
@@ -2808,6 +2874,19 @@ export default function App() {
                 else setView({ view: "list" })
               }}
               onConfirm={() => void executeWorkspaceLifecycle("remove", v.target)}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "batch-remove-confirm"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "batch-remove-confirm" }>
+          return (
+            <WorkspaceBatchRemovalDialog
+              workspaceNames={v.targets.map((target) => target.name)}
+              onCancel={() => setView({ view: "list" })}
+              onConfirm={() => void executeWorkspaceRemovalBatch(v.targets)}
             />
           )
         })()}
@@ -3173,7 +3252,6 @@ export default function App() {
             <box flexGrow={1} />
             <BatchBar
               count={selected().size}
-              actions={selected().size > 1 ? "[c] Clean All  Remove one workspace at a time" : undefined}
             />
           </Show>
           <Show when={view().view === "list" && tab() === "templates" && templatesSelected().size > 0}>

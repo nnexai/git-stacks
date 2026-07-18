@@ -43,7 +43,7 @@ export class SignalState {
   private actionable(signal: JournaledSignal): boolean {
     if (this.dismissed.has(signal.id)) return false
     if (signal.kind === "notification") return true
-    return signal.state === "waiting" || signal.state === "failed"
+    return signal.state === "waiting" || signal.state === "completed" || signal.state === "failed"
   }
 
   private evict(): void {

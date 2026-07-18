@@ -59,6 +59,7 @@ describe("client Next Attention semantics", () => {
     const input = baseInput()
     input.signals = [
       signal("valid", "workspace-alpha", "repo-a"),
+      signal("completed", "workspace-alpha", "repo-b", "surface-b1", { state: "completed" }),
       signal("working", "workspace-alpha", "repo-a", undefined, { state: "working" }),
       signal("removed-workspace", "workspace-removed", "repo-a"),
       signal("missing-repository", "workspace-alpha", "repo-removed"),
@@ -67,7 +68,7 @@ describe("client Next Attention semantics", () => {
     ]
     input.dismissedSignalIds = ["dismissed"]
 
-    expect(buildAttentionCandidates(input).map(({ signal }) => signal.id)).toEqual(["valid"])
+    expect(buildAttentionCandidates(input).map(({ signal }) => signal.id)).toEqual(["valid", "completed"])
   })
 
   test("resolves live named terminals, keeps repository-only targets, and skips stale or ended surfaces", () => {

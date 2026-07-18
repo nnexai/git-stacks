@@ -39,14 +39,16 @@ export function lifecycleLabel(signal: PresentedSignal): string {
   }
 }
 export function signalGroup(signal: PresentedSignal): SignalGroup {
-  return signal.kind === "notification" || signal.state === "waiting" || signal.state === "failed" ? "needs-attention" : "recent-activity"
+  return signal.kind === "notification" || signal.state === "waiting" || signal.state === "completed" || signal.state === "failed"
+    ? "needs-attention"
+    : "recent-activity"
 }
 export function isActiveSession(signal: PresentedSignal): boolean {
   return signal.kind === "activity" && ["working", "waiting", "completed", "failed"].includes(signal.state ?? "")
 }
 export function isBackgroundActivity(signal: PresentedSignal): boolean { return signal.kind === "activity" && signal.state === "working" }
 
-const lifecyclePriority: Record<string, number> = { failed: 4, waiting: 3, working: 2, completed: 1 }
+const lifecyclePriority: Record<string, number> = { failed: 4, waiting: 3, completed: 2, working: 1 }
 export function deduplicateProviderSessions<T extends PresentedSignal>(signals: T[]): T[] {
   const providers = new Map<string, T>()
   for (const signal of signals) {

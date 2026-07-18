@@ -9,6 +9,20 @@ import { stopCoreState } from "./core-store"
 
 export type DashboardLaunchMode = "dashboard" | "runtime-probe" | "lifecycle-probe" | "fatal-mount-probe"
 
+const TUI_CLEANUP_TIMEOUT_MS = 1_000
+
+export async function settleTuiCleanup(task: Promise<unknown>, timeoutMs = TUI_CLEANUP_TIMEOUT_MS): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      task.then(() => true),
+      new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs) }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 function assertReactiveOpenTuiRuntime(): void {
   const [value, setValue] = createSignal(1)
   const doubled = createMemo(() => value() * 2)
@@ -100,7 +114,10 @@ export async function runDashboard(mode: DashboardLaunchMode = "dashboard") {
       }
     }
     try {
-      await closeServiceClient("TUI closed")
+      // A detached managed service outlives the TUI, but its client transport
+      // must never keep the foreground dashboard command alive indefinitely.
+      // Process exit below releases any transport that cannot settle in time.
+      await settleTuiCleanup(closeServiceClient("TUI closed"))
     } catch (error) {
       if (!cleanupFailed) {
         cleanupFailed = true

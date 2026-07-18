@@ -94,6 +94,7 @@ export type UIView =
   | { view: "archived-workspaces"; rows: ArchivedWorkspaceSummary[] }
   | { view: "archive-undo"; target: WorkspaceLifecycleTarget }
   | { view: "remove-confirm"; target: WorkspaceLifecycleTarget }
+  | { view: "batch-remove-confirm"; targets: WorkspaceLifecycleTarget[] }
   | { view: "dirty-remove-blocked"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }
   | { view: "force-remove-name"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }
   | { view: "lifecycle-progress"; target: WorkspaceLifecycleTarget; action: LifecycleAction; message: string }
