@@ -109,7 +109,9 @@ describe("published TUI launcher", () => {
   }
 
   test("outer git-stacks manage exits when the fullscreen TUI exits", async () => {
-    const fixture = await runFixture("q", cliLauncher, ["manage"])
+    const fixture = await runFixture("q", cliLauncher, ["manage"], {
+      GIT_STACKS_CLI: cliLauncher,
+    })
 
     expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
     expect(fixture.durationMs).toBeLessThan(3_000)
@@ -123,6 +125,7 @@ describe("published TUI launcher", () => {
     const environment = {
       GIT_STACKS_CONFIG_DIR: configDir,
       GIT_STACKS_KEY_STORE: "file",
+      GIT_STACKS_CLI: cliLauncher,
     }
     mkdirSync(join(configDir, "workspaces"), { recursive: true })
     mkdirSync(join(configDir, "templates"), { recursive: true })
