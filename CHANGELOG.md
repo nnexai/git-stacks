@@ -8,6 +8,20 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.4] - 2026-07-18
+
+### Validation
+
+- TUI launcher integration fixtures now explicitly bootstrap the built CLI artifact, so clean runners do not depend on a globally installed `git-stacks` executable.
+
+### Release Candidate
+
+This candidate carries the rc.3 fixes after rc.3's hosted artifact gate exposed the TUI fixture's global-CLI assumption. No rc.3 GitHub release or npm publication occurred.
+
+0.22.0-rc.4 / v0.22.0-rc.4; npm prerelease publication uses next
+
+---
+
 ## [0.22.0-rc.3] - 2026-07-18
 
 ### Validation
