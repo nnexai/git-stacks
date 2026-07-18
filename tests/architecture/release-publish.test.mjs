@@ -51,6 +51,21 @@ test("release publication uses GitHub OIDC without a durable npm token", async (
   assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/)
 })
 
+test("release workflows install the shells required by the full RC gate", async () => {
+  const workflows = await Promise.all([
+    readFile(resolve(root, ".github/workflows/release-artifacts.yml"), "utf8"),
+    readFile(resolve(root, ".github/workflows/release-publish.yml"), "utf8"),
+  ])
+
+  for (const workflow of workflows) {
+    assert.match(workflow, /sudo apt-get install --yes bash zsh fish openssh-client/)
+    assert.ok(
+      workflow.indexOf("sudo apt-get install --yes bash zsh fish openssh-client") < workflow.indexOf("npm run release:check"),
+      "required shells must be installed before release validation",
+    )
+  }
+})
+
 test("the Node runtime matrix does not require optional TUI build artifacts", async () => {
   const source = await readFile(resolve(root, "scripts/check-packages.mjs"), "utf8")
   assert.match(source, /const nativeOnly = process\.argv\.includes\("--native-only"\)/)
