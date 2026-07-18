@@ -907,7 +907,12 @@ describe("service-owned web terminal", () => {
       cols: 80,
       rows: 24,
     })
+    const attachment = attach(manager, terminal.id)
     await waitFor(() => (ptys.processes[0]?.signals.length ?? 0) >= 2)
+    await waitFor(() => attachment.sent.some((item) =>
+      item instanceof Uint8Array
+      && new TextDecoder().decode(item.slice(9)).includes("[git-stacks shell cleanup]"),
+    ))
     expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "running", exit_code: null })
 
     groupExists = false
