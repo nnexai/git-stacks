@@ -8,6 +8,20 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.3] - 2026-07-18
+
+### Validation
+
+- The real-Fish pre-attachment regression now uses a deterministic prompt sentinel across Fish 3.x and 4.x instead of depending on Fish 4.x OSC-133 prompt markers.
+
+### Release Candidate
+
+This candidate carries the rc.2 terminal, TUI, and browser-attention fixes after rc.2's hosted artifact gate exposed a version-specific Fish test assumption. No rc.2 GitHub release or npm publication occurred.
+
+0.22.0-rc.3 / v0.22.0-rc.3; npm prerelease publication uses next
+
+---
+
 ## [0.22.0-rc.2] - 2026-07-18
 
 ### Fixed

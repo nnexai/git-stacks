@@ -6,8 +6,8 @@ import test from "node:test"
 import { assertPublishedArtifact, registryRequestUrl, releaseDistTag } from "../../scripts/publish-release.mjs"
 
 const root = resolve(import.meta.dirname, "../..")
-const rcVersion = "0.22.0-rc.2"
-const rcTag = "v0.22.0-rc.2"
+const rcVersion = "0.22.0-rc.3"
+const rcTag = "v0.22.0-rc.3"
 const manifestPaths = [
   "package.json",
   "packages/protocol/package.json",
