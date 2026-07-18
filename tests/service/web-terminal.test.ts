@@ -407,11 +407,12 @@ describe("service-owned web terminal", () => {
   test("reaches a real Fish prompt before browser terminal capability replies are available", async () => {
     const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
     if (!fish) return
+    const promptMarker = "__GIT_STACKS_FISH_PROMPT__"
     const manager = new WebTerminalManager({
       buildAll: async () => [],
       buildWorkspace: async () => { throw new Error("unused") },
       resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
-        argv: [fish, "--login", "--interactive"], cwd: process.cwd(),
+        argv: [fish, "--no-config", "--interactive", "--init-command", `function fish_prompt; printf '${promptMarker}'; end`], cwd: process.cwd(),
         environment: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
         initialization: { kind: "post-init-environment", shell: "fish" },
         ports: {}, configuration: { shell: true }, redacted: [],
@@ -429,7 +430,7 @@ describe("service-owned web terminal", () => {
     await sleep(100)
     const { sent } = attach(manager, terminal.id)
     await waitFor(() => sent.some((item) => item instanceof Uint8Array
-      && new TextDecoder().decode(item.slice(9)).includes("\u001b]133;B")), 2_000)
+      && new TextDecoder().decode(item.slice(9)).includes(promptMarker)), 2_000)
     const output = sent
       .filter((item): item is Uint8Array => item instanceof Uint8Array)
       .map((frame) => new TextDecoder().decode(frame.slice(9)))
