@@ -5,10 +5,10 @@ milestone_name: Workspace Productivity
 current_phase: 127
 current_phase_name: Stale Workspace Intelligence and RC Closure
 status: executing
-stopped_at: Plan 127-13 blocking exact-SHA hosted/authenticated and physical/manual evidence checkpoints
-last_updated: "2026-07-17T19:13:47Z"
-last_activity: 2026-07-17
-last_activity_desc: Replacement candidate reconciled; awaiting Plan 127-13 exact-SHA human evidence
+stopped_at: Plan 127-13 fresh exact-SHA hosted/authenticated and physical/manual evidence checkpoints
+last_updated: "2026-07-18T10:56:00Z"
+last_activity: 2026-07-18
+last_activity_desc: Phase 127 UAT regressions repaired on replacement candidate 1d3b8db7; external and human evidence must be recaptured
 progress:
   total_phases: 5
   completed_phases: 4
@@ -24,7 +24,7 @@ progress:
 Phase: 127 (Stale Workspace Intelligence and RC Closure) — EXECUTING
 Plan: 13 of 14
 Status: Blocked on Plan 127-13 human verification checkpoints
-Last activity: 2026-07-17 — Replacement candidate and ledger verified; hosted/authenticated and physical/manual evidence remains pending
+Last activity: 2026-07-18 — UAT replacement candidate verified locally; hosted/authenticated and physical/manual evidence must be recaptured for the new exact SHA
 
 ## Decisions
 
@@ -121,7 +121,7 @@ Last activity: 2026-07-17 — Replacement candidate and ledger verified; hosted/
 - [Phase 127]: Only validated GitHub.com and GitLab.com provenance enables read-only change status; Gitea and self-hosted status remain deferred or not claimed.
 - [Phase 127]: Local RC success remains separate from hosted, authenticated, live, physical, screenshot, interactive, human, and release-authorization evidence.
 - [Phase 127]: Plan 127-12 freezes the clean post-Plan-11 metadata HEAD as the exact candidate SHA.
-- [Phase 127]: The replacement immutable Plan 127-12 candidate is 233d294913bd4cd37602f6ef72f53cb960fb12d7, captured clean after the post-freeze catalog, TUI lifecycle, and service-authentication repairs; it supersedes f7bdca75f2545664251e88b233693b67fd37ee5c and reuses none of that older source's approvals.
+- [Phase 127]: The UAT-repaired replacement candidate is 1d3b8db75ed5f96989a6284a94ec41a0aba21c59, captured after live Fish, service-command, OpenTUI navigation/completion, package-local launcher, and full-gate verification; it supersedes 233d294913bd4cd37602f6ef72f53cb960fb12d7 and reuses none of that older source's external or human approvals.
 - [Phase 127]: Local no-tag RC success remains deterministic-only evidence; all hosted, authenticated, live, physical, visual, interactive, and human rows stay exact-SHA PENDING until Plan 127-13 evidence exists.
 - [Phase 127]: The marker-delimited receipt JSON is the canonical immutable row/subcase authority; Plan 127-14 may reconcile only exact-SHA row-keyed approvals from Plan 127-13.
 - [Phase 127]: Self-hosted status remains NOT_CLAIMED, provider opt-outs retain reasons, and release authority remains NOT_AUTHORIZED despite green local validation.
@@ -208,6 +208,6 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Session
 
-**Last session:** 2026-07-17T19:13:47Z
-**Stopped at:** Plan 127-13 blocking exact-SHA hosted/authenticated and physical/manual evidence checkpoints for candidate 233d294913bd4cd37602f6ef72f53cb960fb12d7
+**Last session:** 2026-07-18T10:56:00Z
+**Stopped at:** Plan 127-13 fresh exact-SHA hosted/authenticated and physical/manual evidence checkpoints for candidate 1d3b8db75ed5f96989a6284a94ec41a0aba21c59
 **Resume file:** None
