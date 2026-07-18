@@ -408,6 +408,14 @@ export function createSnapshotBuilder(
     return aggregateRevision
   }
 
+  // This is deliberately a read of the last completed catalog, not an
+  // authoritative refresh. Latency-sensitive callers can reuse an exact
+  // revision-bound read model, while absent or mismatched revisions fail
+  // closed to their existing rebuild path.
+  function cachedRevision(): string | undefined {
+    return latestCatalog?.revision
+  }
+
   async function resolveTerminalLaunch(request: TerminalLaunchResolutionRequest, signal?: AbortSignal): Promise<TerminalLaunchResolution> {
     signal?.throwIfAborted()
     // The client can only request a terminal from a snapshot it already
@@ -485,5 +493,5 @@ export function createSnapshotBuilder(
     } })
   }
 
-  return { buildWorkspace, buildAll, buildCatalog, currentRevision, resolveTerminalLaunch }
+  return { buildWorkspace, buildAll, buildCatalog, currentRevision, cachedRevision, resolveTerminalLaunch }
 }

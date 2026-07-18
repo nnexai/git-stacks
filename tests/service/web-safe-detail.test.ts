@@ -86,6 +86,19 @@ describe("browser-safe service detail projection", () => {
     }
   })
 
+  test("preserves workspace and repository file-status evidence when their names match", () => {
+    const repeated = {
+      workspace: { scope: "workspace" as const, name: "git-stacks", root: POSIX, entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] },
+      repos: [{ scope: "repo" as const, name: "git-stacks", repo: "git-stacks", mode: "worktree" as const, mainPath: POSIX, root: POSIX, entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] }],
+      summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 2, byState: {}, byType: {} }, warnings: [], errors: [],
+    }
+    const projected = projectWebFileStatus(repeated, { workspaceId, revision: "7", generatedAt, repositoryIds: new Map([["git-stacks", repositoryId]]) })
+    expect(projected.groups).toMatchObject([
+      { scope: "workspace", name: "git-stacks", entries: [] },
+      { scope: "repository", repository_id: repositoryId, name: "git-stacks", entries: [] },
+    ])
+  })
+
   test("projects bounded newest-first notes and drops storage-only fields", () => {
     const projected = projectWebNotes({
       workspaceId,

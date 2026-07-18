@@ -145,9 +145,16 @@ export function defaultShortcutSettings(platform: WebShortcutPlatform, revision 
   }
 }
 
-function eventBinding(event: ShortcutKeyEvent): WebShortcutBinding {
+function logicalKeyCode(event: ShortcutKeyEvent): WebShortcutBinding["code"] | undefined {
+  const key = event.key?.toLocaleUpperCase("en-US")
+  return key && /^[A-Z]$/.test(key) ? `Key${key}` : undefined
+}
+
+function eventBinding(event: ShortcutKeyEvent): WebShortcutBinding | undefined {
+  const code = logicalKeyCode(event)
+  if (!code) return undefined
   return {
-    code: event.code,
+    code,
     ctrl: event.ctrlKey,
     alt: event.altKey,
     shift: event.shiftKey,
@@ -159,7 +166,7 @@ function eventRejection(event: ShortcutKeyEvent): Exclude<ShortcutUnhandledReaso
   if (event.type !== "keydown") return "not-keydown"
   if (event.isComposing || event.key === "Process" || event.key === "Dead") return "composing"
   if (event.getModifierState?.("AltGraph")) return "alt-graph"
-  if (!/^Key[A-Z]$/.test(event.code)) return "invalid-code"
+  if (!logicalKeyCode(event)) return "invalid-code"
   return undefined
 }
 
@@ -175,8 +182,9 @@ export function matchScopedShortcutEvent(
     return { handled: false, reason: "unmatched" }
   }
 
+  const logicalCode = logicalKeyCode(event)
   const metadata = WEB_SCOPED_SHORTCUT_ACTION_METADATA.find((candidate) =>
-    candidate.scope === activeScope && candidate.web.code === event.code)
+    candidate.scope === activeScope && candidate.web.code === logicalCode)
   return metadata
     ? { handled: true, actionId: metadata.actionId, metadata }
     : { handled: false, reason: "unmatched" }
@@ -187,6 +195,7 @@ export function matchShortcutEvent(event: ShortcutKeyEvent, settings: Pick<WebSh
   if (rejected) return { handled: false, reason: rejected }
 
   const normalized = eventBinding(event)
+  if (!normalized) return { handled: false, reason: "invalid-code" }
   const key = bindingKey(normalized)
   for (const effective of settings.bindings) {
     if (effective.primary && bindingKey(effective.primary) === key) {

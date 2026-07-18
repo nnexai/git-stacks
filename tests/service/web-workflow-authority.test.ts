@@ -190,6 +190,34 @@ describe("secure web workflow authority", () => {
       .rejects.toMatchObject({ code: "unauthorized" })
   })
 
+  test("uses only an exact web-snapshot-seeded core state and falls back on a revision miss", async () => {
+    const coreState = {
+      revision: "7", generated_at: generatedAt, config: {},
+      workspaces: [{ definition: { id: workspaceId, name: "demo", schema_version: "1", created: generatedAt, branch: "demo", repos: [] }, projection: workspace.workspace }],
+      archived_workspaces: [], templates: [], repositories: [],
+    }
+    let buildCalls = 0
+    let seedCalls = 0
+    const cached = new Map<string, typeof coreState>()
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      core: {
+        build: async () => { buildCalls += 1; return coreState },
+        seed: async (catalog) => { seedCalls += 1; cached.set(catalog.revision, coreState) },
+        cached: async (revision) => cached.get(revision),
+      } as never,
+      operations: { workspaceActionState: () => ({ operations: [] }) } as never,
+      workspaceLifecycle: { submit: async () => { throw new Error("unused") } } as never,
+    })
+    await router.request(context(["snapshot.read"]), request("web.snapshot"))
+    expect(seedCalls).toBe(1)
+    await router.request(context(["snapshot.read"]), request("workspace.actions", { workspace_id: workspaceId, expected_revision: "7" }))
+    expect(buildCalls).toBe(0)
+    await router.request(context(["snapshot.read"]), request("workspace.actions", { workspace_id: workspaceId, expected_revision: "6" }))
+      .catch((error) => expect(error).toMatchObject({ code: "conflict" }))
+    expect(buildCalls).toBe(1)
+  })
+
   test("wires operation, removal, open-state, and capability authority into action derivation", async () => {
     const coreState = {
       revision: "7", generated_at: generatedAt, config: {},

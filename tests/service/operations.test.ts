@@ -145,4 +145,64 @@ describe("secure service lifecycle", () => {
     })).rejects.toMatchObject({ code: "conflict" })
     expect(requests.filter((method) => method === "operation.submit")).toHaveLength(1)
   })
+
+  test("finishes a mutation through durable polling when a healthy event stream misses the terminal event", async () => {
+    let operationReads = 0
+    const succeeded: Operation = {
+      operation_id: acceptedOperation.operation_id,
+      state: "succeeded",
+      accepted_at: acceptedOperation.accepted_at,
+      started_at: "2026-07-16T00:00:00.010Z",
+      finished_at: "2026-07-16T00:00:00.020Z",
+      completed_steps: ["workspace.command.run"],
+      result: { exit_code: 0 },
+    }
+    const rpc = {
+      closed: new Promise<void>(() => {}),
+      observeEvents: () => () => {},
+      close: async () => {},
+      request: async (method: string) => {
+        if (method === "events.cursor") return { cursor: "0" }
+        if (method === "operation.submit") return acceptedOperation
+        if (method === "operation.get") {
+          operationReads += 1
+          return succeeded
+        }
+        throw new Error(`Unexpected request ${method}`)
+      },
+    }
+    mock.module("@git-stacks/client", () => ({
+      authenticateSecureCarrier: async () => ({ rpc }),
+      ensureSharedEventSubscription: async () => {},
+    }))
+    mock.module("../../packages/service/src/main", () => ({
+      ensureManagedServiceProcess: async () => ({
+        service_id: "22222222-2222-4222-8222-222222222222",
+        listener_epoch: "33333333-3333-4333-8333-333333333333",
+        tui_launch: { token: "launch-token" },
+        local_tls: {},
+      }),
+    }))
+    mock.module("../../packages/service/src/transport/local-tls", () => ({ connectLocalTls: async () => ({}) }))
+
+    const { runCoreMutation } = await import("../../packages/service/src/policy/client")
+    const originalAddEventListener = AbortSignal.prototype.addEventListener
+    AbortSignal.prototype.addEventListener = function (type, listener, options) {
+      if (type === "abort") return
+      return originalAddEventListener.call(this, type, listener, options)
+    }
+    try {
+      const outcome = await Promise.race([
+        runCoreMutation("workspace.command.run", {
+          workspace: "demo",
+          command: "smoke",
+        }, { pollMs: 1 }),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 250)),
+      ])
+      expect(outcome).toMatchObject({ state: "succeeded" })
+    } finally {
+      AbortSignal.prototype.addEventListener = originalAddEventListener
+    }
+    expect(operationReads).toBe(1)
+  })
 })

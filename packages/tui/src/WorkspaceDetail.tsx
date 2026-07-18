@@ -108,7 +108,7 @@ export function WorkspaceDetail(props: Props) {
             }
           }
 
-          out.push(<text>{""}</text>)
+          out.push(<text> </text>)
           out.push(<text fg="white">  Repos:</text>)
           const currentStatus = status()
           if (currentStatus.state === "loaded") {
@@ -127,7 +127,7 @@ export function WorkspaceDetail(props: Props) {
             out.push(<text fg="gray">    Loading...</text>)
           }
 
-          out.push(<text>{""}</text>)
+          out.push(<text> </text>)
           out.push(<text fg="white">  Files:</text>)
           const fileStatus = props.fileStatus
           if (!fileStatus || fileStatus.state === "idle") {
@@ -147,7 +147,7 @@ export function WorkspaceDetail(props: Props) {
             if (view.summary.total === 0) out.push(<text fg="gray">    no file config entries</text>)
           }
 
-          out.push(<text>{""}</text>)
+          out.push(<text> </text>)
           out.push(<text fg="white">  Source/Issues:</text>)
           if (linkedIssues().length === 0) {
             out.push(<text fg="gray">    no linked source issues</text>)
@@ -157,7 +157,7 @@ export function WorkspaceDetail(props: Props) {
             }
           }
 
-          out.push(<text>{""}</text>)
+          out.push(<text> </text>)
           out.push(<text fg="white">  Integrations:</text>)
           for (const integration of integrations) {
             if (isConditional(integration) && !integration.applies(ws())) {
@@ -211,7 +211,7 @@ export function WorkspaceDetail(props: Props) {
             out.push(<text fg={fg}>    {icon}  {integration.id.padEnd(10)}  {configSummary}  [{source}]</text>)
           }
 
-          out.push(<text>{""}</text>)
+          out.push(<text> </text>)
           out.push(<text fg="white">  Notes:</text>)
           const notes = props.notes
           if (!notes) {
@@ -225,7 +225,7 @@ export function WorkspaceDetail(props: Props) {
             }
           }
 
-          out.push(<text>{""}</text>)
+          out.push(<text> </text>)
           out.push(<text fg="white">  Config:</text>)
           out.push(<text fg="gray">    Branch: {ws().branch}</text>)
           out.push(<text fg="gray">    Created: {ws().created}</text>)

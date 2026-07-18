@@ -301,6 +301,22 @@ describe("authoritative service snapshots", () => {
     expect(await builder.currentRevision()).toBe("1")
   })
 
+  test("reads the completed aggregate revision without rebuilding its catalog", async () => {
+    let statusReads = 0
+    const builder = createSnapshotBuilder(dependencies({
+      getWorkspaceStatus: async () => {
+        statusReads++
+        return [{ name: "git-stacks", exists: true, dirty: false, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }]
+      },
+    }))
+
+    expect(builder.cachedRevision()).toBeUndefined()
+    const catalog = await builder.buildCatalog()
+    expect(statusReads).toBe(1)
+    expect(builder.cachedRevision()).toBe(catalog.revision)
+    expect(statusReads).toBe(1)
+  })
+
   test("reloads global config between aggregate generations", async () => {
     let workspaceRoot = "/tasks-one"
     const builder = createSnapshotBuilder(dependencies({

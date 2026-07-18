@@ -52,18 +52,18 @@ export function TemplateDetail(props: Props) {
                 ? "none"
                 : `${hookCounts().total} ${hookCounts().primary}`}
             </text>
-            <text>{""}</text>
+            <text> </text>
             <text fg="white">  Repos:</text>
             <For each={template().repos}>
               {(repo) => (
                 <text fg="gray">    {repo.repo.padEnd(28)} {repo.mode}</text>
               )}
             </For>
-            <text>{""}</text>
+            <text> </text>
             <Show when={template().description}>
               <text fg="gray">  {template().description}</text>
             </Show>
-            <text>{""}</text>
+            <text> </text>
             <text fg="white">  Integrations:</text>
             <For each={integrations}>
               {(integration) => {

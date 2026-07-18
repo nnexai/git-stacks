@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
-import { beforeAll, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import type { Component } from "solid-js"
 import { createSignal } from "solid-js"
@@ -20,6 +20,12 @@ import {
   createDeferred,
   type Phase127StaleResponse,
 } from "../../helpers/phase127-stale-fixtures"
+
+const activeRenderers: Array<{ destroy(): void }> = []
+
+afterEach(() => {
+  for (const renderer of activeRenderers.splice(0)) renderer.destroy()
+})
 
 type StaleSelection = {
   section: "candidate" | "incomplete"
@@ -204,6 +210,7 @@ async function renderStaleView(options: {
     height: options.height ?? 28,
     kittyKeyboard: true,
   })
+  activeRenderers.push(rendered.renderer)
   return {
     ...rendered,
     callbacks,
@@ -481,6 +488,20 @@ describe("Phase 127 OpenTUI generation, text structure, and disclosure", () => {
     staleView()
     expect(viewSourceLoadError, "Phase 127 TUI stale view source must exist for nested-text inspection").toBeUndefined()
     expect(() => assertNoNestedText(viewSource ?? "")).not.toThrow()
+  })
+
+  test("renderer mounts every stale-detail spacer branch without orphan text", async () => {
+    const rendered = await renderStaleView({
+      state: { phase: "loaded", response: PHASE127_CLIENT_RESPONSES.populated },
+      width: 100,
+      height: 40,
+    })
+    await rendered.renderOnce()
+    const frame = rendered.captureCharFrame()
+    expect(frame).toContain(PHASE127_CLIENT_COPY.confirmedHeading)
+    expect(frame).toContain(PHASE127_CLIENT_COPY.unknownHeading)
+    expect(frame).toContain(PHASE127_CLIENT_COPY.cautionHeading)
+    expect(frame).toContain("[o/Enter] Open workspace")
   })
 
   test("long names, reasons, timestamps, unknown recovery, and disabled explanations remain readable without disclosure", async () => {

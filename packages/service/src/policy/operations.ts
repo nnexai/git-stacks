@@ -845,7 +845,10 @@ export function createWorkspaceMutationAdapters(dependencies: {
         })
         flushOutput()
         await progressQueue
-        Object.assign(result, { exit_code: outcome.exitCode, failed_command: outcome.failedCommand })
+        Object.assign(result, {
+          exit_code: outcome.exitCode,
+          ...(outcome.failedCommand === undefined ? {} : { failed_command: outcome.failedCommand }),
+        })
         if (outcome.exitCode !== 0) throw new Error(`Command ${request.command} failed with exit code ${outcome.exitCode}.${outcome.failedCommand ? ` Failed command: ${outcome.failedCommand}.` : ""}`)
       } }], result }
     },

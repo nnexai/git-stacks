@@ -3,6 +3,7 @@ import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { EventJournal, publishOperationEvent } from "@/lib/service/event-journal"
+import { decodeCanonical, encodeCanonical } from "../../../packages/protocol/src/secure"
 
 const roots: string[] = []
 async function root(): Promise<string> {
@@ -50,6 +51,25 @@ describe("EventJournal", () => {
     })
     expect(event.sequence).toBe("1")
     expect(observed[0]).toContain('"sequence":"1"')
+  })
+
+  test("publishes the same JSON-safe operation event that it persists", async () => {
+    const path = await root()
+    const journal = new EventJournal({ root: path })
+    let published: unknown
+    const event = await publishOperationEvent(journal, {
+      ...operation("json-safe"),
+      state: "succeeded",
+      started_at: "2026-07-11T00:00:01.000Z",
+      finished_at: "2026-07-11T00:00:02.000Z",
+      completed_steps: ["workspace.command.run"],
+      result: { exit_code: 0, failed_command: undefined },
+    }, (record) => { published = record })
+
+    expect(event.operation.result).toEqual({ exit_code: 0 })
+    expect(published).toEqual(event)
+    expect(decodeCanonical(encodeCanonical(published))).toEqual(event)
+    expect(JSON.parse((await readFile(join(path, "events.jsonl"), "utf8")).trim())).toEqual(event)
   })
 
   test("append failure never invokes live publication", async () => {

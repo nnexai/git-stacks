@@ -2383,7 +2383,10 @@ export default function App() {
       return
     }
 
-    if (v.view === "progress") return
+    if (v.view === "progress") {
+      if (key.name === "q") renderer.destroy()
+      return
+    }
 
     // Sync progress — any key returns to list when done
     if (v.view === "sync-progress" && syncDone()) {

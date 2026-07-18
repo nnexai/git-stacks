@@ -21,7 +21,7 @@ const WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
 const WORKSPACE_B = "33333333-3333-4333-8333-333333333333"
 const REPOSITORY = "22222222-2222-4222-8222-222222222222"
 
-type FakeExitBehavior = "term" | "kill" | "never" | "retry-term"
+type FakeExitBehavior = "term" | "kill" | "never" | "retry-term" | "startup-exit"
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -31,10 +31,10 @@ function deferred<T>() {
 
 function createPtyFactory(behaviors: FakeExitBehavior[]): {
   spawn: PtyFactory
-  processes: Array<PtyProcess & { signals: string[] }>
+  processes: Array<PtyProcess & { signals: string[]; exit(event: { exitCode: number; signal?: number }): void }>
   allocations: () => number
 } {
-  const processes: Array<PtyProcess & { signals: string[] }> = []
+  const processes: Array<PtyProcess & { signals: string[]; exit(event: { exitCode: number; signal?: number }): void }> = []
   let allocations = 0
   const spawn: PtyFactory = () => {
     const behavior = behaviors[allocations] ?? behaviors.at(-1) ?? "term"
@@ -46,6 +46,7 @@ function createPtyFactory(behaviors: FakeExitBehavior[]): {
     const process = {
       pid: 900_000 + allocations,
       signals: [] as string[],
+      exit: emitExit,
       write: () => {},
       resize: () => {},
       kill: (signal = "SIGTERM") => {
@@ -61,8 +62,9 @@ function createPtyFactory(behaviors: FakeExitBehavior[]): {
         exitListeners.add(listener)
         return { dispose: () => { exitListeners.delete(listener) } }
       },
-    } satisfies PtyProcess & { signals: string[] }
+    } satisfies PtyProcess & { signals: string[]; exit(event: { exitCode: number; signal?: number }): void }
     processes.push(process)
+    if (behavior === "startup-exit") queueMicrotask(() => emitExit({ exitCode: 1 }))
     return process
   }
   return { spawn, processes, allocations: () => allocations }
@@ -104,7 +106,7 @@ function findPtyInitializationRootContaining(sentinel: string): string | undefin
       const root = join(tmpdir(), entry.name)
       try {
         for (const name of readdirSync(root)) {
-          if (!name.startsWith("value.")) continue
+          if (!name.startsWith("value.") && name !== "environment") continue
           if (readFileSync(join(root, name)).includes(Buffer.from(sentinel))) return root
         }
       } catch (error) {
@@ -329,6 +331,38 @@ describe("service-owned web terminal", () => {
     expect(findPtyInitializationRootContaining(sentinel)).toBeUndefined()
   })
 
+  test("preserves a Fish initialization diagnostic while retaining an unconfirmed group for teardown", async () => {
+    const ptys = createPtyFactory(["startup-exit"])
+    let groupExists = true
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/usr/bin/fish", "--interactive"], cwd: process.cwd(), environment: {},
+        initialization: { kind: "post-init-environment", shell: "fish" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, undefined, 5, { ptyInitializationTimeoutMs: 5 }, undefined, () => groupExists)
+
+    await expect(manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })).rejects.toMatchObject({
+      code: "capability_unavailable",
+      message: expect.stringContaining("Shell exited before PTY initialization completed"),
+    })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+
+    groupExists = false
+    await manager.stop()
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+    await manager.stop()
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+  })
+
   test("removes fish initialization value files when command PTY allocation throws", async () => {
     const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
     expect(fish).toBeDefined()
@@ -368,6 +402,31 @@ describe("service-owned web terminal", () => {
       if (previousShell === undefined) delete process.env.SHELL
       else process.env.SHELL = previousShell
     }
+  })
+
+  test("initializes a real interactive Fish PTY before terminal capability replies are available", async () => {
+    const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
+    if (!fish) return
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: [fish, "--login", "--interactive"], cwd: process.cwd(),
+        environment: { PATH: process.env.PATH ?? "/usr/bin:/bin" },
+        initialization: { kind: "post-init-environment", shell: "fish" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    })
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    expect(terminal.state).toBe("running")
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
   test("runs typed command steps separately in one logical terminal and stops on the exact failing step", async () => {
@@ -413,14 +472,19 @@ describe("service-owned web terminal", () => {
 
   test("keeps an active real PTY for typed steps and forwards input and resize while sequencing", async () => {
     const processes: Array<{ writes: string[]; resizes: Array<[number, number]> }> = []
-    const spawn: PtyFactory = () => {
+    const spawn: PtyFactory = (argv) => {
       const dataListeners = new Set<(data: string) => void>()
       const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
       const record = { writes: [] as string[], resizes: [] as Array<[number, number]> }
       processes.push(record)
+      const command = argv.at(-1)
+      const readyPath = argv.find((value) => value.endsWith("/ready"))
+      if (readyPath) writeFileSync(readyPath, "ready")
+      if (command) record.writes.push(command)
       const finish = () => queueMicrotask(() => {
         for (const listener of exitListeners) listener({ exitCode: 0 })
       })
+      if (command?.includes("printf done") && processes.length > 1) finish()
       return {
         pid: 910_000 + processes.length,
         write(data) {
@@ -794,7 +858,7 @@ describe("service-owned web terminal", () => {
     await manager.close("browser-1", terminal.id)
   })
 
-  test("does not logically finish a command PTY while initialization cleanup leaves its group alive", async () => {
+  test("trusts the original PTY exit and never re-signals a possibly reused group id", async () => {
     const ptys = createPtyFactory(["kill"])
     const manager = new WebTerminalManager({
       buildAll: async () => [],
@@ -816,11 +880,44 @@ describe("service-owned web terminal", () => {
     await waitFor(() => (ptys.processes[0]?.signals.length ?? 0) >= 2)
     await sleep(30)
     expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
-    expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "running", exit_code: null })
-    expect(manager.activeCount).toBe(1)
+    expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "ended", exit_code: 137 })
+    expect(manager.activeCount).toBe(0)
 
-    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "cleanup_failed", exit_code: null })
-    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL", "SIGTERM", "SIGKILL"])
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended", exit_code: 137 })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+  })
+
+  test("settles a failed-init command terminal when its original PTY eventually exits", async () => {
+    const ptys = createPtyFactory(["never"])
+    let groupExists = true
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "never-starts", cwd: process.cwd(), environment: {} }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, undefined, 10, { ptyInitializationTimeoutMs: 5 }, undefined, () => groupExists)
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      command_id: "cmd_0123456789abcdef",
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    await waitFor(() => (ptys.processes[0]?.signals.length ?? 0) >= 2)
+    expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "running", exit_code: null })
+
+    groupExists = false
+    ptys.processes[0]!.exit({ exitCode: 137, signal: 9 })
+    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+
+    expect(manager.activeCount).toBe(0)
+    expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "ended", exit_code: 137 })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
   test("marks a logical PTY sequence cancelled before signaling its active process group", async () => {

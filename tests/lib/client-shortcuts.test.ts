@@ -50,18 +50,37 @@ describe("client shortcut semantics", () => {
     expect(settings.bindings.every(({ aliases }) => aliases.length === 0)).toBe(true)
   })
 
-  test.each(["macos", "linux"] as WebShortcutPlatform[])("matches %s by physical code with exact modifiers", (platform) => {
+  test.each(["macos", "linux"] as WebShortcutPlatform[])("matches %s by logical key with exact modifiers", (platform) => {
     const settings = defaultShortcutSettings(platform)
     const modifiers = platform === "macos"
       ? { ctrlKey: true, metaKey: true }
       : { ctrlKey: true, altKey: true, shiftKey: true }
 
-    expect(matchShortcutEvent(event("KeyK", { ...modifiers, key: "л" }), settings)).toMatchObject({
+    expect(matchShortcutEvent(event("KeyK", { ...modifiers, key: "k" }), settings)).toMatchObject({
       handled: true,
       actionId: "workspace.switch",
       source: "primary",
     })
+    // Colemak-DH produces the logical N from the physical key normally named K.
+    expect(matchShortcutEvent(event("KeyK", { ...modifiers, key: "n" }), settings)).toMatchObject({
+      handled: true,
+      actionId: "workspace.new",
+    })
     expect(matchShortcutEvent(event("KeyK", { ...modifiers, key: "k", ...(platform === "macos" ? { altKey: true } : { metaKey: true }) }), settings)).toEqual({ handled: false, reason: "unmatched" })
+  })
+
+  test("matches persisted Key bindings by logical event key", () => {
+    const persisted = { bindings: [{
+      action_id: "workspace.switch" as const,
+      primary: binding("KeyR", { ctrl: true }),
+      aliases: [],
+    }] }
+    // Colemak-DH produces logical R from a different physical key, but stored bindings remain KeyR.
+    expect(matchShortcutEvent(event("KeyP", { key: "r", ctrlKey: true }), persisted)).toMatchObject({
+      handled: true,
+      actionId: "workspace.switch",
+      binding: { code: "KeyR", ctrl: true },
+    })
   })
 
   test("rejects non-keydown, composition, AltGraph, malformed, unsafe, and unmatched input", () => {
@@ -128,6 +147,12 @@ describe("client shortcut semantics", () => {
       actionId: "workspace.stale.refresh",
       metadata: scoped,
     })
+    expect(matchScopedShortcutEvent(event("KeyP", { key: "r" }), "stale-view")).toEqual({
+      handled: true,
+      actionId: "workspace.stale.refresh",
+      metadata: scoped,
+    })
+    expect(matchScopedShortcutEvent(event("KeyR", { key: "p" }), "stale-view")).toEqual({ handled: false, reason: "unmatched" })
     expect(matchScopedShortcutEvent(refresh, undefined)).toEqual({ handled: false, reason: "inactive-scope" })
     for (const guarded of [
       event("KeyR", { repeat: true }),

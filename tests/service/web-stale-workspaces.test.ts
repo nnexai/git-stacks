@@ -804,7 +804,7 @@ describe("Phase 127 web singleton focus, shortcuts, overflow, and disclosure", (
     expect(overlay.document.activeElement).toBe(overlay.invoker)
   })
 
-  test("context-only R refresh ignores repeats, composition, input, and browser-global routing", async () => {
+  test("context-only logical R refresh ignores physical layout, repeats, composition, input, and browser-global routing", async () => {
     const { createController, mountOverlay } = webStaleExports()
     const refresh = createDeferred<Phase127StaleResponse>()
     const fixture = controllerHarness({
@@ -818,12 +818,14 @@ describe("Phase 127 web singleton focus, shortcuts, overflow, and disclosure", (
     const mounted = mountOverlay(overlay.view, controller)
     await mounted.ready
     const target = overlay.view.body as unknown as FakeElement
-    const accepted = mounted.handleScopedKey(new FakeEvent("keydown", target, { key: "r", code: "KeyR" }) as unknown as KeyboardEvent)
+    // Colemak-DH produces logical R from a different physical key.
+    const accepted = mounted.handleScopedKey(new FakeEvent("keydown", target, { key: "r", code: "KeyP" }) as unknown as KeyboardEvent)
+    const physicalOnly = mounted.handleScopedKey(new FakeEvent("keydown", target, { key: "p", code: "KeyR" }) as unknown as KeyboardEvent)
     const repeat = mounted.handleScopedKey(new FakeEvent("keydown", target, { key: "r", code: "KeyR", repeat: true }) as unknown as KeyboardEvent)
     const composing = mounted.handleScopedKey(new FakeEvent("keydown", target, { key: "Process", code: "KeyR", isComposing: true }) as unknown as KeyboardEvent)
     const input = overlay.document.createElement("input")
     const fromInput = mounted.handleScopedKey(new FakeEvent("keydown", input, { key: "r", code: "KeyR" }) as unknown as KeyboardEvent)
-    expect([accepted, repeat, composing, fromInput]).toEqual([true, false, false, false])
+    expect([accepted, physicalOnly, repeat, composing, fromInput]).toEqual([true, false, false, false, false])
     expect(fixture.requests.filter(({ force_refresh }) => force_refresh)).toHaveLength(1)
     refresh.resolve(PHASE127_CLIENT_RESPONSES.refreshed)
     await mounted.idle()

@@ -1,4 +1,5 @@
 import { Command } from "commander"
+import { fileURLToPath } from "node:url"
 
 import { registerWorkspaceCommands } from "../commands/workspace"
 import { configCommand } from "../commands/config"
@@ -17,6 +18,24 @@ import { hooksCommand } from "../commands/hooks"
 import { silenceObservability } from "@git-stacks/core/observability"
 import { spawn, which } from "@git-stacks/core/node-runtime"
 
+type PackageResolver = (specifier: string) => string
+type ExecutableResolver = (command: string) => string | null
+
+export function resolveDashboardLaunchCommand(
+  resolvePackage: PackageResolver = (specifier) => import.meta.resolve(specifier),
+  resolveExecutable: ExecutableResolver = which,
+): string[] | null {
+  try {
+    const entrypoint = resolvePackage("@git-stacks/tui")
+    const bun = resolveExecutable("bun")
+    if (bun && entrypoint.startsWith("file:")) return [bun, fileURLToPath(entrypoint)]
+  } catch {
+    // The TUI is optional. Fall back to an explicitly installed executable.
+  }
+  const executable = resolveExecutable("git-stacks-tui")
+  return executable ? [executable] : null
+}
+
 export function buildCliProgram(binName = "git-stacks"): Command {
   const program = new Command()
   program.name(binName).description("Git worktree workspace manager").enablePositionalOptions()
@@ -30,12 +49,12 @@ export function buildCliProgram(binName = "git-stacks"): Command {
     .option("--target <id>", "Connect the TUI through the local helper to a paired target")
     .action(async (options: { target?: string }) => {
       await silenceObservability()
-      const executable = which("git-stacks-tui")
-      if (!executable) {
+      const dashboardCommand = resolveDashboardLaunchCommand()
+      if (!dashboardCommand) {
         throw new Error("The optional git-stacks TUI is not installed. Install @git-stacks/tui or use `git-stacks web`.")
       }
       await prepareManagedDashboardEnvironment()
-      const tuiProcess = spawn([executable], { stdio: ["inherit", "inherit", "inherit"], env: { ...process.env, ...(options.target ? { GIT_STACKS_TARGET_ID: options.target } : {}) } })
+      const tuiProcess = spawn(dashboardCommand, { stdio: ["inherit", "inherit", "inherit"], env: { ...process.env, ...(options.target ? { GIT_STACKS_TARGET_ID: options.target } : {}) } })
       const exitCode = await tuiProcess.exited
       if (exitCode !== 0) process.exit(exitCode)
     })

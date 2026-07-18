@@ -212,17 +212,21 @@ function ListPane(props: {
       verticalScrollbarOptions={{ visible: false }}
       viewportCulling
     >
-      <Show when={props.presentation.candidateCount === 0 && props.presentation.incompleteCount > 0}>
-        <text fg="yellow">  No confirmed stale workspaces. Some workspaces could not be fully evaluated.</text>
-      </Show>
-      <Show when={props.presentation.candidateCount > 0}>
-        <text fg="white">  Cleanup candidates</text>
-        <For each={props.presentation.candidates}>{(row, index) => candidateRow(row, index())}</For>
-      </Show>
-      <Show when={props.presentation.incompleteCount > 0}>
-        <text fg="white">  Evaluation incomplete</text>
-        <For each={props.presentation.incomplete}>{(row, index) => incompleteRow(row, index())}</For>
-      </Show>
+      {props.presentation.candidateCount === 0 && props.presentation.incompleteCount > 0
+        ? <text fg="yellow">  No confirmed stale workspaces. Some workspaces could not be fully evaluated.</text>
+        : <box height={0} />}
+      {props.presentation.candidateCount > 0
+        ? <box flexDirection="column">
+            <text fg="white">  Cleanup candidates</text>
+            <For each={props.presentation.candidates}>{(row, index) => candidateRow(row, index())}</For>
+          </box>
+        : <box height={0} />}
+      {props.presentation.incompleteCount > 0
+        ? <box flexDirection="column">
+            <text fg="white">  Evaluation incomplete</text>
+            <For each={props.presentation.incomplete}>{(row, index) => incompleteRow(row, index())}</For>
+          </box>
+        : <box height={0} />}
     </scrollbox>
   )
 }
@@ -243,71 +247,80 @@ function EvidenceDetail(props: {
       verticalScrollbarOptions={{ visible: false }}
       viewportCulling
     >
-      <Show when={row()} fallback={<text fg="gray">  No stale workspace selected.</text>}>
-        {(selected) => (
+      {row()
+        ? (() => {
+          const selected = row()!
+          return (
           <box flexDirection="column" paddingLeft={1} paddingRight={1}>
-            <text fg="cyan">{selected().workspaceName}</text>
-            <text fg="gray">{selected().activity ? `Last activity ${selected().activity?.relative} · ${selected().activity?.exactUtc}` : "Last activity is unavailable."}</text>
+            <text fg="cyan">{selected.workspaceName}</text>
+            <text fg="gray">{selected.activity ? `Last activity ${selected.activity.relative} · ${selected.activity.exactUtc}` : "Last activity is unavailable."}</text>
 
-            <Show when={candidate()}>
-              <text>{""}</text>
-              <text fg="white">Confirmed reasons</text>
-              <For each={selected().confirmedReasons}>
-                {(reason) => (
-                  <box flexDirection="column">
-                    <box flexDirection="row">
-                      <text fg="yellow">! </text>
-                      <text fg="white">{reason.label}</text>
-                    </box>
-                    <Show when={evidenceTimeLabel(reason)}>
-                      {(label) => <text fg="gray">  {label()}</text>}
-                    </Show>
-                  </box>
-                )}
-              </For>
-            </Show>
+            {candidate()
+              ? <box flexDirection="column">
+                  <text> </text>
+                  <text fg="white">Confirmed reasons</text>
+                  <For each={selected.confirmedReasons}>
+                    {(reason) => (
+                      <box flexDirection="column">
+                        <box flexDirection="row">
+                          <text fg="yellow">! </text>
+                          <text fg="white">{reason.label}</text>
+                        </box>
+                        {evidenceTimeLabel(reason)
+                          ? <text fg="gray">  {evidenceTimeLabel(reason)}</text>
+                          : <box height={0} />}
+                      </box>
+                    )}
+                  </For>
+                </box>
+              : <box height={0} />}
 
-            <Show when={selected().unknownEvidence.length > 0}>
-              <text>{""}</text>
-              <text fg="white">Unknown evidence</text>
-              <For each={selected().unknownEvidence}>
-                {(evidence) => (
-                  <box flexDirection="column">
-                    <box flexDirection="row">
-                      <text fg="yellow">? </text>
-                      <text fg="gray">{evidence.label}</text>
-                    </box>
-                    <Show when={evidenceTimeLabel(evidence)}>
-                      {(label) => <text fg="gray">  {label()}</text>}
-                    </Show>
-                  </box>
-                )}
-              </For>
-              <text fg="gray">Resolve provider access or service availability, then refresh evidence.</text>
-            </Show>
+            {selected.unknownEvidence.length > 0
+              ? <box flexDirection="column">
+                  <text> </text>
+                  <text fg="white">Unknown evidence</text>
+                  <For each={selected.unknownEvidence}>
+                    {(evidence) => (
+                      <box flexDirection="column">
+                        <box flexDirection="row">
+                          <text fg="yellow">? </text>
+                          <text fg="gray">{evidence.label}</text>
+                        </box>
+                        {evidenceTimeLabel(evidence)
+                          ? <text fg="gray">  {evidenceTimeLabel(evidence)}</text>
+                          : <box height={0} />}
+                      </box>
+                    )}
+                  </For>
+                  <text fg="gray">Resolve provider access or service availability, then refresh evidence.</text>
+                </box>
+              : <box height={0} />}
 
-            <Show when={selected().cautions.length > 0}>
-              <text>{""}</text>
-              <text fg="yellow">Cautions</text>
-              <text fg="gray">Cautions do not determine whether this workspace is stale.</text>
-              <For each={selected().cautions}>
-                {(caution) => (
-                  <box flexDirection="row">
-                    <text fg="yellow">! </text>
-                    <text fg="gray">{caution.label}</text>
-                  </box>
-                )}
-              </For>
-            </Show>
+            {selected.cautions.length > 0
+              ? <box flexDirection="column">
+                  <text> </text>
+                  <text fg="yellow">Cautions</text>
+                  <text fg="gray">Cautions do not determine whether this workspace is stale.</text>
+                  <For each={selected.cautions}>
+                    {(caution) => (
+                      <box flexDirection="row">
+                        <text fg="yellow">! </text>
+                        <text fg="gray">{caution.label}</text>
+                      </box>
+                    )}
+                  </For>
+                </box>
+              : <box height={0} />}
 
-            <text>{""}</text>
+            <text> </text>
             <text fg="cyan">[o/Enter] Open workspace</text>
-            <Show when={candidate()} fallback={<text fg="gray">{staleWorkspaceIncompleteActionsExplanation()}</text>}>
-              <text fg="cyan">[a] Workspace actions</text>
-            </Show>
+            {candidate()
+              ? <text fg="cyan">[a] Workspace actions</text>
+              : <text fg="gray">{staleWorkspaceIncompleteActionsExplanation()}</text>}
           </box>
-        )}
-      </Show>
+          )
+        })()
+        : <text fg="gray">  No stale workspace selected.</text>}
     </scrollbox>
   )
 }
@@ -524,20 +537,16 @@ export function StaleWorkspacesView(props: Props) {
           <box height={wrappedLineCount(introCopy(), dimensions().width)} flexDirection="column" paddingLeft={1} paddingRight={1}>
             <text fg="white">{introCopy()}</text>
           </box>
-          <Show when={props.state.message}>
-            {(message) => (
-              <box height={wrappedLineCount(message(), dimensions().width)} flexDirection="column" paddingLeft={1} paddingRight={1}>
-                <text fg={statusColor()}>{message()}</text>
+          {props.state.message
+            ? <box height={wrappedLineCount(props.state.message, dimensions().width)} flexDirection="column" paddingLeft={1} paddingRight={1}>
+                <text fg={statusColor()}>{props.state.message}</text>
               </box>
-            )}
-          </Show>
-          <Show when={presentation()}>
-            {(current) => (
-              <box height={wrappedLineCount(countCopy(current()), dimensions().width)} flexDirection="column" paddingLeft={1} paddingRight={1}>
-                <text fg="gray">{countCopy(current())}</text>
+            : <box height={0} />}
+          {presentation()
+            ? <box height={wrappedLineCount(countCopy(presentation()!), dimensions().width)} flexDirection="column" paddingLeft={1} paddingRight={1}>
+                <text fg="gray">{countCopy(presentation()!)}</text>
               </box>
-            )}
-          </Show>
+            : <box height={0} />}
 
           <Show
             when={presentation()}

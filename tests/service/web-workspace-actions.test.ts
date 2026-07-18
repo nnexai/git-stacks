@@ -165,6 +165,9 @@ describe("web authoritative notes and path-free file details", () => {
       "entry.state",
       "entry.severity",
       "entry.message",
+      'group.scope === "workspace" ? "Workspace" : "Repository"',
+      "No configured targets",
+      "file-status-empty",
       "Retry the service check",
     ]) expect(appSource).toContain(seam)
     expect(appSource).not.toMatch(/entry\.(?:path|source_path|target_path|main_path|task_path|root|raw_error)/)

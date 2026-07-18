@@ -218,7 +218,7 @@ export function ForgeSourceReviewDialog(props: Props) {
                 {field(terminology().source_branch, compact(source().source_branch, dimensions().width))}
                 {field(terminology().target_branch, compact(source().target_branch, dimensions().width))}
                 {field("Source repository", compact(source().source_repository, dimensions().width))}
-                <text>{""}</text>
+                <text> </text>
                 {field("Workspace name", current().draft.workspace_name, selected("workspace"))}
                 {editing() && selected("workspace") ? <input focused value={editValue()} onInput={(value) => setEditValue(typeof value === "string" ? value : "")} /> : null}
                 {field("Template", current().draft.template_name, selected("template"))}

@@ -528,7 +528,8 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
       return
     }
     if (event.repeat || event.isComposing || event.key === "Process" || event.key === "Dead" || event.getModifierState?.("AltGraph")) return
-    if (!/^Key[A-Z]$/.test(event.code) || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) return
+    const logicalKey = event.key.toLocaleUpperCase("en-US")
+    if (!/^[A-Z]$/.test(logicalKey) || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) return
     if (!(event.ctrlKey || event.altKey || event.metaKey)) {
       capture.error = "Add Ctrl, Alt, or Command so terminal typing stays available."
       render()
@@ -536,7 +537,7 @@ export function mountShortcutSettings(view: OverlayView, options: ShortcutSettin
       return
     }
     const candidate: WebShortcutBinding = {
-      code: event.code,
+      code: `Key${logicalKey}`,
       ctrl: event.ctrlKey,
       alt: event.altKey,
       shift: event.shiftKey,

@@ -30,7 +30,6 @@ export const WEB_TERMINAL_LAUNCH_RESOLUTION_TIMEOUT_MS = 10_000
 
 type OutputChunk = { cursor: bigint; bytes: Uint8Array }
 type Attachment = { socket: TerminalAttachment; ack: bigint; pressured: boolean; streaming: boolean }
-
 export interface PtyProcess {
   readonly pid: number
   cancelSequence?(): void
@@ -79,7 +78,7 @@ export function createPtyInitialization(
   shell: "bash" | "zsh" | "fish",
   environment: Record<string, string>,
   command?: string,
-): { root: string; readyPath: string; statusPathPrefix: string; bootstrap: string; environment: Record<string, string>; command?: string } {
+): { shell: "bash" | "zsh" | "fish"; root: string; readyPath: string; statusPathPrefix: string; bootstrap: string; environment: Record<string, string>; command?: string } {
   const root = mkdtempSync(join(tmpdir(), "git-stacks-pty-"))
   chmodSync(root, 0o700)
   const readyPath = join(root, "ready")
@@ -115,29 +114,51 @@ export function createPtyInitialization(
         const silentBody = `{ ${body}; } > /dev/null 2>&1`
         return `BASH_XTRACEFD=2; case \"\${BASH_XTRACEFD-}\" in 2) ${silentBody} ;; esac`
       })()
-  return { root, readyPath, statusPathPrefix, bootstrap, environment: shell === "fish" ? {} : overlay.environment, ...(command === undefined ? {} : { command }) }
+  return { shell, root, readyPath, statusPathPrefix, bootstrap, environment: shell === "fish" ? {} : overlay.environment, ...(command === undefined ? {} : { command }) }
 }
 
-function ptyCommandBatch(shell: "bash" | "zsh" | "fish", command: string, statusPathPrefix: string): string {
-  const status = `__GS_PTY_STATUS_${randomBytes(12).toString("hex")}`
-  return shell === "fish"
-    ? `begin\n${command}\nend\nbuiltin set -l ${status} $status; builtin printf '' > ${shellQuote(statusPathPrefix)}$${status}\n`
-    : `{\n${command}\n}\n${status}=$?; > ${shellQuote(statusPathPrefix)}\"$${status}\"\n`
+function createPtyCommandInitialization(
+  shell: ReturnType<typeof discoverUserShell>,
+  environment: Record<string, string>,
+  command: string,
+): { root: string; readyPath: string; acknowledgementPath: string; argv: string[] } {
+  const root = mkdtempSync(join(tmpdir(), "git-stacks-pty-command-"))
+  chmodSync(root, 0o700)
+  const readyPath = join(root, "ready")
+  const acknowledgementPath = join(root, "ack")
+  const environmentPath = join(root, "environment")
+  const chunks: Buffer[] = []
+  for (const [key, value] of Object.entries(environment).sort(([left], [right]) => left.localeCompare(right))) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || value.includes("\0")) throw new TypeError(`Invalid PTY environment entry: ${key}`)
+    chunks.push(Buffer.from(`${key}=${value}\0`, "utf8"))
+  }
+  writeFileSync(environmentPath, Buffer.concat(chunks), { mode: 0o600 })
+  const plan = buildUserShellBootstrap(shell, {
+    mode: "command",
+    command,
+    readinessPath: readyPath,
+    acknowledgementPath,
+    environmentPath,
+  })
+  return { root, readyPath, acknowledgementPath, argv: [...plan.argv] }
 }
 
-async function waitForPtyCommand(
-  childExited: Promise<{ exitCode: number; signal?: number }>,
-  statusPathPrefix: string,
-): Promise<{ exitCode: number; signal?: number; shellExited: boolean }> {
-  while (true) {
-    for (let exitCode = 0; exitCode <= 255; exitCode += 1) {
-      if (existsSync(`${statusPathPrefix}${exitCode}`)) return { exitCode, shellExited: false }
+async function waitForPtyReady(
+  processHandle: PtyProcess,
+  readyPath: string,
+  timeoutMs = 10_000,
+): Promise<void> {
+  let exited = false
+  const subscription = processHandle.onExit(() => { exited = true })
+  const deadline = Date.now() + timeoutMs
+  try {
+    while (!existsSync(readyPath)) {
+      if (exited) throw new Error("Shell exited before PTY initialization completed")
+      if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
+      await new Promise<void>((resolve) => setTimeout(resolve, 10))
     }
-    const result = await Promise.race([
-      childExited.then((event) => ({ event })),
-      new Promise<undefined>((resolve) => setTimeout(resolve, 10)),
-    ])
-    if (result) return { ...result.event, shellExited: true }
+  } finally {
+    subscription.dispose()
   }
 }
 
@@ -145,10 +166,11 @@ async function waitForPtyInitialization(
   processHandle: PtyProcess,
   initialization: ReturnType<typeof createPtyInitialization>,
   timeoutMs = 10_000,
+  injectBootstrap = true,
 ): Promise<void> {
   let exited = false
   const subscription = processHandle.onExit(() => { exited = true })
-  processHandle.write(`${initialization.bootstrap}\r`)
+  if (injectBootstrap) processHandle.write(`${initialization.bootstrap}\r`)
   const deadline = Date.now() + timeoutMs
   try {
     while (!existsSync(initialization.readyPath)) {
@@ -161,15 +183,28 @@ async function waitForPtyInitialization(
   }
 }
 
+function ptyInitializationLaunch(
+  argv: readonly string[],
+  initialization: ReturnType<typeof createPtyInitialization>,
+): { argv: string[]; injectBootstrap: boolean } {
+  // Fish 4.6 performs terminal capability queries before reading interactive
+  // input. terminal.create cannot attach xterm until initialization completes,
+  // so writing the bootstrap through the PTY deadlocks. --init-command runs
+  // after the user's real config but before Fish starts reading terminal input.
+  return initialization.shell === "fish"
+    ? { argv: [...argv, "--init-command", initialization.bootstrap], injectBootstrap: false }
+    : { argv: [...argv], injectBootstrap: true }
+}
+
 function bufferPty(processHandle: PtyProcess): PtyProcess {
-  let dataListener: ((data: string) => void) | undefined
-  let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
   const pendingData: string[] = []
   let pendingExit: { exitCode: number; signal?: number } | undefined
-  processHandle.onData((data) => dataListener ? dataListener(data) : pendingData.push(data))
+  processHandle.onData((data) => dataListeners.size ? dataListeners.forEach((listener) => listener(data)) : pendingData.push(data))
   processHandle.onExit((event) => {
     pendingExit = event
-    exitListener?.(event)
+    for (const listener of exitListeners) listener(event)
   })
   return {
     pid: processHandle.pid,
@@ -178,14 +213,14 @@ function bufferPty(processHandle: PtyProcess): PtyProcess {
     resize: (columns, rows) => processHandle.resize(columns, rows),
     kill: (signal) => processHandle.kill(signal),
     onData(listener) {
-      dataListener = listener
+      dataListeners.add(listener)
       for (const data of pendingData.splice(0)) listener(data)
-      return { dispose: () => { if (dataListener === listener) dataListener = undefined } }
+      return { dispose: () => { dataListeners.delete(listener) } }
     },
     onExit(listener) {
-      exitListener = listener
+      exitListeners.add(listener)
       if (pendingExit) queueMicrotask(() => listener(pendingExit!))
-      return { dispose: () => { if (exitListener === listener) exitListener = undefined } }
+      return { dispose: () => { exitListeners.delete(listener) } }
     },
   }
 }
@@ -348,7 +383,10 @@ export class WebTerminalManager {
               })
             : undefined
           try {
-            const spawned = bufferPty(this.spawn(launch.argv, {
+            const initializationLaunch = initialization
+              ? ptyInitializationLaunch(launch.argv, initialization)
+              : { argv: [...launch.argv], injectBootstrap: true }
+            const spawned = bufferPty(this.spawn(initializationLaunch.argv, {
               cwd: launch.cwd,
               env: {
                 ...launch.environment,
@@ -364,9 +402,16 @@ export class WebTerminalManager {
             if (initialization) {
               const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
               try {
-                await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs)
+                await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs, initializationLaunch.injectBootstrap)
               } catch (error) {
-                await this.terminatePtyProcessGroup(spawned, spawnedExited)
+                // A shell profile can exit during initialization (for example
+                // after a failed user-level `cd`). One bounded TERM/KILL attempt
+                // is safe while this spawn is still owned here. Never retain a
+                // bare PID for deferred signaling: that process-group ID may be
+                // reused after the original leader exits.
+                try {
+                  await this.terminatePtyProcessGroup(spawned, spawnedExited)
+                } catch {}
                 throw error
               }
             }
@@ -497,8 +542,7 @@ export class WebTerminalManager {
     initialColumns: number,
     initialRows: number,
   ): PtyProcess {
-    const shell = discoverUserShell(process.env, "pty")
-    const plan = buildUserShellBootstrap(shell, { mode: "pty" })
+    const shell = discoverUserShell(process.env, "command")
     let active: PtyProcess | undefined
     let columns = initialColumns
     let rows = initialRows
@@ -522,18 +566,18 @@ export class WebTerminalManager {
             finish(130, 15)
             return
           }
-          const initialization = createPtyInitialization(shell.family, {
+          const initialization = createPtyCommandInitialization(shell, {
             ...step.environment,
             ...terminalEnvironment,
           }, step.command)
           try {
-            const child = this.spawn([...plan.argv], {
+            const inheritedEnvironment = shell.family === "bash"
+              ? Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("BASH_FUNC_")))
+              : process.env
+            const child = this.spawn(initialization.argv, {
               cwd: step.cwd,
               env: {
-                ...process.env,
-                ...step.environment,
-                ...initialization.environment,
-                ...terminalEnvironment,
+                ...inheritedEnvironment,
                 TERM: process.env.TERM ?? "xterm-256color",
                 COLORTERM: process.env.COLORTERM ?? "truecolor",
               },
@@ -549,13 +593,22 @@ export class WebTerminalManager {
             const childExited = new Promise<{ exitCode: number; signal?: number }>((resolve) => { resolveExit = resolve })
             child.onExit(resolveExit)
             try {
-              await waitForPtyInitialization(child, initialization, this.timing.ptyInitializationTimeoutMs)
+              await waitForPtyReady(child, initialization.readyPath, this.timing.ptyInitializationTimeoutMs)
             } catch (error) {
               try {
                 await this.terminatePtyProcessGroup(child, childExited)
                 active = undefined
               } catch (cleanupError) {
                 dataListener(`\r\n[git-stacks shell cleanup] ${(cleanupError as Error).message}\r\n`)
+                // Keep the logical terminal honest while the failed-init group
+                // is still alive, but settle it as soon as the original PTY
+                // reports its eventual exit. This observer never sends another
+                // signal to a numeric PID that could have been reused.
+                void childExited.then((event) => {
+                  if (active === child) active = undefined
+                  acceptsInput = false
+                  finish(event.exitCode === 0 ? 126 : event.exitCode, event.signal)
+                })
                 return
               }
               throw error
@@ -563,17 +616,17 @@ export class WebTerminalManager {
             if (cancelled) {
               child.kill("SIGTERM")
             } else {
-              child.write(ptyCommandBatch(shell.family, initialization.command!, initialization.statusPathPrefix))
               acceptsInput = true
               for (const input of pendingInput.splice(0)) child.write(input)
+              writeFileSync(initialization.acknowledgementPath, "ack", { mode: 0o600 })
             }
-            const event = await waitForPtyCommand(childExited, initialization.statusPathPrefix)
+            const event = await childExited
             acceptsInput = false
             if (cancelled) {
               finish(event.exitCode || 130, event.signal)
               return
             }
-            if (!event.shellExited) {
+            if (this.processGroupExists(child.pid)) {
               try {
                 await this.terminatePtyProcessGroup(child, childExited)
               } catch (cleanupError) {

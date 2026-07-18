@@ -285,9 +285,13 @@ export class SecureServiceRouter implements SecureSessionHandler {
         if (context.mode === "browser") throw coded("Rich snapshots are unavailable to browsers", "unauthorized")
         return this.options.snapshot.buildAll()
       }
-      case "web.snapshot": return projectWebSnapshot(this.options.snapshot.buildCatalog
-        ? await this.options.snapshot.buildCatalog()
-        : await this.options.snapshot.buildAll())
+      case "web.snapshot": {
+        const value = this.options.snapshot.buildCatalog
+          ? await this.options.snapshot.buildCatalog()
+          : await this.options.snapshot.buildAll()
+        if (!Array.isArray(value)) await this.options.core?.seed?.(value)
+        return projectWebSnapshot(value)
+      }
       case "workspace-creation.catalog": {
         if (!this.options.workspaceCreationCatalog) throw coded("Workspace creation is unavailable", "capability_unavailable")
         return context.mode === "browser" ? projectWebCatalog(await this.options.workspaceCreationCatalog()) : this.options.workspaceCreationCatalog()
@@ -435,7 +439,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
           const projected = context.mode === "browser"
             ? event.type === "operation" ? { ...event, operation: projectWebOperation(event.operation) }
               : event.type === "signal"
-                ? (await this.signalIsActive(event.signal) ? { ...event, signal: projectWebSignal(event.signal) } : undefined)
+                ? (await this.signalIsVisible(context.principalId, event.signal) ? { ...event, signal: projectWebSignal(event.signal) } : undefined)
                 : event
             : event
           if (projected) await context.sendEvent(projected)
@@ -473,8 +477,8 @@ export class SecureServiceRouter implements SecureSessionHandler {
     return new Set(snapshots.map(({ workspace }) => workspace.id))
   }
 
-  private async signalIsActive(signal: Signal | SignalDismissal): Promise<boolean> {
-    return signal.kind === "dismiss_signal" || (await this.activeWorkspaceIds()).has(signal.workspace_id)
+  private async signalIsVisible(principalId: string, signal: Signal | SignalDismissal): Promise<boolean> {
+    return signal.kind === "dismiss_signal" || (await this.visibleSignals(principalId, [signal])).length > 0
   }
 
   private async visibleSignals(principalId: string, signals: Signal[]): Promise<Signal[]> {
@@ -646,7 +650,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
     const parsed = WebWorkspaceMutationSchema.safeParse(body)
     if (!parsed.success) throw coded("Invalid workspace action request", "invalid_request")
     if (!this.options.core) throw coded("Workspace actions are unavailable", "capability_unavailable")
-    const state = await this.options.core.build()
+    const state = await this.options.core.cached?.(parsed.data.expected_revision) ?? await this.options.core.build()
     if (state.revision !== parsed.data.expected_revision) throw coded("Authoritative snapshot revision is stale", "conflict")
     if (!state.workspaces.some(({ definition, projection }) => definition.id === parsed.data.workspace_id || projection.id === parsed.data.workspace_id)
       && !state.archived_workspaces.some(({ id }) => id === parsed.data.workspace_id)) {

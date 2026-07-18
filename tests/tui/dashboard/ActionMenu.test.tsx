@@ -1,10 +1,15 @@
 /** @jsxImportSource @opentui/solid */
-import { describe, test, expect } from "bun:test"
+import { afterEach, describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import type { WebWorkspaceAction, WebWorkspaceActionId } from "@git-stacks/protocol"
 import { ActionMenu } from "../../../packages/tui/src/ActionMenu"
 
 const renderOpts = { kittyKeyboard: true }
+const activeRenderers: Array<{ destroy(): void }> = []
+
+afterEach(() => {
+  for (const renderer of activeRenderers.splice(0)) renderer.destroy()
+})
 const workspaceId = "00000000-0000-4000-8000-000000000001"
 
 function descriptor(action_id: WebWorkspaceActionId, available = true): WebWorkspaceAction {
@@ -25,11 +30,11 @@ function descriptor(action_id: WebWorkspaceActionId, available = true): WebWorks
 }
 
 const canonical = [
+  descriptor("workspace.archive"),
+  descriptor("workspace.remove"),
   descriptor("workspace.open"),
   descriptor("workspace.close"),
   descriptor("workspace.rename"),
-  descriptor("workspace.archive"),
-  descriptor("workspace.remove"),
   descriptor("workspace.merge"),
   descriptor("workspace.sync"),
   descriptor("workspace.push"),
@@ -49,10 +54,11 @@ function menuProps(overrides: Record<string, unknown> = {}) {
 
 describe("ActionMenu", () => {
   test("renders canonical and adapted action labels", async () => {
-    const { renderOnce, captureCharFrame } = await testRender(
+    const { renderer, renderOnce, captureCharFrame } = await testRender(
       () => <ActionMenu {...menuProps()} />,
       renderOpts,
     )
+    activeRenderers.push(renderer)
     await renderOnce()
     const frame = captureCharFrame()
     for (const label of ["Open workspace", "Close workspace", "Rename workspace", "Edit", "Clean", "Archive workspace", "Remove workspace", "Merge workspace", "Sync workspace", "Push workspace", "Issue...", "Commands..."]) {
@@ -61,26 +67,33 @@ describe("ActionMenu", () => {
   })
 
   test("shows the first canonical row and moves the cursor", async () => {
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <ActionMenu {...menuProps()} />,
       renderOpts,
     )
+    activeRenderers.push(renderer)
     await renderOnce()
     expect(captureCharFrame()).toContain("> [o] Open workspace")
     mockInput.pressArrow("down")
     await renderOnce()
     expect(captureCharFrame()).toContain("> [x] Close workspace")
+    mockInput.pressArrow("down")
+    mockInput.pressArrow("down")
+    mockInput.pressArrow("down")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("> [m] Merge workspace")
     mockInput.pressArrow("up")
     await renderOnce()
-    expect(captureCharFrame()).toContain("> [o] Open workspace")
+    expect(captureCharFrame()).toContain("> [e] Edit ($EDITOR)")
   })
 
   test("Enter and canonical letter shortcuts use onInvoke", async () => {
     const invoked: string[] = []
-    const { mockInput, renderOnce } = await testRender(
+    const { renderer, mockInput, renderOnce } = await testRender(
       () => <ActionMenu {...menuProps({ onInvoke: (actionId: string) => { invoked.push(actionId) } })} />,
       renderOpts,
     )
+    activeRenderers.push(renderer)
     await renderOnce()
     mockInput.pressEnter()
     await renderOnce()
@@ -95,10 +108,11 @@ describe("ActionMenu", () => {
 
   test("escape calls onCancel", async () => {
     let cancelled = false
-    const { mockInput, renderOnce } = await testRender(
+    const { renderer, mockInput, renderOnce } = await testRender(
       () => <ActionMenu {...menuProps({ onCancel: () => { cancelled = true } })} />,
       renderOpts,
     )
+    activeRenderers.push(renderer)
     await renderOnce()
     mockInput.pressEscape()
     await renderOnce()
@@ -111,6 +125,7 @@ describe("ActionMenu", () => {
       () => <ActionMenu {...menuProps({ onAction: (action: string) => { dispatched.push(action) } })} />,
       renderOpts,
     )
+    activeRenderers.push(enabled.renderer)
     await enabled.renderOnce()
     enabled.mockInput.pressKey("i")
     enabled.mockInput.pressKey("d")
@@ -121,6 +136,7 @@ describe("ActionMenu", () => {
       () => <ActionMenu {...menuProps({ issueDisabledReason: "none linked", commandsDisabledReason: "none configured", onAction: (action: string) => { dispatched.push(action) } })} />,
       renderOpts,
     )
+    activeRenderers.push(disabled.renderer)
     await disabled.renderOnce()
     expect(disabled.captureCharFrame()).toContain("Issue... (none linked)")
     expect(disabled.captureCharFrame()).toContain("Commands... (none configured)")
@@ -132,10 +148,11 @@ describe("ActionMenu", () => {
 
   test("undefined inventory is explicit and every legacy action key dispatches zero requests", async () => {
     const requests: string[] = []
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <ActionMenu workspaceName="ws" onAction={(action) => { requests.push(action) }} onInvoke={(action) => { requests.push(action) }} onCancel={() => {}} />,
       renderOpts,
     )
+    activeRenderers.push(renderer)
     await renderOnce()
     expect(captureCharFrame()).toContain("Workspace actions could not be loaded")
     expect(captureCharFrame()).not.toContain("[o] Open")
@@ -148,10 +165,11 @@ describe("ActionMenu", () => {
 
   test("malformed ready inventory is explicit and non-actionable", async () => {
     const requests: string[] = []
-    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <ActionMenu workspaceName="ws" inventoryState="ready" descriptors={undefined} onInvoke={(action) => { requests.push(action) }} onCancel={() => {}} />,
       renderOpts,
     )
+    activeRenderers.push(renderer)
     await renderOnce()
     expect(captureCharFrame()).toContain("Workspace actions could not be loaded")
     mockInput.pressKey("o")

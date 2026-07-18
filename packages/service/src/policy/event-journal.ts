@@ -23,6 +23,14 @@ export type ReplayResult =
   | { kind: "events"; events: ServiceEvent[] }
   | { kind: "replay_gap"; requested: string; earliest_cursor: string; latest_cursor: string; snapshot_revision: string }
 
+function normalizeEventForPublication(event: ServiceEvent): ServiceEvent {
+  // The journal is a JSON protocol boundary. Normalize before retaining or
+  // publishing so the live event is identical to the durable JSON record.
+  // In particular, optional object properties with `undefined` are omitted
+  // instead of reaching the canonical secure encoder and crashing the service.
+  return ServiceEventSchema.parse(JSON.parse(JSON.stringify(event)))
+}
+
 function cursor(value: string): bigint {
   if (!/^(0|[1-9][0-9]*)$/.test(value)) throw new Error(`invalid cursor: ${value}`)
   return BigInt(value)
@@ -102,7 +110,9 @@ export class EventJournal {
   private async append(build: (sequence: string, timestamp: string) => ServiceEvent): Promise<ServiceEvent> {
     return this.serialized(async () => {
       await this.initialize()
-      const event = ServiceEventSchema.parse(build(this.nextSequence.toString(), new Date(this.now()).toISOString()))
+      const event = normalizeEventForPublication(
+        ServiceEventSchema.parse(build(this.nextSequence.toString(), new Date(this.now()).toISOString())),
+      )
       const handle = await open(this.path, "a", 0o600)
       try {
         await handle.write(`${JSON.stringify(event)}\n`, null, "utf8")

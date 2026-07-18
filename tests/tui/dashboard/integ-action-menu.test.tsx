@@ -754,6 +754,32 @@ describe("integration: action menu dispatch", () => {
     expect(frame).toContain("test-ws")
     expect(frame).not.toContain("Running command verify")
   })
+
+  test("q closes the TUI while a durable manual command is still running", async () => {
+    workspaceCommands = { verify: "bun run verify" }
+    let destroyed = false
+    let resolveCommand: ((value: { exitCode: number; plan: unknown[] }) => void) | undefined
+    runManualCommandMock.mockImplementationOnce(async () => await new Promise(resolve => { resolveCommand = resolve }))
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />,
+      { ...renderOpts, onDestroy: () => { destroyed = true } },
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("d")
+    await renderOnce()
+    mockInput.pressEnter()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Running command verify")
+
+    mockInput.pressKey("q")
+    expect(destroyed).toBe(true)
+    resolveCommand?.({ exitCode: 0, plan: [] })
+  })
 })
 
 afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })

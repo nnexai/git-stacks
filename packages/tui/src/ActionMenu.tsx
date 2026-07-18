@@ -21,6 +21,7 @@ type Props = {
 }
 
 type CanonicalGroup = TuiWorkspaceActionGroup
+const groupOrder: readonly CanonicalGroup[] = ["Workspace", "Git", "Details", "Lifecycle"]
 
 type CanonicalRow = {
   id: string
@@ -65,7 +66,10 @@ function CanonicalActionMenu(props: Required<Pick<Props, "workspaceName" | "desc
       ...(props.onRun ? [{ id: "legacy.run", key: "u", label: "Run", group: "Workspace" as const, activate: props.onRun }] : []),
     ]
   }
-  const rows = (): CanonicalRow[] => [...canonicalRows(), ...adaptedRows()]
+  const rows = (): CanonicalRow[] => {
+    const unordered = [...canonicalRows(), ...adaptedRows()]
+    return groupOrder.flatMap((group) => unordered.filter((row) => row.group === group))
+  }
   const firstAvailable = () => Math.max(0, rows().findIndex((row) => !row.disabledReason))
   const [cursor, setCursor] = createSignal(firstAvailable())
   const [announcement, setAnnouncement] = createSignal("")
@@ -86,7 +90,7 @@ function CanonicalActionMenu(props: Required<Pick<Props, "workspaceName" | "desc
 
   return (
     <CenteredDialog title={props.workspaceName} size="medium">
-      <For each={["Workspace", "Git", "Details", "Lifecycle"] as const}>
+      <For each={groupOrder}>
         {(group) => (
           <>
             <text fg="cyan">  {group}</text>

@@ -34,7 +34,7 @@ export function RepoDetail(props: Props) {
             <text fg={entry().diskExists ? "green" : "red"}>
               {"  "}{entry().diskExists ? "✓ exists" : "✗ missing"}
             </text>
-            <text>{""}</text>
+            <text> </text>
             <text fg="white">  Used by:</text>
             <For each={usedByTemplates()}>
               {(t) => <text fg="gray">    template: {t.name}</text>}

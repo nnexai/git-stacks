@@ -59,6 +59,24 @@ describe("TUI managed service bootstrap", () => {
     expect(web.indexOf("await prepareLocalServiceEnvironment()"), "web refresh must precede browser launch")
       .toBeLessThan(web.indexOf("await createBrowserLaunch("))
     expect(cli.indexOf("await prepareManagedDashboardEnvironment()"), "manage refresh must precede TUI spawn")
-      .toBeLessThan(cli.indexOf("spawn([executable]"))
+      .toBeLessThan(cli.indexOf("spawn(dashboardCommand"))
+  })
+
+  test("pairs manage with the resolvable TUI package before a stale PATH binary", async () => {
+    const { resolveDashboardLaunchCommand } = await import("../../../packages/cli/src/lib/cli-program")
+    const executables = new Map([
+      ["bun", "/opt/bun/bin/bun"],
+      ["git-stacks-tui", "/stale/path/git-stacks-tui"],
+    ])
+
+    expect(resolveDashboardLaunchCommand(
+      () => "file:///workspace/node_modules/@git-stacks/tui/dist/index.js",
+      (command) => executables.get(command) ?? null,
+    )).toEqual(["/opt/bun/bin/bun", "/workspace/node_modules/@git-stacks/tui/dist/index.js"])
+
+    expect(resolveDashboardLaunchCommand(
+      () => { throw new Error("package not installed") },
+      (command) => executables.get(command) ?? null,
+    )).toEqual(["/stale/path/git-stacks-tui"])
   })
 })

@@ -479,19 +479,24 @@ async function submitAndStreamOperation(
     operationId = accepted.operation_id
     observe(accepted)
     for (const operation of buffered.get(operationId) ?? []) observe(operation)
-    // The encrypted event stream is the fast path. If the connection closes or is interrupted, resume
-    // through the durable operation endpoint instead of leaving the client
-    // waiting forever for an event that can no longer arrive.
+    // The encrypted event stream is the fast path. Poll the durable operation
+    // endpoint concurrently because an otherwise healthy long-lived stream may
+    // miss a terminal event; waiting for the stream to close would leave the UI
+    // in a permanent running state.
+    const durable = waitForOperation(latestOperation ?? accepted, {
+      signal: controller.signal,
+      onOperation: observe,
+      pollMs: options.pollMs,
+    })
     const result = await Promise.race([
       terminal,
-      stream.then(() => waitForOperation(latestOperation ?? accepted, {
-        signal: options.signal,
-        onOperation: observe,
-        pollMs: options.pollMs,
-      })),
+      durable,
     ])
     controller.abort()
-    await stream
+    // Completion must not depend on teardown of the shared long-lived event
+    // transport. The stream owns its observer cleanup and already converts a
+    // post-ready transport failure into a resolved cursor.
+    void stream
     return result
   } finally {
     controller.abort()

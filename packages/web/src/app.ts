@@ -3,8 +3,8 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createStaleWorkspaceActionRegistry, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
-import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebStaleWorkspaceResponse, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
+import { FUZZY_FIELD_WEIGHT, SignalState, createForgeReviewCoordinator, createOperationTracker, createStaleWorkspaceActionRegistry, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
+import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebStaleWorkspaceResponse, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type SignalDismissal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
 import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, dispatchStaleWorkspaceScopedShortcut, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { bindInPlaceOverlayRetry, createWebOverlayRuntime, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
@@ -446,6 +446,8 @@ let selectedPair: Pair | undefined
 let activeTerminalId: string | undefined
 let signalRefreshGeneration = 0
 let signals: Signal[] = []
+let signalState = new SignalState()
+let dismissedSignalIds = new Set<string>()
 let eventCursor = "0"
 const terminalViews = new Map<string, TerminalView>()
 const pendingWorkspaceCreations = new Map<string, string>()
@@ -1415,7 +1417,7 @@ async function submitWorkspaceLifecycle(
 
 async function reconcileAuthoritativeState(): Promise<void> {
   await refreshSnapshot()
-  await Promise.all([loadTerminals(), refreshSignals(true)])
+  await Promise.all([loadTerminals(), refreshSignals()])
   renderAll()
 }
 
@@ -1895,23 +1897,31 @@ async function showWorkspaceFileStatus(workspace: Workspace): Promise<void> {
       if (!status.groups.length) content.append(element("strong", "", "No configured workspace files"), element("p", "", "This workspace has no configured copy, symlink, or sync targets."))
       else for (const group of status.groups) {
         const section = element("section", "file-status-group")
-        const toggle = button(`${group.name} · ${group.summary.attention} need attention`, "file-group-toggle")
+        const scopeLabel = group.scope === "workspace" ? "Workspace" : "Repository"
+        const groupLabel = `${scopeLabel} · ${group.name}`
+        const toggle = button(group.entries.length
+          ? `${groupLabel} · ${group.summary.attention} need attention`
+          : `${groupLabel} · No configured targets`, "file-group-toggle")
         const rows = element("div", "file-status-entries")
-        const expandedByDefault = group.summary.attention > 0
+        const expandedByDefault = group.summary.attention > 0 || group.entries.length === 0
         toggle.setAttribute("aria-expanded", String(expandedByDefault))
         rows.hidden = !expandedByDefault
         toggle.addEventListener("click", () => {
           rows.hidden = !rows.hidden
           toggle.setAttribute("aria-expanded", String(!rows.hidden))
         })
-        for (const entry of group.entries) {
-          const row = element("div", `file-status-entry ${entry.severity}`)
-          row.setAttribute("data-severity", entry.severity)
-          const target = element("span", "file-target", entry.target)
-          target.title = entry.target
-          row.append(target, element("span", "file-state", `${entry.type} · ${entry.state}`), element("span", "file-message", entry.message))
-          if (entry.counts) row.append(element("span", "file-counts", `${entry.counts.equal} equal · ${entry.counts.source_only} source only · ${entry.counts.target_only} target only · ${entry.counts.differing} differing · ${entry.counts.errors} errors`))
-          rows.append(row)
+        if (!group.entries.length) {
+          rows.append(element("p", "file-status-empty", `No configured copy, symlink, or sync targets in this ${scopeLabel.toLocaleLowerCase("en-US")} group.`))
+        } else {
+          for (const entry of group.entries) {
+            const row = element("div", `file-status-entry ${entry.severity}`)
+            row.setAttribute("data-severity", entry.severity)
+            const target = element("span", "file-target", entry.target)
+            target.title = entry.target
+            row.append(target, element("span", "file-state", `${entry.type} · ${entry.state}`), element("span", "file-message", entry.message))
+            if (entry.counts) row.append(element("span", "file-counts", `${entry.counts.equal} equal · ${entry.counts.source_only} source only · ${entry.counts.target_only} target only · ${entry.counts.differing} differing · ${entry.counts.errors} errors`))
+            rows.append(row)
+          }
         }
         section.append(toggle, rows)
         content.append(section)
@@ -2203,8 +2213,8 @@ async function showCreation(): Promise<void> {
     const name = element("input"); name.placeholder = "Workspace name"
     const branch = element("input"); branch.placeholder = "feature/my-change"
     const source = element("select")
-    for (const template of catalog.templates) { const option = element("option", "", `Template: ${template.name}`); option.value = `template:${template.name}`; source.append(option) }
     const repositoriesOption = element("option", "", "Choose repositories…"); repositoriesOption.value = "repositories"; source.append(repositoriesOption)
+    for (const template of catalog.templates) { const option = element("option", "", `Template: ${template.name}`); option.value = `template:${template.name}`; source.append(option) }
     const repositoryPicker = element("div", "repository-picker")
     const repositoryInputs: HTMLInputElement[] = []
     for (const repository of catalog.repositories) {
@@ -2263,17 +2273,53 @@ async function refreshSnapshot(): Promise<void> {
   if (preferencesChanged) savePreferences()
   renderAll()
 }
-async function refreshSignals(resetCursor = false): Promise<void> {
+type SignalSnapshot = { signals: Signal[]; dismissed: string[]; sequence: string }
+
+function eventSequenceIsNewer(sequence: string): boolean {
+  return BigInt(sequence) > BigInt(eventCursor)
+}
+
+function renderSignalProjection(): void {
+  const projection = signalState.projection()
+  const dismissed = new Set([...dismissedSignalIds, ...projection.dismissed])
+  signals = projection.signals
+    .filter((signal) => !dismissed.has(signal.id))
+    .map(({ journal_sequence: _, ...signal }) => signal)
+  renderSignals()
+  renderNav()
+}
+
+function replaceSignalProjection(projection: SignalSnapshot): void {
+  if (!eventSequenceIsNewer(projection.sequence) && projection.sequence !== eventCursor) return
+  signalState = new SignalState()
+  dismissedSignalIds = new Set(projection.dismissed)
+  for (const signal of projection.signals) signalState.apply({ sequence: projection.sequence, signal })
+  eventCursor = projection.sequence
+  renderSignalProjection()
+}
+
+function applySignalEvent(signal: Signal | SignalDismissal, sequence: string): void {
+  if (!eventSequenceIsNewer(sequence)) return
+  if (signal.kind === "dismiss_signal") {
+    dismissedSignalIds.add(signal.signal_id)
+    signalState.apply({ sequence, dismissal: signal })
+  } else {
+    dismissedSignalIds.delete(signal.id)
+    signalState.apply({ sequence, signal })
+  }
+  eventCursor = sequence
+  renderSignalProjection()
+}
+
+async function refreshSignals(): Promise<void> {
   const generation = ++signalRefreshGeneration
   try {
     const active = activeTerminalId ? terminalViews.get(activeTerminalId)?.meta : undefined
     const projection = active
-      ? await api<{ signals: Signal[]; sequence: string }>("signals.acknowledge", { surface_id: active.surface_id }, { scope: "signal.dismiss" })
-      : await api<{ signals: Signal[]; sequence: string }>("signals.list", undefined, { scope: "signal.read" })
+      ? await api<SignalSnapshot>("signals.acknowledge", { surface_id: active.surface_id }, { scope: "signal.dismiss" })
+      : await api<SignalSnapshot>("signals.list", undefined, { scope: "signal.read" })
     if (generation !== signalRefreshGeneration) return
-    signals = projection.signals
-    if ((resetCursor || eventCursor === "0") && projection.sequence !== "0") eventCursor = projection.sequence
-    renderSignals(); renderNav()
+    replaceSignalProjection(projection)
   } catch {}
 }
 async function loadTerminals(): Promise<void> {
@@ -2301,6 +2347,7 @@ function connectEvents(): void {
     const data = value as {
       type: string
       sequence?: string
+      signal?: Signal | SignalDismissal
       control?: { kind: string }
       operation?: {
         operation_id: string
@@ -2310,9 +2357,14 @@ function connectEvents(): void {
         error?: { message?: string; lifecycle?: WorkspaceLifecycleFailureDetails }
       }
     }
-    if (data.sequence) eventCursor = data.sequence
+    const eventIsNewer = data.sequence ? eventSequenceIsNewer(data.sequence) : false
+    if (!eventIsNewer && data.sequence) return
+    if (data.type === "signal" && data.signal && data.sequence) {
+      applySignalEvent(data.signal, data.sequence)
+      return
+    }
+    if (eventIsNewer && data.sequence) eventCursor = data.sequence
     if (data.type === "control" && data.control?.kind === "snapshot_invalidated") void refreshSnapshot()
-    else if (data.type === "signal") void refreshSignals()
     else if (data.type === "operation" && data.operation) {
       const operation = data.operation
       const reviewedObserver = reviewedOperationObservers.get(operation.operation_id)

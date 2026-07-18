@@ -259,6 +259,7 @@ export class SecureRpcClient {
   private readonly eventObservers = new Set<SecureEventObserver>()
   private readonly frameObservers = new Set<FrameObserver>()
   private started = false
+  private finished = false
   private resolveClosed!: (error?: Error) => void
   readonly closed = new Promise<Error | undefined>((resolve) => { this.resolveClosed = resolve })
 
@@ -267,11 +268,11 @@ export class SecureRpcClient {
   start(): void {
     if (this.started) return
     this.started = true
-    void this.channel.start((frame) => this.receive(frame)).then(() => this.resolveClosed(), (error) => {
+    void this.channel.start((frame) => this.receive(frame)).then(() => {
+      this.finish(new Error("Secure channel closed unexpectedly"))
+    }, (error) => {
       const failure = error instanceof Error ? error : new Error(String(error))
-      for (const request of this.pending.values()) request.reject(failure)
-      this.pending.clear()
-      this.resolveClosed(failure)
+      this.finish(failure)
     })
   }
 
@@ -317,7 +318,16 @@ export class SecureRpcClient {
   async close(reason = "client closed"): Promise<void> {
     await this.channel.sendControl("close", { code: "client_closed", message: reason }).catch(() => undefined)
     await this.session.carrier.close(reason).catch(() => undefined)
-    this.resolveClosed()
+    this.finish()
+  }
+
+  private finish(error?: Error): void {
+    if (this.finished) return
+    this.finished = true
+    const pendingFailure = error ?? new Error("Secure RPC client closed")
+    for (const request of this.pending.values()) request.reject(pendingFailure)
+    this.pending.clear()
+    this.resolveClosed(error)
   }
 
   private receive(frame: SecureFrame): void {

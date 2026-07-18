@@ -1274,7 +1274,8 @@ describe("web authoritative shortcut overlays", () => {
     const firstRow = opened.view?.body.querySelectorAll(".shortcut-row")[0]
     firstRow?.querySelectorAll("BUTTON").find((candidate) => candidate.textContent === "Add shortcut alias")?.dispatch("click")
     opened.view?.body.querySelectorAll("BUTTON").find((candidate) => candidate.getAttribute("data-capture") === "workspace.switch")
-      ?.dispatch("keydown", { code: "KeyQ", key: "q", ctrlKey: true, altKey: true, shiftKey: true })
+      // Capture stores logical Q even when a layout emits it from another physical key.
+      ?.dispatch("keydown", { code: "KeyP", key: "q", ctrlKey: true, altKey: true, shiftKey: true })
     await settings.idle()
     expect(mutations[0]).toMatchObject({ intent: "set-aliases", expected_revision: "20", aliases: [{ code: "KeyQ" }] })
 
