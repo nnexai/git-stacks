@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "@test/api"
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { cleanup, makeTmpDir } from "../helpers"
@@ -17,7 +17,7 @@ const shellFixtures: ShellFixture[] = (["bash", "zsh", "fish"] as const).map((fa
   mkdirSync(fixtureRoot, { recursive: true })
   writeFileSync(executable, "#!/bin/sh\nexit 0\n", "utf8")
   chmodSync(executable, 0o700)
-  return { family, executable }
+  return { family, executable: realpathSync(executable) }
 })
 
 const hostileCommand = [

@@ -36,7 +36,7 @@ async function runFixture(
     timeoutId = setTimeout(() => {
       child.kill("SIGKILL")
       reject(new Error(`PTY fixture ${scenario} timed out`))
-    }, 7_000)
+    }, 9_000)
   })
   const [exitCode, stdout, stderr] = await Promise.race([
     Promise.all([

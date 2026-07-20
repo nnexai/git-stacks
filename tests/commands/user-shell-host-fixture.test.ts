@@ -290,7 +290,11 @@ describe("host user-shell fixtures", () => {
     const childPid = Number((await readFile(childFile, "utf8")).trim())
     const grandchildPid = Number((await readFile(grandchildFile, "utf8")).trim())
     const pids = [childPid, grandchildPid]
-    const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
+    const alive = (pid: number) => {
+      try { process.kill(pid, 0) } catch { return false }
+      const state = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })
+      return state.status === 0 && !state.stdout.trim().startsWith("Z")
+    }
     await waitFor(() => pids.every((pid) => !alive(pid)), "cancelled process tree still has live descendants")
     receipt.process_tree.case_count = 1
   })

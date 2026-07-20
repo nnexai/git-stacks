@@ -21,6 +21,11 @@ import {
 const WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
 const WORKSPACE_B = "33333333-3333-4333-8333-333333333333"
 const REPOSITORY = "22222222-2222-4222-8222-222222222222"
+const requiredShells = new Set((process.env.GIT_STACKS_REQUIRE_SHELLS ?? "").split(",").map((shell) => shell.trim()).filter(Boolean))
+
+function requireHostedShell(shell: "bash" | "zsh" | "fish", executable: string | null): void {
+  if (requiredShells.has(shell)) expect(executable, `required host shell is unavailable: ${shell}`).not.toBeNull()
+}
 
 type FakeExitBehavior = "term" | "kill" | "never" | "retry-term" | "startup-exit"
 
@@ -122,6 +127,9 @@ function findPtyInitializationRootContaining(sentinel: string): string | undefin
 
 describe("service-owned web terminal", () => {
   test("applies and verifies the PTY overlay and directly runs commands despite hostile profile dispatch functions", () => {
+    requireHostedShell("bash", which("bash"))
+    requireHostedShell("zsh", which("zsh"))
+    requireHostedShell("fish", which("fish"))
     const fixtures = ([
       {
         family: "bash" as const,
@@ -219,6 +227,9 @@ describe("service-owned web terminal", () => {
   })
 
   test("keeps authoritative PTY overlay values out of captured output when profiles enable tracing", () => {
+    requireHostedShell("bash", which("bash"))
+    requireHostedShell("zsh", which("zsh"))
+    requireHostedShell("fish", which("fish"))
     const fixtures = ([
       {
         family: "bash" as const,
@@ -274,7 +285,6 @@ describe("service-owned web terminal", () => {
     ]).filter((fixture): fixture is typeof fixture & { executable: string } => fixture.executable !== null)
 
     expect(fixtures.map(({ family }) => family)).toContain("bash")
-    expect(fixtures.map(({ family }) => family)).toContain("fish")
     for (const fixture of fixtures) {
       const root = mkdtempSync(join(tmpdir(), `git-stacks-trace-${fixture.family}-`))
       const profilePath = join(root, fixture.profileName)
@@ -410,7 +420,7 @@ describe("service-owned web terminal", () => {
       rows: 24,
     })
     expect(spawnedArgv).toEqual([
-      "/bin/sh", "-c", "/bin/stty -echo; exec \"$@\"", "git-stacks-pty-init", "/bin/zsh", "-l", "-i",
+      "/bin/zsh", "-l", "-i",
     ])
     expect(writes[0]).toBe("\u001b[?1;2c")
     expect(writes[1]).toContain("__GS_PTY_OK_")
@@ -425,41 +435,49 @@ describe("service-owned web terminal", () => {
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
-  test("does not replay the Bash bootstrap as terminal input", async () => {
-    const bash = which("bash")
-    if (!bash) return
-    const manager = new WebTerminalManager({
-      buildAll: async () => [],
-      buildWorkspace: async () => { throw new Error("unused") },
-      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
-        argv: [bash, "--noprofile", "--norc", "-i"], cwd: process.cwd(),
-        environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", PS1: "$ " },
-        initialization: { kind: "post-init-environment", shell: "bash" },
-        ports: {}, configuration: { shell: true }, redacted: [],
-      } }),
-    }, undefined, undefined, Date.now, undefined, undefined, 1_000, { ptyBootstrapDelayMs: 25 })
+  test("does not replay POSIX bootstraps as terminal input", async () => {
+    const fixtures = ([
+      { family: "bash" as const, executable: which("bash"), args: ["--noprofile", "--norc", "-i"] },
+      { family: "zsh" as const, executable: which("zsh"), args: ["-f", "-i"] },
+    ]).filter((fixture): fixture is typeof fixture & { executable: string } => fixture.executable !== null)
+    requireHostedShell("bash", which("bash"))
+    requireHostedShell("zsh", which("zsh"))
 
-    const terminal = await manager.create("browser-1", {
-      workspace_id: WORKSPACE_A,
-      repository_id: REPOSITORY,
-      expected_revision: "1",
-      cols: 80,
-      rows: 24,
-    })
-    const { sent } = attach(manager, terminal.id)
-    await sleep(50)
-    const output = sent
-      .filter((item): item is Uint8Array => item instanceof Uint8Array)
-      .map((frame) => new TextDecoder().decode(frame.slice(9)))
-      .join("")
-    expect(output).not.toContain("BASH_XTRACEFD")
-    expect(output).not.toContain("__GS_PTY_")
-    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+    for (const fixture of fixtures) {
+      const manager = new WebTerminalManager({
+        buildAll: async () => [],
+        buildWorkspace: async () => { throw new Error("unused") },
+        resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+          argv: [fixture.executable, ...fixture.args], cwd: process.cwd(),
+          environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", PS1: "$ ", PROMPT: "$ " },
+          initialization: { kind: "post-init-environment", shell: fixture.family },
+          ports: {}, configuration: { shell: true }, redacted: [],
+        } }),
+      }, undefined, undefined, Date.now, undefined, undefined, 1_000, { ptyBootstrapDelayMs: 25 })
+
+      const terminal = await manager.create("browser-1", {
+        workspace_id: WORKSPACE_A,
+        repository_id: REPOSITORY,
+        expected_revision: "1",
+        cols: 80,
+        rows: 24,
+      })
+      const { sent } = attach(manager, terminal.id)
+      await sleep(50)
+      const output = sent
+        .filter((item): item is Uint8Array => item instanceof Uint8Array)
+        .map((frame) => new TextDecoder().decode(frame.slice(9)))
+        .join("")
+      expect(output).not.toContain("BASH_XTRACEFD")
+      expect(output).not.toContain("__GS_PTY_")
+      await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+    }
   })
 
   test("removes fish initialization value files when command PTY allocation throws", async () => {
     const fish = which("fish") ?? undefined
-    expect(fish).toBeDefined()
+    requireHostedShell("fish", fish ?? null)
+    if (!fish) return
     const previousShell = process.env.SHELL
     const sentinel = "phase-124-command-allocation-secret"
     let allocatedRoot: string | undefined

@@ -34,6 +34,8 @@ export interface PtyProcess {
   readonly pid: number
   cancelSequence?(): void
   releasePreAttachment?(): void
+  suppressOutput?(): void
+  resumeOutput?(): void
   write(data: string): void
   resize(columns: number, rows: number): void
   kill(signal?: string): void
@@ -109,7 +111,7 @@ export function createPtyInitialization(
             `${key}=\"$${shadow}\"`,
             `case \"\${${key}-}\" in \"$${shadow}\") ;; *) ${ok}= ;; esac`,
           ]),
-          `case \"$${ok}\" in 1) /bin/stty echo 2>/dev/null; > ${shellQuote(readyPath)} ;; esac`,
+          `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
         ].join("; ")
         if (shell === "zsh") return `{ ${body}; } > /dev/null 2>&1`
         const silentBody = `{ ${body}; } > /dev/null 2>&1`
@@ -184,6 +186,7 @@ async function waitForPtyInitialization(
         await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, injectAt - Date.now())))
       }
       if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
+      processHandle.suppressOutput?.()
       processHandle.write(`${initialization.bootstrap}\r`)
     }
     while (!existsSync(initialization.readyPath)) {
@@ -192,6 +195,7 @@ async function waitForPtyInitialization(
       await new Promise<void>((resolve) => setTimeout(resolve, 10))
     }
   } finally {
+    processHandle.resumeOutput?.()
     subscription.dispose()
   }
 }
@@ -207,13 +211,7 @@ function ptyInitializationLaunch(
   if (initialization.shell === "fish") {
     return { argv: [...argv, "--init-command", initialization.bootstrap], injectBootstrap: false }
   }
-  // The kernel echoes PTY input before shell redirections can silence it.
-  // Disable echo before exec so the injected bootstrap never reaches replay;
-  // the bootstrap restores echo immediately before publishing readiness.
-  return {
-    argv: ["/bin/sh", "-c", "/bin/stty -echo; exec \"$@\"", "git-stacks-pty-init", ...argv],
-    injectBootstrap: true,
-  }
+  return { argv: [...argv], injectBootstrap: true }
 }
 
 const PRIMARY_DEVICE_ATTRIBUTES_QUERY = "\u001b[0c"
@@ -224,10 +222,11 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
   const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
   const pendingData: string[] = []
   let preAttachment = answerPrimaryDeviceAttributes
+  let outputSuppressed = false
   let negotiationPending = ""
   let pendingExit: { exitCode: number; signal?: number } | undefined
   const emitData = (data: string) => {
-    if (!data) return
+    if (!data || outputSuppressed) return
     if (dataListeners.size) dataListeners.forEach((listener) => listener(data))
     else pendingData.push(data)
   }
@@ -269,6 +268,11 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
       emitData(negotiationPending)
       negotiationPending = ""
     },
+    suppressOutput: () => {
+      outputSuppressed = true
+      negotiationPending = ""
+    },
+    resumeOutput: () => { outputSuppressed = false },
     write: (data) => processHandle.write(data),
     resize: (columns, rows) => processHandle.resize(columns, rows),
     kill: (signal) => processHandle.kill(signal),

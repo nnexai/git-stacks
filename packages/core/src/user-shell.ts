@@ -2,7 +2,7 @@ import { constants, accessSync, chmodSync, existsSync, mkdtempSync, realpathSync
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 
-import { sleep, spawn, type SpawnedProcess, type SpawnOptions } from "./node-runtime"
+import { sleep, spawn, spawnSync, type SpawnedProcess, type SpawnOptions } from "./node-runtime"
 
 export const USER_SHELL_INITIALIZATION_TIMEOUT_MS = 10_000
 export const USER_SHELL_TERMINATION_GRACE_MS = 1_000
@@ -102,6 +102,17 @@ const DEFAULT_EXECUTION_DEPENDENCIES: UserShellExecutionDependencies = {
     if (process.platform === "win32") return false
     try {
       process.kill(-pid, 0)
+      if (process.platform === "darwin") {
+        // Darwin keeps exited descendants visible to kill(2) while they are
+        // zombies. They cannot be signalled and do not represent live work.
+        const result = spawnSync(["/bin/ps", "-axo", "pgid=,stat="])
+        if (result.exitCode === 0) {
+          return result.stdout.toString("utf8").split("\n").some((line) => {
+            const match = line.trim().match(/^(\d+)\s+(\S+)/)
+            return Number(match?.[1]) === pid && !match?.[2]?.startsWith("Z")
+          })
+        }
+      }
       return true
     } catch (error) {
       return (error as NodeJS.ErrnoException).code === "EPERM"
@@ -116,6 +127,9 @@ const POSIX_BOOTSTRAP_PREFIX = [
   "__gs_command=$4",
   "while IFS= command read -r -d '' __gs_entry; do command export \"$__gs_entry\" || command exit 126; done < \"$__gs_environment\"",
   "command rm -f -- \"$__gs_environment\" || command exit 126",
+  // Give both pipe readers an in-band ordering boundary before command output.
+  "command printf '\\036%s\\037' \"$__gs_ready\"",
+  "command printf '\\036%s\\037' \"$__gs_ready\" >&2",
   "> \"$__gs_ready\" || command exit 126",
   "while [[ ! -e \"$__gs_ack\" ]]; do command sleep 0.01; done",
   "command rm -f -- \"$__gs_ready\" \"$__gs_ack\"",
@@ -135,6 +149,8 @@ const FISH_BOOTSTRAP = [
   "  set -gx $__gs_pair[1] $__gs_pair[2]",
   "end",
   "command rm -f -- $__gs_environment; or exit 126",
+  "printf '\\036%s\\037' $__gs_ready",
+  "printf '\\036%s\\037' $__gs_ready >&2",
   "command touch -- $__gs_ready; or exit 126",
   "while not test -e $__gs_ack; command sleep 0.01; end",
   "command rm -f -- $__gs_ready $__gs_ack",
@@ -316,27 +332,62 @@ function appendBounded(target: Buffer[], chunk: Uint8Array): void {
   target.push(Buffer.from(chunk).subarray(0, MAX_INITIALIZATION_DIAGNOSTIC_BYTES - used))
 }
 
-async function collectOutput(
+function collectOutput(
   stream: ReadableStream<Uint8Array> | null,
   streamName: "stdout" | "stderr",
+  boundary: Buffer,
   initialized: () => boolean,
   initialization: Buffer[],
   command: Buffer[],
   onOutput?: (output: UserShellOutput) => void,
-): Promise<void> {
-  if (!stream) return
-  const reader = stream.getReader()
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) return
-    if (initialized()) {
-      const copy = Buffer.from(value)
-      command.push(copy)
-      onOutput?.({ stream: streamName, chunk: copy })
-    } else {
-      appendBounded(initialization, value)
+): { completed: Promise<void>; boundaryReached: Promise<void> } {
+  if (!stream) return { completed: Promise.resolve(), boundaryReached: Promise.resolve() }
+  let reachBoundary!: () => void
+  const boundaryReached = new Promise<void>((resolve) => { reachBoundary = resolve })
+  const completed = (async () => {
+    const reader = stream.getReader()
+    let pending = Buffer.alloc(0)
+    let foundBoundary = false
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        if (pending.length) appendBounded(initialization, pending)
+        reachBoundary()
+        return
+      }
+      if (foundBoundary) {
+        const copy = Buffer.from(value)
+        if (initialized()) {
+          command.push(copy)
+          onOutput?.({ stream: streamName, chunk: copy })
+        } else appendBounded(initialization, copy)
+        continue
+      }
+      if (initialized()) {
+        const copy = Buffer.from(value)
+        command.push(copy)
+        onOutput?.({ stream: streamName, chunk: copy })
+        continue
+      }
+      pending = Buffer.concat([pending, Buffer.from(value)])
+      const boundaryIndex = pending.indexOf(boundary)
+      if (boundaryIndex >= 0) {
+        appendBounded(initialization, pending.subarray(0, boundaryIndex))
+        const remainder = pending.subarray(boundaryIndex + boundary.length)
+        if (remainder.length) appendBounded(initialization, remainder)
+        pending = Buffer.alloc(0)
+        foundBoundary = true
+        reachBoundary()
+        continue
+      }
+      const safeLength = Math.max(0, pending.length - boundary.length + 1)
+      if (safeLength) {
+        appendBounded(initialization, pending.subarray(0, safeLength))
+        pending = pending.subarray(safeLength)
+      }
     }
-  }
+  })()
+  return { completed, boundaryReached }
 }
 
 async function exitWithin(
@@ -485,13 +536,14 @@ export async function executeUserShellCommand(
     acknowledgementPath,
     environmentPath,
   })
+  const outputBoundary = Buffer.from(`\u001e${readinessPath}\u001f`, "utf8")
 
   let initialized = false
   let processHandle: SpawnedProcess | undefined
   const initializationDiagnostics: Buffer[] = []
   const stdout: Buffer[] = []
   const stderr: Buffer[] = []
-  let outputReaders: Promise<void>[] = []
+  let outputReaders: Array<{ completed: Promise<void>; boundaryReached: Promise<void> }> = []
 
   try {
     processHandle = dependencies.spawn(plan.argv, {
@@ -503,10 +555,11 @@ export async function executeUserShellCommand(
       stderr: "pipe",
     })
     outputReaders = [
-      collectOutput(processHandle.stdout, "stdout", () => initialized, initializationDiagnostics, stdout, request.onOutput),
-      collectOutput(processHandle.stderr, "stderr", () => initialized, initializationDiagnostics, stderr, request.onOutput),
+      collectOutput(processHandle.stdout, "stdout", outputBoundary, () => initialized, initializationDiagnostics, stdout, request.onOutput),
+      collectOutput(processHandle.stderr, "stderr", outputBoundary, () => initialized, initializationDiagnostics, stderr, request.onOutput),
     ]
     await waitForInitialization(processHandle, shell, readinessPath, request.signal, dependencies)
+    await Promise.all(outputReaders.map((reader) => reader.boundaryReached))
     initialized = true
     writeFileSync(acknowledgementPath, "ack", { mode: 0o600 })
 
@@ -523,7 +576,7 @@ export async function executeUserShellCommand(
         request.signal?.reason,
       )
     }
-    await Promise.all(outputReaders)
+    await Promise.all(outputReaders.map((reader) => reader.completed))
     const exitCode = outcome.exitCode ?? 1
     return {
       exitCode,
@@ -543,7 +596,7 @@ export async function executeUserShellCommand(
   } catch (error) {
     if (processHandle && !initialized) {
       await terminateProcessGroup(processHandle, shell, dependencies)
-      await Promise.all(outputReaders)
+      await Promise.all(outputReaders.map((reader) => reader.completed))
     }
     throw error
   } finally {
