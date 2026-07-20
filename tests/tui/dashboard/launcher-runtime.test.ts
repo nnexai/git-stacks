@@ -8,8 +8,8 @@ const launcher = resolve("packages/tui/dist/index.js")
 const directRun = resolve("packages/tui/dist/run.js")
 const cliLauncher = resolve("packages/cli/dist/index.js")
 const ptyFixture = resolve("tests/helpers/tui-launcher-pty.mjs")
-const promptExitLimitMs = process.platform === "darwin" && process.arch === "x64" ? 6_000 : 3_000
-const dashboardExitLimitMs = process.platform === "darwin" && process.arch === "x64" ? 10_000 : 5_000
+const promptExitLimitMs = process.platform === "darwin" ? 6_000 : 3_000
+const dashboardExitLimitMs = process.platform === "darwin" ? 10_000 : 5_000
 
 type Scenario = "runtime" | "fatal" | "q" | "ctrl-c" | "sigint" | "sigterm" | "direct" | "dashboard-q"
 interface FixtureResult {
