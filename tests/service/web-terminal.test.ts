@@ -21,7 +21,7 @@ import {
 const WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
 const WORKSPACE_B = "33333333-3333-4333-8333-333333333333"
 const REPOSITORY = "22222222-2222-4222-8222-222222222222"
-const slowMacIntel = process.platform === "darwin" && process.arch === "x64"
+const loadedMacRunner = process.platform === "darwin"
 const requiredShells = new Set((process.env.GIT_STACKS_REQUIRE_SHELLS ?? "").split(",").map((shell) => shell.trim()).filter(Boolean))
 
 function requireHostedShell(shell: "bash" | "zsh" | "fish", executable: string | null): void {
@@ -456,7 +456,7 @@ describe("service-owned web terminal", () => {
         } }),
       }, undefined, undefined, Date.now, undefined, undefined, 1_000, {
         ptyBootstrapDelayMs: 25,
-        ptyInitializationTimeoutMs: slowMacIntel ? 30_000 : 10_000,
+        ptyInitializationTimeoutMs: loadedMacRunner ? 30_000 : 10_000,
       })
 
       const terminal = await manager.create("browser-1", {
