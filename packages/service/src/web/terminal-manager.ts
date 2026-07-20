@@ -125,7 +125,7 @@ export function createPtyInitialization(
     if (originalZdotdir) {
       const sourceOriginal = (name: string) => [
         `if [[ -r ${shellQuote(join(originalZdotdir, name))} ]]; then`,
-        `  command source -- ${shellQuote(join(originalZdotdir, name))}`,
+        `  builtin source -- ${shellQuote(join(originalZdotdir, name))}`,
         "fi",
       ].join("\n")
       for (const name of [".zshenv", ".zprofile", ".zshrc"]) {

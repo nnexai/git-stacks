@@ -508,6 +508,7 @@ describe("service-owned web terminal", () => {
       "printf '\\033[0c'",
       "IFS= read -r -k 7 __gs_terminal_response",
       `printf '${profileMarker}\\n'`,
+      "function source { return 92 }",
       "PROMPT='$ '",
     ].join("\n"))
     const manager = new WebTerminalManager({
