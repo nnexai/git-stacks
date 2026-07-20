@@ -379,6 +379,8 @@ describe("service-owned web terminal", () => {
 
   test("answers POSIX terminal probes before injecting the private bootstrap", async () => {
     const writes: string[] = []
+    let capabilityResponseAt = 0
+    let bootstrapAt = 0
     let dataListener: (data: string) => void = () => undefined
     let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
     let spawnedArgv: string[] = []
@@ -389,7 +391,11 @@ describe("service-owned web terminal", () => {
         pid: 920_000,
         write(data) {
           writes.push(data)
-          if (data === "\u001b[?1;2c") return
+          if (data === "\u001b[?1;2c") {
+            capabilityResponseAt = Date.now()
+            return
+          }
+          bootstrapAt = Date.now()
           const readyPath = data.match(/> '([^']+\/ready)'/)?.[1]
           expect(readyPath).toBeDefined()
           writeFileSync(readyPath!, "ready")
@@ -410,7 +416,7 @@ describe("service-owned web terminal", () => {
       } }),
     }, undefined, undefined, Date.now, spawn, undefined, 1_000, {
       ptyInitializationTimeoutMs: 500,
-      ptyBootstrapDelayMs: 25,
+      ptyBootstrapDelayMs: 250,
     })
 
     const terminal = await manager.create("browser-1", {
@@ -425,6 +431,7 @@ describe("service-owned web terminal", () => {
     ])
     expect(writes[0]).toBe("\u001b[?1;2c")
     expect(writes[1]).toContain("__GS_PTY_OK_")
+    expect(bootstrapAt - capabilityResponseAt).toBeGreaterThanOrEqual(90)
     const { sent } = attach(manager, terminal.id)
     const output = sent
       .filter((item): item is Uint8Array => item instanceof Uint8Array)

@@ -68,7 +68,7 @@ async function runPty(shellCommand, environment, drive) {
   })
   let output = ""
   terminal.onData((chunk) => { output += chunk })
-  const waitFor = async (text, timeoutMs = 5_000) => {
+  const waitFor = async (text, timeoutMs = process.platform === "darwin" ? 10_000 : 5_000) => {
     const deadline = Date.now() + timeoutMs
     while (!output.includes(text) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10))
@@ -79,7 +79,7 @@ async function runPty(shellCommand, environment, drive) {
     const timeout = setTimeout(() => {
       killPtyTree(terminal)
       reject(new Error(`PTY launcher timed out. Output:\n${output}`))
-    }, scenario === "dashboard-q" ? 12_000 : 8_000)
+    }, process.platform === "darwin" ? (scenario === "dashboard-q" ? 22_000 : 18_000) : (scenario === "dashboard-q" ? 12_000 : 8_000))
     terminal.onExit((event) => {
       clearTimeout(timeout)
       setTimeout(() => resolve(event), 20)

@@ -35,6 +35,7 @@ export interface PtyProcess {
   cancelSequence?(): void
   releasePreAttachment?(): void
   outputObserved?(): boolean
+  outputIdleFor?(milliseconds: number): boolean
   suppressOutput?(): void
   resumeOutput?(): void
   write(data: string): void
@@ -182,8 +183,9 @@ async function waitForPtyInitialization(
     // private bootstrap become an accidental response to one of those reads.
     if (injectBootstrap) {
       const injectAt = Math.min(deadline, Date.now() + bootstrapDelayMs)
-      while (!processHandle.outputObserved?.() && Date.now() < injectAt) {
+      while (Date.now() < injectAt) {
         if (exited) throw new Error("Shell exited before PTY initialization completed")
+        if (processHandle.outputObserved?.() && (processHandle.outputIdleFor?.(100) ?? true)) break
         await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, injectAt - Date.now())))
       }
       if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
@@ -224,6 +226,7 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
   const pendingData: string[] = []
   let preAttachment = answerPrimaryDeviceAttributes
   let outputObserved = false
+  let lastOutputAt = 0
   let outputSuppressed = false
   let negotiationPending = ""
   let pendingExit: { exitCode: number; signal?: number } | undefined
@@ -234,6 +237,7 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
   }
   processHandle.onData((data) => {
     outputObserved = true
+    lastOutputAt = Date.now()
     if (!preAttachment) { emitData(data); return }
     let input = negotiationPending + data
     negotiationPending = ""
@@ -272,6 +276,7 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
       negotiationPending = ""
     },
     outputObserved: () => outputObserved,
+    outputIdleFor: (milliseconds) => outputObserved && Date.now() - lastOutputAt >= milliseconds,
     suppressOutput: () => {
       outputSuppressed = true
       negotiationPending = ""
