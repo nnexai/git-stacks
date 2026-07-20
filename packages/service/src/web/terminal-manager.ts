@@ -119,7 +119,28 @@ export function createPtyInitialization(
         const silentBody = `{ ${body}; } > /dev/null 2>&1`
         return `BASH_XTRACEFD=2; case \"\${BASH_XTRACEFD-}\" in 2) ${silentBody} ;; esac`
       })()
-  return { shell, root, readyPath, statusPathPrefix, bootstrap, environment: shell === "fish" ? {} : overlay.environment, ...(command === undefined ? {} : { command }) }
+  let initializationEnvironment = shell === "fish" ? {} : overlay.environment
+  if (shell === "zsh") {
+    const originalZdotdir = environment.ZDOTDIR || process.env.ZDOTDIR || environment.HOME || process.env.HOME
+    if (originalZdotdir) {
+      const sourceOriginal = (name: string) => [
+        `if [[ -r ${shellQuote(join(originalZdotdir, name))} ]]; then`,
+        `  command source -- ${shellQuote(join(originalZdotdir, name))}`,
+        "fi",
+      ].join("\n")
+      for (const name of [".zshenv", ".zprofile", ".zshrc"]) {
+        writeFileSync(join(root, name), `${sourceOriginal(name)}\nZDOTDIR=${shellQuote(root)}\n`, { mode: 0o600 })
+      }
+      writeFileSync(join(root, ".zlogin"), [
+        sourceOriginal(".zlogin"),
+        `ZDOTDIR=${shellQuote(originalZdotdir)}`,
+        bootstrap,
+        "",
+      ].join("\n"), { mode: 0o600 })
+      initializationEnvironment = { ...overlay.environment, ZDOTDIR: root }
+    }
+  }
+  return { shell, root, readyPath, statusPathPrefix, bootstrap, environment: initializationEnvironment, ...(command === undefined ? {} : { command }) }
 }
 
 function createPtyCommandInitialization(
@@ -175,6 +196,7 @@ async function waitForPtyInitialization(
   bootstrapDelayMs = 1_000,
 ): Promise<void> {
   let exited = false
+  let initialized = false
   const exitSubscription = processHandle.onExit(() => { exited = true })
   const deadline = Date.now() + timeoutMs
   try {
@@ -206,9 +228,17 @@ async function waitForPtyInitialization(
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 10))
     }
+    initialized = true
   } finally {
     processHandle.resumeOutput?.()
     exitSubscription.dispose()
+  }
+  if (initialized && injectBootstrap) {
+    // Initialization output is hidden so private bootstrap text cannot reach
+    // browser history. Ask Readline/ZLE to redraw after output resumes; the
+    // prompt may otherwise have been rendered entirely inside that hidden
+    // interval, leaving an attached terminal blank with input still active.
+    processHandle.write("\u000c")
   }
 }
 
@@ -222,6 +252,14 @@ function ptyInitializationLaunch(
   // after the user's real config but before Fish starts reading terminal input.
   if (initialization.shell === "fish") {
     return { argv: [...argv, "--init-command", initialization.bootstrap], injectBootstrap: false }
+  }
+  if (
+    initialization.shell === "zsh"
+    && (argv.includes("-l") || argv.includes("--login"))
+    && !argv.includes("-f")
+    && initialization.environment.ZDOTDIR === initialization.root
+  ) {
+    return { argv: [...argv], injectBootstrap: false }
   }
   return { argv: [...argv], injectBootstrap: true }
 }

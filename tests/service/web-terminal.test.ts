@@ -396,6 +396,7 @@ describe("service-owned web terminal", () => {
             capabilityResponseAt = Date.now()
             return
           }
+          if (data === "\u000c") return
           bootstrapWrites += 1
           if (bootstrapWrites === 1) {
             bootstrapAt = Date.now()
@@ -415,7 +416,7 @@ describe("service-owned web terminal", () => {
       buildAll: async () => [],
       buildWorkspace: async () => { throw new Error("unused") },
       resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
-        argv: ["/bin/zsh", "-l", "-i"], cwd: process.cwd(), environment: {},
+        argv: ["/bin/zsh", "-f", "-i"], cwd: process.cwd(), environment: {},
         initialization: { kind: "post-init-environment", shell: "zsh" },
         ports: {}, configuration: { shell: true }, redacted: [],
       } }),
@@ -432,11 +433,12 @@ describe("service-owned web terminal", () => {
       rows: 24,
     })
     expect(spawnedArgv).toEqual([
-      "/bin/zsh", "-l", "-i",
+      "/bin/zsh", "-f", "-i",
     ])
     expect(writes[0]).toBe("\u001b[?1;2c")
     expect(writes[1]).toContain("__GS_PTY_OK_")
     expect(writes[2]).toContain("__GS_PTY_OK_")
+    expect(writes[3]).toBe("\u000c")
     expect(bootstrapAt - capabilityResponseAt).toBeGreaterThanOrEqual(90)
     const { sent } = attach(manager, terminal.id)
     const output = sent
@@ -479,15 +481,71 @@ describe("service-owned web terminal", () => {
         cols: 80,
         rows: 24,
       })
-      const { sent } = attach(manager, terminal.id)
-      await sleep(50)
+      const { sent, socket } = attach(manager, terminal.id)
+      const roundtripMarker = `WEB_TERMINAL_ROUNDTRIP_${fixture.family}`
+      manager.message(socket, JSON.stringify({ type: "input", data: `printf '${roundtripMarker}\\n'\r` }))
+      await waitFor(() => sent.some((item) => item instanceof Uint8Array
+        && new TextDecoder().decode(item.slice(9)).includes(roundtripMarker)), loadedMacRunner ? 10_000 : 3_000)
       const output = sent
         .filter((item): item is Uint8Array => item instanceof Uint8Array)
         .map((frame) => new TextDecoder().decode(frame.slice(9)))
         .join("")
+      expect(output).toContain(roundtripMarker)
       expect(output).not.toContain("BASH_XTRACEFD")
       expect(output).not.toContain("__GS_PTY_")
       await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+    }
+  })
+
+  test("initializes a login zsh through startup files and preserves interactive output", async () => {
+    const zsh = which("zsh")
+    requireHostedShell("zsh", zsh)
+    if (!zsh) return
+    const root = mkdtempSync(join(tmpdir(), "git-stacks-zsh-login-"))
+    const profileMarker = "ZSH_LOGIN_PROFILE_READY"
+    const roundtripMarker = "ZSH_LOGIN_ROUNDTRIP_READY"
+    writeFileSync(join(root, ".zshrc"), [
+      "printf '\\033[0c'",
+      "IFS= read -r -k 7 __gs_terminal_response",
+      `printf '${profileMarker}\\n'`,
+      "PROMPT='$ '",
+    ].join("\n"))
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: [zsh, "-l", "-i"], cwd: process.cwd(),
+        environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, ZDOTDIR: root },
+        initialization: { kind: "post-init-environment", shell: "zsh" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, undefined, undefined, 1_000, {
+      ptyInitializationTimeoutMs: loadedMacRunner ? 30_000 : 10_000,
+    })
+
+    try {
+      const terminal = await manager.create("browser-1", {
+        workspace_id: WORKSPACE_A,
+        repository_id: REPOSITORY,
+        expected_revision: "1",
+        cols: 80,
+        rows: 24,
+      })
+      const { sent, socket } = attach(manager, terminal.id)
+      manager.message(socket, JSON.stringify({ type: "input", data: `printf '${roundtripMarker}\\n'\r` }))
+      await waitFor(() => sent.some((item) => item instanceof Uint8Array
+        && new TextDecoder().decode(item.slice(9)).includes(roundtripMarker)), loadedMacRunner ? 10_000 : 3_000)
+      const output = sent
+        .filter((item): item is Uint8Array => item instanceof Uint8Array)
+        .map((frame) => new TextDecoder().decode(frame.slice(9)))
+        .join("")
+      expect(output).toContain(profileMarker)
+      expect(output).toContain(roundtripMarker)
+      expect(output).not.toContain("__GS_PTY_")
+      await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+    } finally {
+      await manager.stop()
+      rmSync(root, { recursive: true, force: true })
     }
   })
 
