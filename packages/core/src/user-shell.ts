@@ -416,20 +416,79 @@ async function processGroupGoneWithin(
   return true
 }
 
+function darwinDescendantPids(rootPid: number): number[] {
+  if (process.platform !== "darwin") return []
+  const result = spawnSync(["/bin/ps", "-axo", "pid=,ppid="])
+  if (result.exitCode !== 0) return []
+  const children = new Map<number, number[]>()
+  for (const line of result.stdout.toString("utf8").split("\n")) {
+    const match = line.trim().match(/^(\d+)\s+(\d+)$/)
+    if (!match) continue
+    const pid = Number(match[1])
+    const parentPid = Number(match[2])
+    children.set(parentPid, [...(children.get(parentPid) ?? []), pid])
+  }
+  const descendants: number[] = []
+  const pending = [...(children.get(rootPid) ?? [])]
+  while (pending.length) {
+    const pid = pending.shift()!
+    descendants.push(pid)
+    pending.push(...(children.get(pid) ?? []))
+  }
+  return descendants
+}
+
+function signalOwnedProcesses(pids: readonly number[], signal: NodeJS.Signals): void {
+  for (const pid of [...pids].reverse()) {
+    try { process.kill(pid, signal) } catch { /* already exited */ }
+  }
+}
+
+function ownedProcessExists(pid: number): boolean {
+  try { process.kill(pid, 0) } catch { return false }
+  if (process.platform !== "darwin") return true
+  const result = spawnSync(["/bin/ps", "-o", "stat=", "-p", String(pid)])
+  if (result.exitCode !== 0) return false
+  const state = result.stdout.toString("utf8").trim()
+  return !state.startsWith("Z") && !state.includes("E")
+}
+
+async function ownedProcessesGoneWithin(
+  pids: readonly number[],
+  milliseconds: number,
+  dependencies: UserShellExecutionDependencies,
+): Promise<boolean> {
+  if (!pids.length) return true
+  const deadline = dependencies.now() + milliseconds
+  while (pids.some(ownedProcessExists)) {
+    const remaining = deadline - dependencies.now()
+    if (remaining <= 0) return false
+    await dependencies.wait(Math.min(INITIALIZATION_POLL_MS, remaining))
+  }
+  return true
+}
+
 async function terminateProcessGroup(
   processHandle: SpawnedProcess,
   shell: ValidatedUserShell,
   dependencies: UserShellExecutionDependencies,
 ): Promise<void> {
+  // Interactive Bash on Darwin can put background jobs in their own process
+  // groups. Capture the owned tree while parentage is still authoritative.
+  const ownedDescendants = darwinDescendantPids(processHandle.pid)
   processHandle.killGroup("SIGTERM")
+  signalOwnedProcesses(ownedDescendants, "SIGTERM")
   const leaderExitedAfterTerm = await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
   const groupExitedAfterTerm = await processGroupGoneWithin(processHandle.pid, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
-  if (leaderExitedAfterTerm && groupExitedAfterTerm) return
+  const descendantsExitedAfterTerm = await ownedProcessesGoneWithin(ownedDescendants, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
+  if (leaderExitedAfterTerm && groupExitedAfterTerm && descendantsExitedAfterTerm) return
   processHandle.killGroup("SIGKILL")
+  signalOwnedProcesses(ownedDescendants, "SIGKILL")
   const leaderExitedAfterKill = leaderExitedAfterTerm
     || await exitWithin(processHandle, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
   const groupExitedAfterKill = await processGroupGoneWithin(processHandle.pid, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
-  if (leaderExitedAfterKill && groupExitedAfterKill) return
+  const descendantsExitedAfterKill = await ownedProcessesGoneWithin(ownedDescendants, USER_SHELL_TERMINATION_GRACE_MS, dependencies)
+  if (leaderExitedAfterKill && groupExitedAfterKill && descendantsExitedAfterKill) return
   fail(
     "cleanup",
     shell.executable,
