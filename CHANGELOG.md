@@ -8,6 +8,27 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.6] - 2026-07-20
+
+### Fixed
+
+- Login zsh terminals now apply the service environment through temporary startup files instead of injecting private bootstrap commands through terminal input, preventing profile reads from consuming the bootstrap or exiting the shell.
+- Bash and fallback zsh terminals redraw after hidden initialization so an attached web terminal does not remain blank with an active cursor.
+- Interactive shell initialization now allows slow user and system startup configuration to settle before reporting a timeout.
+
+### Validation
+
+- A real macOS login-zsh fixture performs terminal capability negotiation during `.zshrc`, completes initialization, and executes a typed command after browser attachment without exposing private bootstrap text.
+- Required Bash, zsh, and Fish shell-host tests and the complete Node/TUI/package matrix pass on Linux, Apple silicon macOS, and Intel macOS runners.
+
+### Release Candidate
+
+This candidate supersedes rc.5 with the cold-start login-zsh fix and post-attachment output verification.
+
+0.22.0-rc.6 / v0.22.0-rc.6; npm prerelease publication uses next
+
+---
+
 ## [0.22.0-rc.5] - 2026-07-20
 
 ### Fixed
