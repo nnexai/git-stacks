@@ -103,13 +103,14 @@ const DEFAULT_EXECUTION_DEPENDENCIES: UserShellExecutionDependencies = {
     try {
       process.kill(-pid, 0)
       if (process.platform === "darwin") {
-        // Darwin keeps exited descendants visible to kill(2) while they are
-        // zombies. They cannot be signalled and do not represent live work.
+        // Darwin keeps terminal descendants visible to kill(2) while they are
+        // zombies (Z) or irreversibly exiting (E). Neither represents live work.
         const result = spawnSync(["/bin/ps", "-axo", "pgid=,stat="])
         if (result.exitCode === 0) {
           return result.stdout.toString("utf8").split("\n").some((line) => {
             const match = line.trim().match(/^(\d+)\s+(\S+)/)
-            return Number(match?.[1]) === pid && !match?.[2]?.startsWith("Z")
+            const state = match?.[2] ?? ""
+            return Number(match?.[1]) === pid && !state.startsWith("Z") && !state.includes("E")
           })
         }
       }
@@ -565,7 +566,12 @@ export async function executeUserShellCommand(
 
     const outcome = await waitForCommandExit(processHandle, request.signal)
     if (outcome.cancelled) {
-      await terminateProcessGroup(processHandle, shell, dependencies)
+      let cleanupError: unknown
+      try {
+        await terminateProcessGroup(processHandle, shell, dependencies)
+      } catch (error) {
+        cleanupError = error
+      }
       fail(
         "cancellation",
         shell.executable,
@@ -573,7 +579,7 @@ export async function executeUserShellCommand(
         "execution-cancelled",
         "User shell command was cancelled.",
         "Retry the command when cancellation is no longer requested.",
-        request.signal?.reason,
+        cleanupError ?? request.signal?.reason,
       )
     }
     await Promise.all(outputReaders.map((reader) => reader.completed))

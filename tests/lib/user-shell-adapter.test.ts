@@ -235,6 +235,44 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     expect(signals).toEqual(["SIGTERM", "SIGKILL"])
   })
 
+  test("preserves cancellation as the primary diagnostic when cleanup cannot be confirmed", async () => {
+    if (!existsSync(ADAPTER_PATH)) return
+    const { executeUserShellCommand, UserShellError } = await import("../../packages/core/src/user-shell")
+    const controller = new AbortController()
+    controller.abort(new Error("test cancellation"))
+    let now = 0
+    const signals: Array<NodeJS.Signals | number> = []
+
+    const execution = executeUserShellCommand({
+      command: hostileCommand,
+      cwd: fixtureRoot,
+      shellEnvironment: { SHELL: shellFixtures[0].executable },
+      signal: controller.signal,
+    }, {
+      now: () => now,
+      wait: async (milliseconds) => { now += milliseconds },
+      processGroupExists: () => true,
+      spawn: (argv) => {
+        writeFileSync(argv.at(-4)!, "ready", "utf8")
+        return {
+          pid: 4246,
+          exited: new Promise<number>(() => undefined),
+          stdout: null,
+          stderr: null,
+          kill: () => true,
+          killGroup: (signal) => { signals.push(signal ?? "SIGTERM"); return true },
+          unref: () => undefined,
+        }
+      },
+    })
+
+    const error = await execution.catch((value: unknown) => value)
+    expect(error).toMatchObject({ diagnostic: { category: "cancellation", stage: "execution-cancelled" } })
+    expect(error).toBeInstanceOf(UserShellError)
+    expect((error as Error).cause).toMatchObject({ diagnostic: { category: "cleanup", stage: "process-group-exit" } })
+    expect(signals).toEqual(["SIGTERM", "SIGKILL"])
+  })
+
   test("does not apply the initialization timeout after the readiness handshake", async () => {
     if (!existsSync(ADAPTER_PATH)) return
     const { executeUserShellCommand } = await import("../../packages/core/src/user-shell")

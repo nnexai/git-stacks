@@ -293,7 +293,8 @@ describe("host user-shell fixtures", () => {
     const alive = (pid: number) => {
       try { process.kill(pid, 0) } catch { return false }
       const state = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })
-      return state.status === 0 && !state.stdout.trim().startsWith("Z")
+      const processState = state.stdout.trim()
+      return state.status === 0 && !processState.startsWith("Z") && !processState.includes("E")
     }
     await waitFor(() => pids.every((pid) => !alive(pid)), "cancelled process tree still has live descendants")
     receipt.process_tree.case_count = 1

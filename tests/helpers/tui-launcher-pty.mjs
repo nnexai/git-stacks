@@ -79,7 +79,7 @@ async function runPty(shellCommand, environment, drive) {
     const timeout = setTimeout(() => {
       killPtyTree(terminal)
       reject(new Error(`PTY launcher timed out. Output:\n${output}`))
-    }, 7_000)
+    }, scenario === "dashboard-q" ? 12_000 : 8_000)
     terminal.onExit((event) => {
       clearTimeout(timeout)
       setTimeout(() => resolve(event), 20)

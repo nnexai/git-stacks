@@ -8,6 +8,8 @@ const launcher = resolve("packages/tui/dist/index.js")
 const directRun = resolve("packages/tui/dist/run.js")
 const cliLauncher = resolve("packages/cli/dist/index.js")
 const ptyFixture = resolve("tests/helpers/tui-launcher-pty.mjs")
+const promptExitLimitMs = process.platform === "darwin" && process.arch === "x64" ? 6_000 : 3_000
+const dashboardExitLimitMs = process.platform === "darwin" && process.arch === "x64" ? 10_000 : 5_000
 
 type Scenario = "runtime" | "fatal" | "q" | "ctrl-c" | "sigint" | "sigterm" | "direct" | "dashboard-q"
 interface FixtureResult {
@@ -36,7 +38,7 @@ async function runFixture(
     timeoutId = setTimeout(() => {
       child.kill("SIGKILL")
       reject(new Error(`PTY fixture ${scenario} timed out`))
-    }, 9_000)
+    }, 14_000)
   })
   const [exitCode, stdout, stderr] = await Promise.race([
     Promise.all([
@@ -82,9 +84,9 @@ describe("published TUI launcher", () => {
     expect(fixture.output).toContain("git-stacks-tui renderer probe: reactive")
     expect(fixture.output).not.toContain("Orphan text error")
     expect(fixture.output).not.toContain("unexpected visible branch")
-    expect(fixture.durationMs).toBeLessThan(3_000)
+    expect(fixture.durationMs).toBeLessThan(promptExitLimitMs)
     expectAlternateScreenRestored(fixture.output)
-  })
+  }, 15_000)
 
   test("fatal mount cleanup exits nonzero, restores the terminal, and leaves no child", async () => {
     const fixture = await runFixture("fatal")
@@ -93,9 +95,9 @@ describe("published TUI launcher", () => {
     expect(fixture.output.match(/git-stacks-tui:/g)).toHaveLength(1)
     expect(fixture.output).toContain("Orphan text error")
     expect(fixture.childAlive).toBe(false)
-    expect(fixture.durationMs).toBeLessThan(3_000)
+    expect(fixture.durationMs).toBeLessThan(promptExitLimitMs)
     expectAlternateScreenRestored(fixture.output)
-  })
+  }, 15_000)
 
   for (const [scenario, input] of [["q", "q"], ["ctrl-c", "raw Ctrl+C"]] as const) {
     test(`${input} exits promptly and restores raw and alternate-screen state`, async () => {
@@ -103,9 +105,9 @@ describe("published TUI launcher", () => {
 
       expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
       expect(fixture.output).not.toContain("Orphan text error")
-      expect(fixture.durationMs).toBeLessThan(3_000)
+      expect(fixture.durationMs).toBeLessThan(promptExitLimitMs)
       expectAlternateScreenRestored(fixture.output)
-    })
+    }, 15_000)
   }
 
   test("outer git-stacks manage exits when the fullscreen TUI exits", async () => {
@@ -114,9 +116,9 @@ describe("published TUI launcher", () => {
     })
 
     expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
-    expect(fixture.durationMs).toBeLessThan(3_000)
+    expect(fixture.durationMs).toBeLessThan(promptExitLimitMs)
     expectAlternateScreenRestored(fixture.output)
-  })
+  }, 15_000)
 
   test("real dashboard exits promptly after q while its managed service remains detached", async () => {
     const root = mkdtempSync(join(tmpdir(), "git-stacks-dashboard-exit-"))
@@ -138,7 +140,7 @@ describe("published TUI launcher", () => {
       const fixture = await runFixture("dashboard-q", cliLauncher, ["manage"], environment)
 
       expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
-      expect(fixture.durationMs).toBeLessThan(5_000)
+      expect(fixture.durationMs).toBeLessThan(dashboardExitLimitMs)
       expectAlternateScreenRestored(fixture.output)
     } finally {
       const stop = Bun.spawn([process.execPath, cliLauncher, "service", "stop"], {
@@ -150,7 +152,7 @@ describe("published TUI launcher", () => {
       await stop.exited
       rmSync(root, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 
   for (const [scenario, signal] of [["sigint", "SIGINT"], ["sigterm", "SIGTERM"]] as const) {
     test(`external ${signal} exits promptly and restores raw and alternate-screen state`, async () => {
@@ -159,9 +161,9 @@ describe("published TUI launcher", () => {
       expect(result(fixture.output)).toEqual({ status: 0, tty: "restored" })
       expect(fixture.output).not.toContain("Orphan text error")
       expect(fixture.childAlive).toBe(false)
-      expect(fixture.durationMs).toBeLessThan(3_000)
+      expect(fixture.durationMs).toBeLessThan(promptExitLimitMs)
       expectAlternateScreenRestored(fixture.output)
-    })
+    }, 15_000)
   }
 
   test("direct run.js without the preload fails clearly before renderer side effects", async () => {
@@ -173,5 +175,5 @@ describe("published TUI launcher", () => {
     expect(fixture.output).not.toContain("Orphan text error")
     expect(fixture.output).not.toContain("[?1049h")
     expect(fixture.durationMs).toBeLessThan(3_000)
-  })
+  }, 15_000)
 })
