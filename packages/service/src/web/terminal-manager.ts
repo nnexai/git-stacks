@@ -191,7 +191,7 @@ async function waitForPtyReady(
 async function waitForPtyInitialization(
   processHandle: PtyProcess,
   initialization: ReturnType<typeof createPtyInitialization>,
-  timeoutMs = 10_000,
+  timeoutMs = 30_000,
   injectBootstrap = true,
   bootstrapDelayMs = 1_000,
 ): Promise<void> {

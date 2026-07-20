@@ -471,7 +471,7 @@ describe("service-owned web terminal", () => {
         } }),
       }, undefined, undefined, Date.now, undefined, undefined, 1_000, {
         ptyBootstrapDelayMs: loadedMacRunner ? 1_000 : 25,
-        ptyInitializationTimeoutMs: loadedMacRunner ? 30_000 : 10_000,
+        ptyInitializationTimeoutMs: 30_000,
       })
 
       const terminal = await manager.create("browser-1", {
@@ -523,7 +523,7 @@ describe("service-owned web terminal", () => {
         ports: {}, configuration: { shell: true }, redacted: [],
       } }),
     }, undefined, undefined, Date.now, undefined, undefined, 1_000, {
-      ptyInitializationTimeoutMs: loadedMacRunner ? 30_000 : 10_000,
+      ptyInitializationTimeoutMs: 30_000,
     })
 
     try {
