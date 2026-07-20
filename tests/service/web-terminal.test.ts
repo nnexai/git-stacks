@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { spawnSync } from "node:child_process"
+import { which } from "../../packages/core/src/node-runtime"
 import { UserShellError } from "../../packages/core/src/user-shell"
 import type { Signal, TerminalLaunchResolution } from "../../packages/protocol/src/service"
 import { createWorkspaceLifecycleAdmission } from "../../packages/service/src/policy/workspace-lifecycle-admission"
@@ -124,7 +125,7 @@ describe("service-owned web terminal", () => {
     const fixtures = ([
       {
         family: "bash" as const,
-        executable: "/usr/bin/bash",
+        executable: which("bash"),
         profileName: "bashrc",
         profile: [
           "shopt -s expand_aliases",
@@ -142,7 +143,7 @@ describe("service-owned web terminal", () => {
       },
       {
         family: "zsh" as const,
-        executable: "/usr/bin/zsh",
+        executable: which("zsh"),
         profileName: ".zshrc",
         profile: [
           "alias export=false",
@@ -159,7 +160,7 @@ describe("service-owned web terminal", () => {
       },
       {
         family: "fish" as const,
-        executable: "/usr/bin/fish",
+        executable: which("fish"),
         profileName: "fish/config.fish",
         profile: [
           "function source; return 92; end",
@@ -168,7 +169,7 @@ describe("service-owned web terminal", () => {
         argv: (_profile: string, command: string) => ["--interactive", "--command", command],
         environment: (root: string) => ({ XDG_CONFIG_HOME: root }),
       },
-    ]).filter(({ executable }) => existsSync(executable))
+    ]).filter((fixture): fixture is typeof fixture & { executable: string } => fixture.executable !== null)
 
     expect(fixtures.map(({ family }) => family)).toContain("bash")
     for (const fixture of fixtures) {
@@ -195,6 +196,8 @@ describe("service-owned web terminal", () => {
   })
 
   test("creates POSIX PTY readiness only after the complete overlay verifies", () => {
+    const bash = which("bash")
+    expect(bash).not.toBeNull()
     const root = mkdtempSync(join(tmpdir(), "git-stacks-hostile-readiness-"))
     const profilePath = join(root, "bashrc")
     writeFileSync(profilePath, [
@@ -203,7 +206,7 @@ describe("service-owned web terminal", () => {
     ].join("\n"))
     const initialization = createPtyInitialization("bash", { AUTHORITATIVE_OVERLAY: "service-wins" })
     try {
-      spawnSync("/usr/bin/bash", ["--noprofile", "--rcfile", profilePath, "-i", "-c", initialization.bootstrap], {
+      spawnSync(bash!, ["--noprofile", "--rcfile", profilePath, "-i", "-c", initialization.bootstrap], {
         encoding: "utf8",
         env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...initialization.environment },
         timeout: 3_000,
@@ -219,7 +222,7 @@ describe("service-owned web terminal", () => {
     const fixtures = ([
       {
         family: "bash" as const,
-        executable: "/usr/bin/bash",
+        executable: which("bash"),
         profileName: "bashrc",
         profile: [
           "exec 9>&2",
@@ -240,7 +243,7 @@ describe("service-owned web terminal", () => {
       },
       {
         family: "zsh" as const,
-        executable: "/usr/bin/zsh",
+        executable: which("zsh"),
         profileName: ".zshrc",
         profile: [
           "set -x",
@@ -258,7 +261,7 @@ describe("service-owned web terminal", () => {
       },
       {
         family: "fish" as const,
-        executable: "/usr/bin/fish",
+        executable: which("fish"),
         profileName: "fish/config.fish",
         profile: [
           "set -g fish_trace 1",
@@ -268,7 +271,7 @@ describe("service-owned web terminal", () => {
         argv: (_profile: string, command: string) => ["--interactive", "--command", command],
         environment: (root: string) => ({ XDG_CONFIG_HOME: root }),
       },
-    ]).filter(({ executable }) => existsSync(executable))
+    ]).filter((fixture): fixture is typeof fixture & { executable: string } => fixture.executable !== null)
 
     expect(fixtures.map(({ family }) => family)).toContain("bash")
     expect(fixtures.map(({ family }) => family)).toContain("fish")
@@ -363,8 +366,99 @@ describe("service-owned web terminal", () => {
     expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
   })
 
+  test("answers POSIX terminal probes before injecting the private bootstrap", async () => {
+    const writes: string[] = []
+    let dataListener: (data: string) => void = () => undefined
+    let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
+    let spawnedArgv: string[] = []
+    const spawn: PtyFactory = (argv) => {
+      spawnedArgv = argv
+      queueMicrotask(() => dataListener("startup-prefix\u001b[0cstartup-suffix"))
+      return {
+        pid: 920_000,
+        write(data) {
+          writes.push(data)
+          if (data === "\u001b[?1;2c") return
+          const readyPath = data.match(/> '([^']+\/ready)'/)?.[1]
+          expect(readyPath).toBeDefined()
+          writeFileSync(readyPath!, "ready")
+        },
+        resize: () => undefined,
+        kill: () => queueMicrotask(() => exitListener({ exitCode: 0 })),
+        onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
+        onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/zsh", "-l", "-i"], cwd: process.cwd(), environment: {},
+        initialization: { kind: "post-init-environment", shell: "zsh" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 1_000, {
+      ptyInitializationTimeoutMs: 500,
+      ptyBootstrapDelayMs: 25,
+    })
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    expect(spawnedArgv).toEqual([
+      "/bin/sh", "-c", "/bin/stty -echo; exec \"$@\"", "git-stacks-pty-init", "/bin/zsh", "-l", "-i",
+    ])
+    expect(writes[0]).toBe("\u001b[?1;2c")
+    expect(writes[1]).toContain("__GS_PTY_OK_")
+    const { sent } = attach(manager, terminal.id)
+    const output = sent
+      .filter((item): item is Uint8Array => item instanceof Uint8Array)
+      .map((frame) => new TextDecoder().decode(frame.slice(9)))
+      .join("")
+    expect(output).toContain("startup-prefix")
+    expect(output).toContain("startup-suffix")
+    expect(output).not.toContain("\u001b[0c")
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+  })
+
+  test("does not replay the Bash bootstrap as terminal input", async () => {
+    const bash = which("bash")
+    if (!bash) return
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: [bash, "--noprofile", "--norc", "-i"], cwd: process.cwd(),
+        environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", PS1: "$ " },
+        initialization: { kind: "post-init-environment", shell: "bash" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, undefined, undefined, 1_000, { ptyBootstrapDelayMs: 25 })
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    const { sent } = attach(manager, terminal.id)
+    await sleep(50)
+    const output = sent
+      .filter((item): item is Uint8Array => item instanceof Uint8Array)
+      .map((frame) => new TextDecoder().decode(frame.slice(9)))
+      .join("")
+    expect(output).not.toContain("BASH_XTRACEFD")
+    expect(output).not.toContain("__GS_PTY_")
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+  })
+
   test("removes fish initialization value files when command PTY allocation throws", async () => {
-    const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
+    const fish = which("fish") ?? undefined
     expect(fish).toBeDefined()
     const previousShell = process.env.SHELL
     const sentinel = "phase-124-command-allocation-secret"
@@ -405,7 +499,7 @@ describe("service-owned web terminal", () => {
   })
 
   test("reaches a real Fish prompt before browser terminal capability replies are available", async () => {
-    const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
+    const fish = which("fish") ?? undefined
     if (!fish) return
     const promptMarker = "__GIT_STACKS_FISH_PROMPT__"
     const manager = new WebTerminalManager({

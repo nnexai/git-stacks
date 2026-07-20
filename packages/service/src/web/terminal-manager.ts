@@ -109,7 +109,7 @@ export function createPtyInitialization(
             `${key}=\"$${shadow}\"`,
             `case \"\${${key}-}\" in \"$${shadow}\") ;; *) ${ok}= ;; esac`,
           ]),
-          `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
+          `case \"$${ok}\" in 1) /bin/stty echo 2>/dev/null; > ${shellQuote(readyPath)} ;; esac`,
         ].join("; ")
         if (shell === "zsh") return `{ ${body}; } > /dev/null 2>&1`
         const silentBody = `{ ${body}; } > /dev/null 2>&1`
@@ -168,12 +168,24 @@ async function waitForPtyInitialization(
   initialization: ReturnType<typeof createPtyInitialization>,
   timeoutMs = 10_000,
   injectBootstrap = true,
+  bootstrapDelayMs = 200,
 ): Promise<void> {
   let exited = false
   const subscription = processHandle.onExit(() => { exited = true })
-  if (injectBootstrap) processHandle.write(`${initialization.bootstrap}\r`)
   const deadline = Date.now() + timeoutMs
   try {
+    // Bash and zsh profiles can read from the terminal while they initialize
+    // (prompt frameworks commonly issue capability probes). Do not let the
+    // private bootstrap become an accidental response to one of those reads.
+    if (injectBootstrap) {
+      const injectAt = Math.min(deadline, Date.now() + bootstrapDelayMs)
+      while (Date.now() < injectAt) {
+        if (exited) throw new Error("Shell exited before PTY initialization completed")
+        await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, injectAt - Date.now())))
+      }
+      if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
+      processHandle.write(`${initialization.bootstrap}\r`)
+    }
     while (!existsSync(initialization.readyPath)) {
       if (exited) throw new Error("Shell exited before PTY initialization completed")
       if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
@@ -192,9 +204,16 @@ function ptyInitializationLaunch(
   // input. terminal.create cannot attach xterm until initialization completes,
   // so writing the bootstrap through the PTY deadlocks. --init-command runs
   // after the user's real config but before Fish starts reading terminal input.
-  return initialization.shell === "fish"
-    ? { argv: [...argv, "--init-command", initialization.bootstrap], injectBootstrap: false }
-    : { argv: [...argv], injectBootstrap: true }
+  if (initialization.shell === "fish") {
+    return { argv: [...argv, "--init-command", initialization.bootstrap], injectBootstrap: false }
+  }
+  // The kernel echoes PTY input before shell redirections can silence it.
+  // Disable echo before exec so the injected bootstrap never reaches replay;
+  // the bootstrap restores echo immediately before publishing readiness.
+  return {
+    argv: ["/bin/sh", "-c", "/bin/stty -echo; exec \"$@\"", "git-stacks-pty-init", ...argv],
+    injectBootstrap: true,
+  }
 }
 
 const PRIMARY_DEVICE_ATTRIBUTES_QUERY = "\u001b[0c"
@@ -311,6 +330,7 @@ export type WorkspaceTerminalCloseResult =
 export type WebTerminalManagerTiming = {
   launchResolutionTimeoutMs?: number
   ptyInitializationTimeoutMs?: number
+  ptyBootstrapDelayMs?: number
   setTimeout?: (callback: () => void, delayMs: number) => unknown
   clearTimeout?: (handle: unknown) => void
 }
@@ -439,11 +459,17 @@ export class WebTerminalManager {
               cols: input.cols,
               rows: input.rows,
               name: "xterm-256color",
-            }), initialization?.shell === "fish")
+            }), initialization !== undefined)
             if (initialization) {
               const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
               try {
-                await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs, initializationLaunch.injectBootstrap)
+                await waitForPtyInitialization(
+                  spawned,
+                  initialization,
+                  this.timing.ptyInitializationTimeoutMs,
+                  initializationLaunch.injectBootstrap,
+                  this.timing.ptyBootstrapDelayMs,
+                )
               } catch (error) {
                 // A shell profile can exit during initialization (for example
                 // after a failed user-level `cd`). One bounded TERM/KILL attempt
