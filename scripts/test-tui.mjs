@@ -2,7 +2,11 @@ import { spawn } from "node:child_process"
 import { globSync } from "node:fs"
 
 const files = globSync("tests/tui/dashboard/**/*.test.{ts,tsx}").sort()
-const concurrency = Math.min(4, files.length)
+// GitHub's Intel macOS runners become CPU-starved when several Bun/OpenTUI
+// processes initialize together, obscuring the launcher lifecycle assertions.
+const concurrency = process.platform === "darwin" && process.arch === "x64"
+  ? 1
+  : Math.min(4, files.length)
 let next = 0
 let failed = false
 let aborted = false
