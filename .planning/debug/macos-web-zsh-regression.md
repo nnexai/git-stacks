@@ -20,7 +20,7 @@ updated: 2026-07-20
 - hypothesis: Commit `b20ed830` introduced the first-bad mechanism: interactive PTY creation now writes a readiness bootstrap to zsh input and blocks browser attachment until that input creates a private ready file. Real zsh startup can require or consume terminal traffic before it accepts the bootstrap, creating a circular pre-attachment dependency.
 - test: Build a diagnostic canary that bypasses only the interactive post-init handshake and otherwise retains the v0.22 terminal lifecycle. Compare it on the same Mac against rc.6 before designing the final authority-preserving mechanism.
 - expecting: The bypass canary restores the prompt and command roundtrip across an explicit service restart, proving the handshake rather than unrelated v0.22 lifecycle work is causal.
-- next_action: Add redacted phase diagnostics and the narrow interactive-handshake bypass canary without changing configured-command execution.
+- next_action: Run the pushed bypass canary on the affected Mac and compare initial launch plus explicit service restart results against rc.6.
 - reasoning_checkpoint: Real same-host version testing supersedes the synthetic hosted fixture as the authoritative evidence.
 - tdd_checkpoint: false
 
@@ -41,6 +41,12 @@ updated: 2026-07-20
 - timestamp: 2026-07-20T00:00:04+02:00
   observation: The known-good implementation directly spawned the same login-interactive shell with the resolved environment and immediately created the browser-visible session. The v0.22 snapshot already includes the complete effective environment in the initial spawn environment before the post-init handshake reapplies it.
   implication: A narrow handshake bypass is a valid causal probe and does not remove the effective environment from the spawned process; it only relaxes the Phase 124 post-profile precedence guarantee for the diagnostic canary.
+- timestamp: 2026-07-20T00:00:05+02:00
+  observation: Hosted run 29744016446 reproduced `Shell PTY initialization exceeded 30000ms` on the default handshake path in the Node 24 Apple Silicon macOS job. The Node 24 macOS Intel job and required macOS shell-host job passed. The separate optional Bun TUI Intel failure was an existing dashboard-output assertion and did not exercise the canary switch.
+  implication: Hosted macOS independently confirms that the retained default handshake remains capable of timing out. This does not invalidate the diagnostic bypass; the bypass must be explicitly enabled and still requires same-host verification on the affected Mac.
+- timestamp: 2026-07-20T00:00:06+02:00
+  observation: Canary branch `canary/macos-pty-handshake-bypass` at `fec4edea` passes the complete 34-test web-terminal suite locally, all workspace typechecks, architecture/dependency checks, package builds, runtime audit, and the redacted diagnostic assertions.
+  implication: The canary is ready for the decisive real-Mac test without being promoted as a release candidate.
 
 ## Eliminated
 
