@@ -1,6 +1,6 @@
 {
   "name": "@git-stacks/tui",
-  "version": "0.22.0-rc.4",
+  "version": "0.22.0-rc.5",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -31,10 +31,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@git-stacks/client": "0.22.0-rc.4",
-    "@git-stacks/core": "0.22.0-rc.4",
-    "@git-stacks/protocol": "0.22.0-rc.4",
-    "@git-stacks/service": "0.22.0-rc.4",
+    "@git-stacks/client": "0.22.0-rc.5",
+    "@git-stacks/core": "0.22.0-rc.5",
+    "@git-stacks/protocol": "0.22.0-rc.5",
+    "@git-stacks/service": "0.22.0-rc.5",
     "@opentui/core": "0.4.3",
     "@opentui/solid": "0.4.3",
     "solid-js": "1.9.12"

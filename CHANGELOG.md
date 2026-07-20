@@ -8,6 +8,26 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.5] - 2026-07-20
+
+### Fixed
+
+- Interactive Bash and zsh terminals now wait for startup output to settle before injecting the private environment bootstrap, preventing macOS zsh from exiting during line-editor initialization.
+- Private Bash bootstrap commands are suppressed from terminal output while preserving profile diagnostics and the configured environment.
+- macOS terminal shutdown now terminates owned descendants that interactive job control moved outside the shell leader's process group.
+
+### Validation
+
+- Required Bash, zsh, and Fish shell-host tests and the complete Node/TUI/package matrix pass on Linux, Apple silicon macOS, and Intel macOS runners.
+
+### Release Candidate
+
+This candidate contains the cross-shell PTY initialization and cleanup fixes verified after rc.4.
+
+0.22.0-rc.5 / v0.22.0-rc.5; npm prerelease publication uses next
+
+---
+
 ## [0.22.0-rc.4] - 2026-07-18
 
 ### Validation
