@@ -455,7 +455,7 @@ describe("service-owned web terminal", () => {
           ports: {}, configuration: { shell: true }, redacted: [],
         } }),
       }, undefined, undefined, Date.now, undefined, undefined, 1_000, {
-        ptyBootstrapDelayMs: 25,
+        ptyBootstrapDelayMs: loadedMacRunner ? 1_000 : 25,
         ptyInitializationTimeoutMs: loadedMacRunner ? 30_000 : 10_000,
       })
 

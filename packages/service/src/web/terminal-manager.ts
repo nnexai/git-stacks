@@ -34,6 +34,7 @@ export interface PtyProcess {
   readonly pid: number
   cancelSequence?(): void
   releasePreAttachment?(): void
+  outputObserved?(): boolean
   suppressOutput?(): void
   resumeOutput?(): void
   write(data: string): void
@@ -170,10 +171,10 @@ async function waitForPtyInitialization(
   initialization: ReturnType<typeof createPtyInitialization>,
   timeoutMs = 10_000,
   injectBootstrap = true,
-  bootstrapDelayMs = 200,
+  bootstrapDelayMs = 1_000,
 ): Promise<void> {
   let exited = false
-  const subscription = processHandle.onExit(() => { exited = true })
+  const exitSubscription = processHandle.onExit(() => { exited = true })
   const deadline = Date.now() + timeoutMs
   try {
     // Bash and zsh profiles can read from the terminal while they initialize
@@ -181,7 +182,7 @@ async function waitForPtyInitialization(
     // private bootstrap become an accidental response to one of those reads.
     if (injectBootstrap) {
       const injectAt = Math.min(deadline, Date.now() + bootstrapDelayMs)
-      while (Date.now() < injectAt) {
+      while (!processHandle.outputObserved?.() && Date.now() < injectAt) {
         if (exited) throw new Error("Shell exited before PTY initialization completed")
         await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, injectAt - Date.now())))
       }
@@ -196,7 +197,7 @@ async function waitForPtyInitialization(
     }
   } finally {
     processHandle.resumeOutput?.()
-    subscription.dispose()
+    exitSubscription.dispose()
   }
 }
 
@@ -222,6 +223,7 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
   const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
   const pendingData: string[] = []
   let preAttachment = answerPrimaryDeviceAttributes
+  let outputObserved = false
   let outputSuppressed = false
   let negotiationPending = ""
   let pendingExit: { exitCode: number; signal?: number } | undefined
@@ -231,6 +233,7 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
     else pendingData.push(data)
   }
   processHandle.onData((data) => {
+    outputObserved = true
     if (!preAttachment) { emitData(data); return }
     let input = negotiationPending + data
     negotiationPending = ""
@@ -268,6 +271,7 @@ function bufferPty(processHandle: PtyProcess, answerPrimaryDeviceAttributes = fa
       emitData(negotiationPending)
       negotiationPending = ""
     },
+    outputObserved: () => outputObserved,
     suppressOutput: () => {
       outputSuppressed = true
       negotiationPending = ""
