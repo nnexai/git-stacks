@@ -124,9 +124,7 @@ jobs:
       - run: npm ci
       - run: npm run build:packages
       - name: Run fail-on-skip shell and SSH acceptance
-        run: GIT_STACKS_KEY_STORE=file ./node_modules/.bin/vitest run tests/commands/user-shell-host-fixture.test.ts tests/service/managed-service-process.test.ts
-      - name: Run fail-on-skip web terminal acceptance
-        run: GIT_STACKS_KEY_STORE=file ./node_modules/.bin/vitest run tests/service/web-terminal.test.ts
+        run: GIT_STACKS_KEY_STORE=file ./node_modules/.bin/vitest run tests/commands/user-shell-host-fixture.test.ts tests/service/managed-service-process.test.ts tests/service/web-terminal.test.ts
       - name: Validate machine-readable zero-skip receipt
         if: always()
         run: |
