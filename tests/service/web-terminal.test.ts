@@ -517,7 +517,7 @@ describe("service-owned web terminal", () => {
       buildAll: async () => [],
       buildWorkspace: async () => { throw new Error("unused") },
       resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
-        argv: [zsh, "-l", "-i"], cwd: process.cwd(),
+        argv: [zsh, ...(loadedMacRunner ? [] : ["-d"]), "-l", "-i"], cwd: process.cwd(),
         environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: root, ZDOTDIR: root },
         initialization: { kind: "post-init-environment", shell: "zsh" },
         ports: {}, configuration: { shell: true }, redacted: [],
