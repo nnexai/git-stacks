@@ -1252,9 +1252,12 @@ describe("service-owned web terminal", () => {
     const { sent, socket } = attach(manager, terminal.id)
     manager.message(socket, JSON.stringify({ type: "resize", cols: 91, rows: 27 }))
     manager.message(socket, JSON.stringify({ type: "input", data: "echo WEB_PTY_MARKER; stty size\r" }))
-    await sleep(150)
-    const output = sent.filter((item): item is Uint8Array => item instanceof Uint8Array).map((frame) => frame.slice(9))
-    const text = new TextDecoder().decode(Buffer.concat(output))
+    const terminalText = (): string => {
+      const output = sent.filter((item): item is Uint8Array => item instanceof Uint8Array).map((frame) => frame.slice(9))
+      return new TextDecoder().decode(Buffer.concat(output))
+    }
+    await waitFor(() => terminalText().includes("WEB_PTY_MARKER") && terminalText().includes("27 91"))
+    const text = terminalText()
     expect(text).toContain("WEB_PTY_MARKER")
     expect(text).toContain("27 91")
     expect(manager.diagnostics.inputs_received).toBe(1)
