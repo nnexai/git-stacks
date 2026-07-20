@@ -505,8 +505,10 @@ describe("service-owned web terminal", () => {
     const profileMarker = "ZSH_LOGIN_PROFILE_READY"
     const roundtripMarker = "ZSH_LOGIN_ROUNDTRIP_READY"
     writeFileSync(join(root, ".zshrc"), [
-      "printf '\\033[0c'",
-      "IFS= read -r -k 7 __gs_terminal_response",
+      ...(loadedMacRunner ? [
+        "printf '\\033[0c'",
+        "IFS= read -r -k 7 __gs_terminal_response",
+      ] : []),
       `printf '${profileMarker}\\n'`,
       "function source { return 92 }",
       "PROMPT='$ '",
