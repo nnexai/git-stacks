@@ -192,9 +192,18 @@ async function waitForPtyInitialization(
       processHandle.suppressOutput?.()
       processHandle.write(`${initialization.bootstrap}\r`)
     }
+    let retryBootstrapAt = Date.now() + Math.max(250, bootstrapDelayMs)
     while (!existsSync(initialization.readyPath)) {
       if (exited) throw new Error("Shell exited before PTY initialization completed")
       if (Date.now() >= deadline) throw new Error(`Shell PTY initialization exceeded ${timeoutMs}ms`)
+      if (injectBootstrap && Date.now() >= retryBootstrapAt) {
+        // A terminal capability read can consume the first injected line even
+        // after its visible query has been answered. Retrying the idempotent,
+        // output-suppressed bootstrap lets the shell accept it once the line
+        // editor owns terminal input, without exposing private values.
+        processHandle.write(`${initialization.bootstrap}\r`)
+        retryBootstrapAt = Date.now() + Math.max(250, bootstrapDelayMs)
+      }
       await new Promise<void>((resolve) => setTimeout(resolve, 10))
     }
   } finally {

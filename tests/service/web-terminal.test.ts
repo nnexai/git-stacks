@@ -381,6 +381,7 @@ describe("service-owned web terminal", () => {
     const writes: string[] = []
     let capabilityResponseAt = 0
     let bootstrapAt = 0
+    let bootstrapWrites = 0
     let dataListener: (data: string) => void = () => undefined
     let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
     let spawnedArgv: string[] = []
@@ -395,7 +396,11 @@ describe("service-owned web terminal", () => {
             capabilityResponseAt = Date.now()
             return
           }
-          bootstrapAt = Date.now()
+          bootstrapWrites += 1
+          if (bootstrapWrites === 1) {
+            bootstrapAt = Date.now()
+            return
+          }
           const readyPath = data.match(/> '([^']+\/ready)'/)?.[1]
           expect(readyPath).toBeDefined()
           writeFileSync(readyPath!, "ready")
@@ -415,7 +420,7 @@ describe("service-owned web terminal", () => {
         ports: {}, configuration: { shell: true }, redacted: [],
       } }),
     }, undefined, undefined, Date.now, spawn, undefined, 1_000, {
-      ptyInitializationTimeoutMs: 500,
+      ptyInitializationTimeoutMs: 1_000,
       ptyBootstrapDelayMs: 250,
     })
 
@@ -431,6 +436,7 @@ describe("service-owned web terminal", () => {
     ])
     expect(writes[0]).toBe("\u001b[?1;2c")
     expect(writes[1]).toContain("__GS_PTY_OK_")
+    expect(writes[2]).toContain("__GS_PTY_OK_")
     expect(bootstrapAt - capabilityResponseAt).toBeGreaterThanOrEqual(90)
     const { sent } = attach(manager, terminal.id)
     const output = sent
