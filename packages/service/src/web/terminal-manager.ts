@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, closeSync, constants, existsSync, fstatSync, mkdtempSync, openSync, rmSync, writeFileSync, writeSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -12,6 +12,7 @@ import {
   type ExecuteUserShellCommandRequest,
   type ExecuteUserShellCommandResult,
 } from "@git-stacks/core/user-shell"
+import { WS_CONFIG_DIR } from "@git-stacks/core/paths"
 import type { SnapshotAdapter } from "../snapshot-adapter"
 import type { TerminalAttachment } from "../terminal-attachment"
 import {
@@ -27,6 +28,35 @@ export const WEB_TERMINAL_REPLAY_BYTES = 1024 * 1024
 export const WEB_TERMINAL_SOCKET_PRESSURE_BYTES = 512 * 1024
 export const WEB_TERMINAL_ENDED_RETENTION_MS = 60 * 60 * 1_000
 export const WEB_TERMINAL_LAUNCH_RESOLUTION_TIMEOUT_MS = 10_000
+export const PTY_CANARY_BYPASS_ENV = "GIT_STACKS_CANARY_BYPASS_INTERACTIVE_PTY_INITIALIZATION"
+export const PTY_CANARY_DIAGNOSTICS_ENV = "GIT_STACKS_CANARY_PTY_DIAGNOSTICS"
+
+export type PtyCanaryDiagnostic = {
+  id: string
+  phase: "launch" | "spawned" | "initializing" | "initialization_bypassed" | "initialized" | "initialization_failed" | "session_ready" | "attached" | "first_output" | "first_input" | "exited"
+  shell?: "bash" | "zsh" | "fish"
+  bypass?: boolean
+  pid?: number
+  exit_code?: number
+  signal?: number
+  failure?: "early_exit" | "timeout" | "other"
+}
+
+function appendPtyCanaryDiagnostic(event: PtyCanaryDiagnostic): void {
+  if (process.env[PTY_CANARY_DIAGNOSTICS_ENV] !== "1") return
+  let descriptor: number | undefined
+  try {
+    const path = join(WS_CONFIG_DIR, "service", "pty-canary.jsonl")
+    descriptor = openSync(path, constants.O_APPEND | constants.O_CREAT | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600)
+    const stat = fstatSync(descriptor)
+    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0 || (typeof process.getuid === "function" && stat.uid !== process.getuid())) return
+    writeSync(descriptor, `${JSON.stringify({ timestamp: new Date().toISOString(), ...event })}\n`)
+  } catch {
+    // Diagnostic capture must never alter terminal behavior.
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor)
+  }
+}
 
 type OutputChunk = { cursor: bigint; bytes: Uint8Array }
 type Attachment = { socket: TerminalAttachment; ack: bigint; pressured: boolean; streaming: boolean }
@@ -370,6 +400,9 @@ type Session = {
   attachment?: Attachment
   filter: TerminalSignalFilter
   agentSessions: Map<TerminalSignal["provider"], string>
+  diagnosticId?: string
+  diagnosticShell?: "bash" | "zsh" | "fish"
+  diagnosticInputObserved?: boolean
 }
 
 export type { TerminalAttachmentData } from "../terminal-attachment"
@@ -393,6 +426,8 @@ export type WebTerminalManagerTiming = {
   ptyBootstrapDelayMs?: number
   setTimeout?: (callback: () => void, delayMs: number) => unknown
   clearTimeout?: (handle: unknown) => void
+  bypassInteractiveInitialization?: boolean
+  ptyDiagnostic?: (event: PtyCanaryDiagnostic) => void
 }
 
 function terminalId(): string { return `term_${randomBytes(16).toString("base64url")}` }
@@ -483,6 +518,13 @@ export class WebTerminalManager {
       const signalToken = randomBytes(32).toString("base64url")
       let session: Session | undefined
       const filter = new TerminalSignalFilter(signalToken, (signal) => { if (session) void this.handleSignal(session, signal) })
+      const diagnosticId = randomBytes(6).toString("hex")
+      let diagnosticShell: "bash" | "zsh" | "fish" | undefined
+      const recordDiagnostic = (event: Omit<PtyCanaryDiagnostic, "id">) => {
+        const diagnostic = { id: diagnosticId, ...event }
+        if (this.timing.ptyDiagnostic) this.timing.ptyDiagnostic(diagnostic)
+        else appendPtyCanaryDiagnostic(diagnostic)
+      }
       let resolveExit!: (code: number) => void
       const exited = new Promise<number>((resolve) => { resolveExit = resolve })
       let child: PtyProcess
@@ -497,7 +539,16 @@ export class WebTerminalManager {
         }
         const launch = resolution.launch
         if ("argv" in launch) {
-          const initialization = launch.initialization
+          diagnosticShell = launch.initialization?.shell
+          const bypassInteractiveInitialization = launch.initialization !== undefined
+            && (this.timing.bypassInteractiveInitialization
+              ?? process.env[PTY_CANARY_BYPASS_ENV] === "1")
+          recordDiagnostic({
+            phase: "launch",
+            ...(diagnosticShell === undefined ? {} : { shell: diagnosticShell }),
+            bypass: bypassInteractiveInitialization,
+          })
+          const initialization = launch.initialization && !bypassInteractiveInitialization
             ? createPtyInitialization(launch.initialization.shell, {
                 ...launch.environment,
                 ...terminalEnvironment,
@@ -520,9 +571,16 @@ export class WebTerminalManager {
               rows: input.rows,
               name: "xterm-256color",
             }), initialization !== undefined)
+            recordDiagnostic({
+              phase: "spawned",
+              ...(diagnosticShell === undefined ? {} : { shell: diagnosticShell }),
+              bypass: bypassInteractiveInitialization,
+              pid: spawned.pid,
+            })
             if (initialization) {
               const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
               try {
+                recordDiagnostic({ phase: "initializing", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
                 await waitForPtyInitialization(
                   spawned,
                   initialization,
@@ -530,7 +588,16 @@ export class WebTerminalManager {
                   initializationLaunch.injectBootstrap,
                   this.timing.ptyBootstrapDelayMs,
                 )
+                recordDiagnostic({ phase: "initialized", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
               } catch (error) {
+                const message = error instanceof Error ? error.message : ""
+                recordDiagnostic({
+                  phase: "initialization_failed",
+                  shell: launch.initialization!.shell,
+                  bypass: false,
+                  pid: spawned.pid,
+                  failure: message.includes("exited") ? "early_exit" : message.includes("exceeded") ? "timeout" : "other",
+                })
                 // A shell profile can exit during initialization (for example
                 // after a failed user-level `cd`). One bounded TERM/KILL attempt
                 // is safe while this spawn is still owned here. Never retain a
@@ -541,6 +608,8 @@ export class WebTerminalManager {
                 } catch {}
                 throw error
               }
+            } else if (bypassInteractiveInitialization) {
+              recordDiagnostic({ phase: "initialization_bypassed", shell: launch.initialization!.shell, bypass: true, pid: spawned.pid })
             }
             child = spawned
           } finally {
@@ -574,13 +643,28 @@ export class WebTerminalManager {
         exited,
         filter,
         agentSessions: new Map(),
+        ...(diagnosticShell === undefined ? {} : { diagnosticId, diagnosticShell }),
       }
       session = activeSession
+      let outputObserved = false
       child.onData((data) => {
+        if (!outputObserved && activeSession.diagnosticId && activeSession.diagnosticShell) {
+          outputObserved = true
+          recordDiagnostic({ phase: "first_output", shell: activeSession.diagnosticShell, pid: child.pid })
+        }
         const sanitized = filter.push(new TextEncoder().encode(data))
         if (sanitized.length) this.output(activeSession, sanitized)
       })
-      child.onExit(({ exitCode }) => {
+      child.onExit(({ exitCode, signal }) => {
+        if (activeSession.diagnosticId && activeSession.diagnosticShell) {
+          recordDiagnostic({
+            phase: "exited",
+            shell: activeSession.diagnosticShell,
+            pid: child.pid,
+            exit_code: exitCode,
+            ...(signal === undefined ? {} : { signal }),
+          })
+        }
         resolveExit(exitCode)
         const remaining = filter.flush()
         if (remaining.length) this.output(activeSession, remaining)
@@ -591,6 +675,7 @@ export class WebTerminalManager {
         this.notifyActive()
       })
       this.sessions.set(id, activeSession)
+      if (diagnosticShell !== undefined) recordDiagnostic({ phase: "session_ready", shell: diagnosticShell, pid: child.pid })
       this.notifyActive()
       return this.project(activeSession)
     } finally {
@@ -981,6 +1066,7 @@ export class WebTerminalManager {
     if (session.attachment && session.attachment.socket !== socket) session.attachment.socket.close(4001, "Taken over")
     session.process.releasePreAttachment?.()
     session.attachment = { socket, ack: session.earliestCursor > 0n ? session.earliestCursor - 1n : 0n, pressured: false, streaming: socket.data.streaming }
+    this.recordSessionDiagnostic(session, { phase: "attached", pid: session.process.pid })
     socket.send(JSON.stringify({ type: "ready", terminal: this.project(session), reset: true, streaming: session.attachment.streaming }))
     if (session.attachment.streaming) for (const chunk of session.chunks) this.sendChunk(session, chunk)
   }
@@ -995,7 +1081,14 @@ export class WebTerminalManager {
     const parsed = WebTerminalSocketControlSchema.safeParse(decoded)
     if (!parsed.success) { socket.close(1008, "Invalid control"); return }
     const message = parsed.data
-    if (message.type === "input" && session.state === "running") { this.inputsReceived += 1; session.process.write(message.data) }
+    if (message.type === "input" && session.state === "running") {
+      this.inputsReceived += 1
+      if (!session.diagnosticInputObserved) {
+        session.diagnosticInputObserved = true
+        this.recordSessionDiagnostic(session, { phase: "first_input", pid: session.process.pid })
+      }
+      session.process.write(message.data)
+    }
     else if (message.type === "resize" && session.state === "running") session.process.resize(message.cols, message.rows)
     else if (message.type === "ack") {
       const ack = BigInt(message.cursor) > session.cursor ? session.cursor : BigInt(message.cursor)
@@ -1040,6 +1133,13 @@ export class WebTerminalManager {
       session.earliestCursor = session.chunks[0]?.cursor ?? session.cursor
       this.sendChunk(session, chunk)
     }
+  }
+
+  private recordSessionDiagnostic(session: Session, event: Omit<PtyCanaryDiagnostic, "id" | "shell">): void {
+    if (!session.diagnosticId || !session.diagnosticShell) return
+    const diagnostic = { id: session.diagnosticId, shell: session.diagnosticShell, ...event }
+    if (this.timing.ptyDiagnostic) this.timing.ptyDiagnostic(diagnostic)
+    else appendPtyCanaryDiagnostic(diagnostic)
   }
 
   private sendChunk(session: Session, chunk: OutputChunk): void {

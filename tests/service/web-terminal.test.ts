@@ -451,6 +451,69 @@ describe("service-owned web terminal", () => {
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
+  test("canary bypass exposes an interactive shell without writing initialization input", async () => {
+    const writes: string[] = []
+    const diagnostics: Array<{ phase: string; bypass?: boolean }> = []
+    let dataListener: (data: string) => void = () => undefined
+    let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
+    let spawnedArgv: string[] = []
+    let spawnedEnvironment: Record<string, string | undefined> = {}
+    const spawn: PtyFactory = (argv, options) => {
+      spawnedArgv = argv
+      spawnedEnvironment = options.env
+      return {
+        pid: 921_000,
+        write: (data) => { writes.push(data) },
+        resize: () => undefined,
+        kill: () => queueMicrotask(() => exitListener({ exitCode: 0 })),
+        onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
+        onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/zsh", "-l", "-i"], cwd: process.cwd(),
+        environment: { PATH: "/canary/bin", ZDOTDIR: "/real/zsh" },
+        initialization: { kind: "post-init-environment", shell: "zsh" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 1_000, {
+      bypassInteractiveInitialization: true,
+      ptyDiagnostic: (event) => { diagnostics.push(event) },
+    })
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    expect(spawnedArgv).toEqual(["/bin/zsh", "-l", "-i"])
+    expect(spawnedEnvironment).toMatchObject({ PATH: "/canary/bin", ZDOTDIR: "/real/zsh" })
+    expect(writes).toEqual([])
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ phase: "launch", bypass: true }),
+      expect.objectContaining({ phase: "initialization_bypassed", bypass: true }),
+      expect.objectContaining({ phase: "session_ready" }),
+    ]))
+
+    const { sent, socket } = attach(manager, terminal.id)
+    dataListener("CANARY_PROMPT_READY")
+    manager.message(socket, JSON.stringify({ type: "input", data: "printf CANARY_INPUT_READY\r" }))
+    await waitFor(() => sent.some((item) => item instanceof Uint8Array
+      && new TextDecoder().decode(item.slice(9)).includes("CANARY_PROMPT_READY")))
+    expect(writes).toEqual(["printf CANARY_INPUT_READY\r"])
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ phase: "attached" }),
+      expect.objectContaining({ phase: "first_output" }),
+      expect.objectContaining({ phase: "first_input" }),
+    ]))
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+  })
+
   test("does not replay POSIX bootstraps as terminal input", async () => {
     const fixtures = ([
       { family: "bash" as const, executable: which("bash"), args: ["--noprofile", "--norc", "-i"] },
