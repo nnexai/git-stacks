@@ -8,6 +8,26 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.22.0-rc.7] - 2026-07-21
+
+### Fixed
+
+- Login zsh terminals now launch directly with the resolved workspace environment, allowing the user's real startup files and ZLE prompt framework to own terminal negotiation without a temporary `ZDOTDIR` wrapper.
+- The service no longer injects bootstrap or redraw input into normal login zsh sessions, preventing blank or half-interactive terminals where tty echo worked but commands did not execute.
+
+### Validation
+
+- The affected macOS installation renders its real prompt after normal profile startup and executes entered commands successfully, including after the earlier handshake, attach-first, redraw, and `precmd` canaries isolated the wrapper failure.
+- Real-zsh terminal tests and the hosted Linux/macOS x64/arm64 matrix pass, including browser-owned terminal capability responses on the required macOS shell host.
+
+### Release Candidate
+
+This candidate supersedes rc.6 with the affected-Mac-verified direct login-zsh fix.
+
+0.22.0-rc.7 / v0.22.0-rc.7; npm prerelease publication uses next
+
+---
+
 ## [0.22.0-rc.6] - 2026-07-20
 
 ### Fixed

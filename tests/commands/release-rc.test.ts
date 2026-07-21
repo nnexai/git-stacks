@@ -46,8 +46,8 @@ const CHANGELOG = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
 const RELEASING = readFileSync(join(ROOT, "docs", "releasing.md"), "utf8")
 const STALE_GUIDE_PATH = join(ROOT, "docs", "stale-workspaces.md")
 const STALE_GUIDE = existsSync(STALE_GUIDE_PATH) ? readFileSync(STALE_GUIDE_PATH, "utf8") : ""
-const RC_VERSION = "0.22.0-rc.6"
-const RC_TAG = "v0.22.0-rc.6"
+const RC_VERSION = "0.22.0-rc.7"
+const RC_TAG = "v0.22.0-rc.7"
 const PACKAGE_MANIFEST_PATHS = [
   "package.json",
   "packages/protocol/package.json",
@@ -202,8 +202,8 @@ describe("v0.22.0 release candidate metadata", () => {
   test("current RC changelog and stale guide describe the exact advisory product boundary", () => {
     const rcEntry = changelogEntry(RC_VERSION)
 
-    expect(CHANGELOG).toContain("## [0.22.0-rc.6] - 2026-07-20")
-    expect(rcEntry).toContain("0.22.0-rc.6 / v0.22.0-rc.6; npm prerelease publication uses next")
+    expect(CHANGELOG).toContain("## [0.22.0-rc.7] - 2026-07-21")
+    expect(rcEntry).toContain("0.22.0-rc.7 / v0.22.0-rc.7; npm prerelease publication uses next")
     expect(README).toContain("docs/stale-workspaces.md")
 
     expect(STALE_GUIDE).toMatch(/strictly older than 30 days/i)

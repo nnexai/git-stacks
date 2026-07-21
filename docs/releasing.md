@@ -6,10 +6,10 @@ This procedure separates local candidate preparation, evidence collection, and r
 
 For the current candidate:
 
-- package version: `0.22.0-rc.6`;
-- intended Git tag: `v0.22.0-rc.6`;
+- package version: `0.22.0-rc.7`;
+- intended Git tag: `v0.22.0-rc.7`;
 - npm prerelease dist-tag: `next`;
-- changelog heading: `## [0.22.0-rc.6] - 2026-07-20`.
+- changelog heading: `## [0.22.0-rc.7] - 2026-07-21`.
 
 The root facade and all seven workspace packages must use that exact version, including every internal `@git-stacks/*` range and the corresponding root/workspace lockfile records. The tag is an expected identity only until separately authorized and created.
 
