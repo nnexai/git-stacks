@@ -17,10 +17,10 @@ updated: 2026-07-20
 
 ## Current Focus
 
-- hypothesis: confirmed — commit `b20ed830` introduced a circular dependency by blocking browser attachment until login-zsh startup completed, while real startup profiles can wait for responses from the browser terminal.
-- test: Publish login-zsh sessions before waiting for the startup-file readiness marker, preserve the post-profile overlay, and verify initial launch plus explicit service restart on the affected Mac without the bypass flag.
-- expecting: The browser attaches immediately, zsh completes its normal 2–6 second profile startup through the real xterm, the wrapper verifies the authoritative overlay, and the prompt plus command roundtrip work after restart.
-- next_action: Push the attach-first authority-preserving canary and run it on the affected Mac with diagnostics enabled but the bypass disabled.
+- hypothesis: Attach-first removes the startup deadlock, but the startup-file path can reach its verified ready marker without zsh/ZLE emitting a prompt; unlike the injected bootstrap path, deferred initialization never requests the post-initialization redraw already required by earlier blank-terminal failures.
+- test: After deferred zsh readiness, release terminal negotiation and send one Ctrl-L redraw request. Require prompt output and a subsequent browser input roundtrip after `initialized`, not merely the private ready marker.
+- expecting: The real trace advances from `initialized` through `activation_redraw`, `first_output`, and `first_input`, and the terminal remains usable after service restart.
+- next_action: Verify the activation-redraw regression locally and in the hosted matrix, then push a no-bypass canary for the affected Mac.
 - reasoning_checkpoint: Real same-host version testing supersedes the synthetic hosted fixture as the authoritative evidence.
 - tdd_checkpoint: false
 
@@ -53,6 +53,9 @@ updated: 2026-07-20
 - timestamp: 2026-07-21T09:33:33+02:00
   observation: A deterministic regression now models a login-zsh profile emitting a cursor-position query and refusing to finish until xterm responds. Session creation returns before readiness, attachment exposes the query, the browser response completes initialization, and no bootstrap is written to shell input.
   implication: Attach-first initialization breaks the circular dependency while retaining the post-profile environment authority contract.
+- timestamp: 2026-07-21T10:33:16+02:00
+  observation: The affected Mac's no-bypass trace reaches `session_ready` and `attached` within 66ms and reaches `initialized` after 2.51s, but records neither `first_output` nor `first_input`; the browser remains blank at `(0,0)`.
+  implication: The circular startup wait is fixed and the authoritative wrapper completes. The remaining failure is activation after readiness: no prompt is rendered and the browser never reaches a usable input roundtrip.
 
 ## Eliminated
 
@@ -64,6 +67,6 @@ updated: 2026-07-20
 ## Resolution
 
 - root_cause: Login-zsh initialization waited for a private ready marker before creating a browser-visible session, but complex profiles can wait for terminal capability responses that only the attached xterm can provide.
-- fix: Create and expose the login-zsh session before asynchronously waiting for the startup-file readiness marker; retain the existing post-profile overlay and fail visibly inside the terminal if deferred initialization cannot complete.
-- verification: Bypass canary passed three same-Mac launches including service restart. The authority-preserving deterministic query/response regression and service typecheck pass; real-Mac no-bypass verification remains pending.
+- fix: Create and expose the login-zsh session before asynchronously waiting for the startup-file readiness marker; retain the existing post-profile overlay, release negotiation after readiness, and request a post-initialization ZLE redraw.
+- verification: Bypass canary passed three same-Mac launches including service restart. Attach-first reaches verified initialization on the real Mac but remains blank; redraw-path verification is in progress.
 - files_changed: `packages/service/src/web/terminal-manager.ts`, `tests/service/web-terminal.test.ts`, `docs/canary-macos-pty.md`

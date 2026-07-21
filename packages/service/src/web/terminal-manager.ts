@@ -33,7 +33,7 @@ export const PTY_CANARY_DIAGNOSTICS_ENV = "GIT_STACKS_CANARY_PTY_DIAGNOSTICS"
 
 export type PtyCanaryDiagnostic = {
   id: string
-  phase: "launch" | "spawned" | "initializing" | "initialization_bypassed" | "initialized" | "initialization_failed" | "session_ready" | "attached" | "first_output" | "first_input" | "exited"
+  phase: "launch" | "spawned" | "initializing" | "initialization_bypassed" | "initialized" | "activation_redraw" | "initialization_failed" | "session_ready" | "attached" | "first_output" | "first_input" | "exited"
   shell?: "bash" | "zsh" | "fish"
   bypass?: boolean
   pid?: number
@@ -709,6 +709,14 @@ export class WebTerminalManager {
               this.timing.ptyBootstrapDelayMs,
             )
             recordDiagnostic({ phase: "initialized", shell: pending.initialization.shell, bypass: false, pid: child.pid })
+            // Startup-file initialization can complete before zsh/ZLE emits a
+            // prompt, leaving xterm attached to an otherwise live shell with a
+            // blank screen. Request one redraw only after the authoritative
+            // overlay is verified and terminal negotiation is released.
+            activeSession.initializationPending = false
+            child.releasePreAttachment?.()
+            recordDiagnostic({ phase: "activation_redraw", shell: pending.initialization.shell, bypass: false, pid: child.pid })
+            child.write("\u000c")
           } catch (error) {
             const message = error instanceof Error ? error.message : "Unknown initialization failure"
             recordDiagnostic({

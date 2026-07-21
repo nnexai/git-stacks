@@ -526,9 +526,9 @@ describe("service-owned web terminal", () => {
         pid: 921_001,
         write: (data) => {
           writes.push(data)
-          if (data !== "\u001b[1;1R") return
-          writeFileSync(readyPath, "ready")
-          queueMicrotask(() => dataListener("ZSH_PROFILE_AND_OVERLAY_READY"))
+          if (data === "\u001b[1;1R") writeFileSync(readyPath, "ready")
+          else if (data === "\u000c") queueMicrotask(() => dataListener("ZSH_PROFILE_AND_OVERLAY_READY"))
+          else if (data === "printf ZSH_POST_INIT_INPUT_READY\r") queueMicrotask(() => dataListener("ZSH_POST_INIT_INPUT_READY"))
         },
         resize: () => undefined,
         kill: () => queueMicrotask(() => exitListener({ exitCode: 0 })),
@@ -573,7 +573,13 @@ describe("service-owned web terminal", () => {
     await waitFor(() => diagnostics.some(({ phase }) => phase === "initialized"))
     await waitFor(() => sent.some((item) => item instanceof Uint8Array
       && new TextDecoder().decode(item.slice(9)).includes("ZSH_PROFILE_AND_OVERLAY_READY")))
-    expect(writes).toEqual(["\u001b[1;1R"])
+    manager.message(socket, JSON.stringify({ type: "input", data: "printf ZSH_POST_INIT_INPUT_READY\r" }))
+    await waitFor(() => sent.some((item) => item instanceof Uint8Array
+      && new TextDecoder().decode(item.slice(9)).includes("ZSH_POST_INIT_INPUT_READY")))
+    expect(writes).toEqual(["\u001b[1;1R", "\u000c", "printf ZSH_POST_INIT_INPUT_READY\r"])
+    expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining([
+      "initialized", "activation_redraw", "first_output", "first_input",
+    ]))
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
