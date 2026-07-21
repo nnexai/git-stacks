@@ -661,16 +661,16 @@ describe("service-owned web terminal", () => {
         rows: 24,
       })
       const { sent, socket } = attach(manager, terminal.id)
-      manager.message(socket, JSON.stringify({ type: "input", data: `printf '${roundtripMarker}\\n'\r` }))
-      await waitFor(() => sent.some((item) => item instanceof Uint8Array
-        && new TextDecoder().decode(item.slice(9)).includes(roundtripMarker)), loadedMacRunner ? 10_000 : 3_000)
-      const output = sent
+      const output = () => sent
         .filter((item): item is Uint8Array => item instanceof Uint8Array)
         .map((frame) => new TextDecoder().decode(frame.slice(9)))
         .join("")
-      expect(output).toContain(profileMarker)
-      expect(output).toContain(roundtripMarker)
-      expect(output).not.toContain("__GS_PTY_")
+      await waitFor(() => output().includes(profileMarker), loadedMacRunner ? 10_000 : 3_000)
+      manager.message(socket, JSON.stringify({ type: "input", data: `printf '${roundtripMarker}\\n'\r` }))
+      await waitFor(() => output().split(roundtripMarker).length >= 3, loadedMacRunner ? 10_000 : 3_000)
+      expect(output()).toContain(profileMarker)
+      expect(output()).toContain(roundtripMarker)
+      expect(output()).not.toContain("__GS_PTY_")
       await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
     } finally {
       await manager.stop()
