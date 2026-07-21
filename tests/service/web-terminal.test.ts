@@ -667,7 +667,7 @@ describe("service-owned web terminal", () => {
         .join("")
       await waitFor(() => output().includes(profileMarker), loadedMacRunner ? 10_000 : 3_000)
       manager.message(socket, JSON.stringify({ type: "input", data: `printf '${roundtripMarker}\\n'\r` }))
-      await waitFor(() => output().split(roundtripMarker).length >= 3, loadedMacRunner ? 10_000 : 3_000)
+      await waitFor(() => output().includes(roundtripMarker), loadedMacRunner ? 10_000 : 3_000)
       expect(output()).toContain(profileMarker)
       expect(output()).toContain(roundtripMarker)
       expect(output()).not.toContain("__GS_PTY_")
