@@ -403,6 +403,7 @@ type Session = {
   diagnosticId?: string
   diagnosticShell?: "bash" | "zsh" | "fish"
   diagnosticInputObserved?: boolean
+  initializationPending?: boolean
 }
 
 export type { TerminalAttachmentData } from "../terminal-attachment"
@@ -662,6 +663,7 @@ export class WebTerminalManager {
         filter,
         agentSessions: new Map(),
         ...(diagnosticShell === undefined ? {} : { diagnosticId, diagnosticShell }),
+        ...(deferredInitialization === undefined ? {} : { initializationPending: true }),
       }
       session = activeSession
       let outputObserved = false
@@ -719,6 +721,8 @@ export class WebTerminalManager {
             this.output(activeSession, new TextEncoder().encode(`\r\n[git-stacks shell initialization] ${message}\r\n`))
             try { await this.terminatePtyProcessGroup(child, activeSession.exited) } catch {}
           } finally {
+            activeSession.initializationPending = false
+            child.releasePreAttachment?.()
             rmSync(pending.initialization.root, { force: true, recursive: true })
           }
         })()
@@ -1110,7 +1114,7 @@ export class WebTerminalManager {
     const session = this.sessions.get(socket.data.sessionId)
     if (!session || session.principalId !== socket.data.principalId) { socket.close(1008, "Unknown terminal"); return }
     if (session.attachment && session.attachment.socket !== socket) session.attachment.socket.close(4001, "Taken over")
-    session.process.releasePreAttachment?.()
+    if (!session.initializationPending) session.process.releasePreAttachment?.()
     session.attachment = { socket, ack: session.earliestCursor > 0n ? session.earliestCursor - 1n : 0n, pressured: false, streaming: socket.data.streaming }
     this.recordSessionDiagnostic(session, { phase: "attached", pid: session.process.pid })
     socket.send(JSON.stringify({ type: "ready", terminal: this.project(session), reset: true, streaming: session.attachment.streaming }))
