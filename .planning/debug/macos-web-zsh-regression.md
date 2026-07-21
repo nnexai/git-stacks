@@ -17,10 +17,10 @@ updated: 2026-07-20
 
 ## Current Focus
 
-- hypothesis: Commit `b20ed830` introduced the first-bad mechanism: interactive PTY creation now writes a readiness bootstrap to zsh input and blocks browser attachment until that input creates a private ready file. Real zsh startup can require or consume terminal traffic before it accepts the bootstrap, creating a circular pre-attachment dependency.
-- test: Build a diagnostic canary that bypasses only the interactive post-init handshake and otherwise retains the v0.22 terminal lifecycle. Compare it on the same Mac against rc.6 before designing the final authority-preserving mechanism.
-- expecting: The bypass canary restores the prompt and command roundtrip across an explicit service restart, proving the handshake rather than unrelated v0.22 lifecycle work is causal.
-- next_action: Run the pushed bypass canary on the affected Mac and compare initial launch plus explicit service restart results against rc.6.
+- hypothesis: confirmed — commit `b20ed830` introduced a circular dependency by blocking browser attachment until login-zsh startup completed, while real startup profiles can wait for responses from the browser terminal.
+- test: Publish login-zsh sessions before waiting for the startup-file readiness marker, preserve the post-profile overlay, and verify initial launch plus explicit service restart on the affected Mac without the bypass flag.
+- expecting: The browser attaches immediately, zsh completes its normal 2–6 second profile startup through the real xterm, the wrapper verifies the authoritative overlay, and the prompt plus command roundtrip work after restart.
+- next_action: Push the attach-first authority-preserving canary and run it on the affected Mac with diagnostics enabled but the bypass disabled.
 - reasoning_checkpoint: Real same-host version testing supersedes the synthetic hosted fixture as the authoritative evidence.
 - tdd_checkpoint: false
 
@@ -47,6 +47,12 @@ updated: 2026-07-20
 - timestamp: 2026-07-20T00:00:06+02:00
   observation: Canary branch `canary/macos-pty-handshake-bypass` at `fec4edea` passes the complete 34-test web-terminal suite locally, all workspace typechecks, architecture/dependency checks, package builds, runtime audit, and the redacted diagnostic assertions.
   implication: The canary is ready for the decisive real-Mac test without being promoted as a release candidate.
+- timestamp: 2026-07-21T09:33:32+02:00
+  observation: The affected Mac successfully launched three bypassed login-zsh sessions. Session publication and browser attachment took 34–63ms; first shell output followed after 5.9s on the first launch and about 2.5s on both subsequent launches, including after explicit service restart. Input roundtrip succeeded and no exit or failure event occurred.
+  implication: The PTY and browser transport are healthy. The visible delay is real shell-profile work, while the pre-attachment handshake is the causal regression.
+- timestamp: 2026-07-21T09:33:33+02:00
+  observation: A deterministic regression now models a login-zsh profile emitting a cursor-position query and refusing to finish until xterm responds. Session creation returns before readiness, attachment exposes the query, the browser response completes initialization, and no bootstrap is written to shell input.
+  implication: Attach-first initialization breaks the circular dependency while retaining the post-profile environment authority contract.
 
 ## Eliminated
 
@@ -57,7 +63,7 @@ updated: 2026-07-20
 
 ## Resolution
 
-- root_cause:
-- fix:
-- verification:
-- files_changed:
+- root_cause: Login-zsh initialization waited for a private ready marker before creating a browser-visible session, but complex profiles can wait for terminal capability responses that only the attached xterm can provide.
+- fix: Create and expose the login-zsh session before asynchronously waiting for the startup-file readiness marker; retain the existing post-profile overlay and fail visibly inside the terminal if deferred initialization cannot complete.
+- verification: Bypass canary passed three same-Mac launches including service restart. The authority-preserving deterministic query/response regression and service typecheck pass; real-Mac no-bypass verification remains pending.
+- files_changed: `packages/service/src/web/terminal-manager.ts`, `tests/service/web-terminal.test.ts`, `docs/canary-macos-pty.md`

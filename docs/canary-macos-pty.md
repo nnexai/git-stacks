@@ -1,14 +1,15 @@
-# macOS PTY handshake-bypass canary
+# macOS PTY attach-first canary
 
-This diagnostic canary tests one hypothesis only: the interactive post-profile
-PTY handshake introduced after `v0.21.0-rc.6` prevents a real macOS login zsh
-from reaching the browser attachment boundary.
+The first canary proved that the interactive post-profile PTY handshake
+introduced after `v0.21.0-rc.6` prevented a real macOS login zsh from reaching
+the browser attachment boundary. This revision tests the authority-preserving
+fix: publish the zsh session so xterm can answer startup queries, then let the
+existing startup-file wrapper apply and verify the post-profile environment.
 
-The bypass applies only to ordinary interactive terminals. Configured command
-terminals retain their existing initialization and execution path. The initial
-spawn still receives the complete resolved environment, but the canary does not
-reapply that environment after the user's shell profiles run. This is therefore
-not a release candidate or a final authority-preserving fix.
+No bootstrap is injected into zsh terminal input. Configured command terminals
+and other shells retain their existing initialization and execution paths.
+This remains a canary until it passes on the affected Mac; it is not a release
+candidate yet.
 
 ## Build on the Mac
 
@@ -30,11 +31,10 @@ Stop any installed service first:
 node packages/cli/dist/index.js service stop
 ```
 
-Start the packaged browser client with both canary controls inherited by the
-new service:
+Start the packaged browser client with redacted lifecycle diagnostics inherited
+by the new service. Do not enable the earlier bypass flag:
 
 ```zsh
-GIT_STACKS_CANARY_BYPASS_INTERACTIVE_PTY_INITIALIZATION=1 \
 GIT_STACKS_CANARY_PTY_DIAGNOSTICS=1 \
 node packages/cli/dist/index.js web
 ```
@@ -49,7 +49,6 @@ Then repeat after an explicit service restart:
 
 ```zsh
 node packages/cli/dist/index.js service stop
-GIT_STACKS_CANARY_BYPASS_INTERACTIVE_PTY_INITIALIZATION=1 \
 GIT_STACKS_CANARY_PTY_DIAGNOSTICS=1 \
 node packages/cli/dist/index.js web
 ```

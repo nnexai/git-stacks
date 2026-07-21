@@ -528,6 +528,10 @@ export class WebTerminalManager {
       let resolveExit!: (code: number) => void
       const exited = new Promise<number>((resolve) => { resolveExit = resolve })
       let child: PtyProcess
+      let deferredInitialization: {
+        initialization: ReturnType<typeof createPtyInitialization>
+        injectBootstrap: boolean
+      } | undefined
       try {
         const terminalEnvironment = {
           GIT_STACKS_SURFACE_ID: surfaceId,
@@ -579,41 +583,55 @@ export class WebTerminalManager {
             })
             if (initialization) {
               const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
-              try {
-                recordDiagnostic({ phase: "initializing", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
-                await waitForPtyInitialization(
-                  spawned,
+              if (initialization.shell === "zsh" && !initializationLaunch.injectBootstrap) {
+                // Login zsh profiles can negotiate with the real terminal before
+                // .zlogin applies the authoritative overlay. Publish the session
+                // first so xterm can answer those queries, then observe the
+                // startup-file readiness marker without injecting terminal input.
+                deferredInitialization = {
                   initialization,
-                  this.timing.ptyInitializationTimeoutMs,
-                  initializationLaunch.injectBootstrap,
-                  this.timing.ptyBootstrapDelayMs,
-                )
-                recordDiagnostic({ phase: "initialized", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
-              } catch (error) {
-                const message = error instanceof Error ? error.message : ""
-                recordDiagnostic({
-                  phase: "initialization_failed",
-                  shell: launch.initialization!.shell,
-                  bypass: false,
-                  pid: spawned.pid,
-                  failure: message.includes("exited") ? "early_exit" : message.includes("exceeded") ? "timeout" : "other",
-                })
-                // A shell profile can exit during initialization (for example
-                // after a failed user-level `cd`). One bounded TERM/KILL attempt
-                // is safe while this spawn is still owned here. Never retain a
-                // bare PID for deferred signaling: that process-group ID may be
-                // reused after the original leader exits.
+                  injectBootstrap: initializationLaunch.injectBootstrap,
+                }
+                recordDiagnostic({ phase: "initializing", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
+              } else {
                 try {
-                  await this.terminatePtyProcessGroup(spawned, spawnedExited)
-                } catch {}
-                throw error
+                  recordDiagnostic({ phase: "initializing", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
+                  await waitForPtyInitialization(
+                    spawned,
+                    initialization,
+                    this.timing.ptyInitializationTimeoutMs,
+                    initializationLaunch.injectBootstrap,
+                    this.timing.ptyBootstrapDelayMs,
+                  )
+                  recordDiagnostic({ phase: "initialized", shell: launch.initialization!.shell, bypass: false, pid: spawned.pid })
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : ""
+                  recordDiagnostic({
+                    phase: "initialization_failed",
+                    shell: launch.initialization!.shell,
+                    bypass: false,
+                    pid: spawned.pid,
+                    failure: message.includes("exited") ? "early_exit" : message.includes("exceeded") ? "timeout" : "other",
+                  })
+                  // A shell profile can exit during initialization (for example
+                  // after a failed user-level `cd`). One bounded TERM/KILL attempt
+                  // is safe while this spawn is still owned here. Never retain a
+                  // bare PID for deferred signaling: that process-group ID may be
+                  // reused after the original leader exits.
+                  try {
+                    await this.terminatePtyProcessGroup(spawned, spawnedExited)
+                  } catch {}
+                  throw error
+                }
               }
             } else if (bypassInteractiveInitialization) {
               recordDiagnostic({ phase: "initialization_bypassed", shell: launch.initialization!.shell, bypass: true, pid: spawned.pid })
             }
             child = spawned
           } finally {
-            if (initialization) rmSync(initialization.root, { force: true, recursive: true })
+            if (initialization && deferredInitialization?.initialization !== initialization) {
+              rmSync(initialization.root, { force: true, recursive: true })
+            }
           }
         } else {
           child = this.createCommandProcess(launch.steps, terminalEnvironment, input.cols, input.rows)
@@ -677,6 +695,34 @@ export class WebTerminalManager {
       this.sessions.set(id, activeSession)
       if (diagnosticShell !== undefined) recordDiagnostic({ phase: "session_ready", shell: diagnosticShell, pid: child.pid })
       this.notifyActive()
+      if (deferredInitialization) {
+        const pending = deferredInitialization
+        void (async () => {
+          try {
+            await waitForPtyInitialization(
+              child,
+              pending.initialization,
+              this.timing.ptyInitializationTimeoutMs,
+              pending.injectBootstrap,
+              this.timing.ptyBootstrapDelayMs,
+            )
+            recordDiagnostic({ phase: "initialized", shell: pending.initialization.shell, bypass: false, pid: child.pid })
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Unknown initialization failure"
+            recordDiagnostic({
+              phase: "initialization_failed",
+              shell: pending.initialization.shell,
+              bypass: false,
+              pid: child.pid,
+              failure: message.includes("exited") ? "early_exit" : message.includes("exceeded") ? "timeout" : "other",
+            })
+            this.output(activeSession, new TextEncoder().encode(`\r\n[git-stacks shell initialization] ${message}\r\n`))
+            try { await this.terminatePtyProcessGroup(child, activeSession.exited) } catch {}
+          } finally {
+            rmSync(pending.initialization.root, { force: true, recursive: true })
+          }
+        })()
+      }
       return this.project(activeSession)
     } finally {
       admission.release()

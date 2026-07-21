@@ -514,6 +514,69 @@ describe("service-owned web terminal", () => {
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
+  test("attaches login zsh before startup-file initialization waits for xterm", async () => {
+    const diagnostics: Array<{ phase: string }> = []
+    const writes: string[] = []
+    let dataListener: (data: string) => void = () => undefined
+    let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
+    let readyPath = ""
+    const spawn: PtyFactory = (_argv, options) => {
+      readyPath = join(String(options.env.ZDOTDIR), "ready")
+      return {
+        pid: 921_001,
+        write: (data) => {
+          writes.push(data)
+          if (data !== "\u001b[1;1R") return
+          writeFileSync(readyPath, "ready")
+          queueMicrotask(() => dataListener("ZSH_PROFILE_AND_OVERLAY_READY"))
+        },
+        resize: () => undefined,
+        kill: () => queueMicrotask(() => exitListener({ exitCode: 0 })),
+        onData(listener) {
+          dataListener = listener
+          queueMicrotask(() => listener("\u001b[6n"))
+          return { dispose: () => { dataListener = () => undefined } }
+        },
+        onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/zsh", "-l", "-i"], cwd: process.cwd(),
+        environment: { HOME: "/real/home", ZDOTDIR: "/real/zsh", PATH: "/resolved/bin" },
+        initialization: { kind: "post-init-environment", shell: "zsh" },
+        ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 1_000, {
+      ptyInitializationTimeoutMs: 1_000,
+      ptyDiagnostic: (event) => { diagnostics.push(event) },
+    })
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    expect(terminal.state).toBe("running")
+    expect(existsSync(readyPath)).toBe(false)
+    expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining(["initializing", "session_ready"]))
+    expect(diagnostics.map(({ phase }) => phase)).not.toContain("initialized")
+
+    const { sent, socket } = attach(manager, terminal.id)
+    expect(sent.some((item) => item instanceof Uint8Array
+      && new TextDecoder().decode(item.slice(9)).includes("\u001b[6n"))).toBe(true)
+    manager.message(socket, JSON.stringify({ type: "input", data: "\u001b[1;1R" }))
+    await waitFor(() => diagnostics.some(({ phase }) => phase === "initialized"))
+    await waitFor(() => sent.some((item) => item instanceof Uint8Array
+      && new TextDecoder().decode(item.slice(9)).includes("ZSH_PROFILE_AND_OVERLAY_READY")))
+    expect(writes).toEqual(["\u001b[1;1R"])
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
+  })
+
   test("does not replay POSIX bootstraps as terminal input", async () => {
     const fixtures = ([
       { family: "bash" as const, executable: which("bash"), args: ["--noprofile", "--norc", "-i"] },
