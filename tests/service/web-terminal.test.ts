@@ -669,6 +669,10 @@ describe("service-owned web terminal", () => {
         .filter((item): item is Uint8Array => item instanceof Uint8Array)
         .map((frame) => new TextDecoder().decode(frame.slice(9)))
         .join("")
+      if (loadedMacRunner) {
+        await waitFor(() => output().includes("\u001b[0c"), 10_000)
+        manager.message(socket, JSON.stringify({ type: "input", data: "\u001b[?1;2c" }))
+      }
       await waitFor(() => output().includes(profileMarker), loadedMacRunner ? 10_000 : 3_000)
       manager.message(socket, JSON.stringify({ type: "input", data: `printf '${roundtripMarker}\\n'\r` }))
       await waitFor(() => output().includes(roundtripMarker), loadedMacRunner ? 10_000 : 3_000)
