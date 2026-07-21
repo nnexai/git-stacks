@@ -33,7 +33,7 @@ export const PTY_CANARY_DIAGNOSTICS_ENV = "GIT_STACKS_CANARY_PTY_DIAGNOSTICS"
 
 export type PtyCanaryDiagnostic = {
   id: string
-  phase: "launch" | "spawned" | "initializing" | "initialization_bypassed" | "initialized" | "activation_redraw" | "initialization_failed" | "session_ready" | "attached" | "first_output" | "first_input" | "exited"
+  phase: "launch" | "spawned" | "initializing" | "initialization_bypassed" | "initialized" | "initialization_failed" | "session_ready" | "attached" | "first_output" | "first_input" | "exited"
   shell?: "bash" | "zsh" | "fish"
   bypass?: boolean
   pid?: number
@@ -120,6 +120,7 @@ export function createPtyInitialization(
   const statusPathPrefix = join(root, "status.")
   const overlay = ptyOverlay(environment)
   const ok = `__GS_PTY_OK_${randomBytes(12).toString("hex")}`
+  let zshStartupBootstrap: string | undefined
   const bootstrap = shell === "fish"
     ? (() => {
         const valuePaths = overlay.entries.map(({ key }, index) => {
@@ -137,15 +138,24 @@ export function createPtyInitialization(
         ].join("; ")
       })()
     : (() => {
-        const body = [
+        const assignments = [
           `${ok}=1`,
           ...overlay.entries.flatMap(({ key, shadow }) => [
             `${key}=\"$${shadow}\"`,
             `case \"\${${key}-}\" in \"$${shadow}\") ;; *) ${ok}= ;; esac`,
           ]),
-          `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
-        ].join("; ")
-        if (shell === "zsh") return `{ ${body}; } > /dev/null 2>&1`
+        ]
+        const body = [...assignments, `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`].join("; ")
+        if (shell === "zsh") {
+          const readyHook = `__GS_PTY_READY_${randomBytes(12).toString("hex")}`
+          const installReadyHook = [
+            `${readyHook}() { > ${shellQuote(readyPath)}; precmd_functions=( \${precmd_functions:#${readyHook}} ); builtin unfunction ${readyHook}; }`,
+            "builtin typeset -ga precmd_functions",
+            `precmd_functions+=( ${readyHook} )`,
+          ].join("; ")
+          zshStartupBootstrap = `{ ${assignments.join("; ")}; case \"$${ok}\" in 1) ${installReadyHook} ;; esac; } > /dev/null 2>&1`
+          return `{ ${body}; } > /dev/null 2>&1`
+        }
         const silentBody = `{ ${body}; } > /dev/null 2>&1`
         return `BASH_XTRACEFD=2; case \"\${BASH_XTRACEFD-}\" in 2) ${silentBody} ;; esac`
       })()
@@ -164,7 +174,7 @@ export function createPtyInitialization(
       writeFileSync(join(root, ".zlogin"), [
         sourceOriginal(".zlogin"),
         `ZDOTDIR=${shellQuote(originalZdotdir)}`,
-        bootstrap,
+        zshStartupBootstrap ?? bootstrap,
         "",
       ].join("\n"), { mode: 0o600 })
       initializationEnvironment = { ...overlay.environment, ZDOTDIR: root }
@@ -709,14 +719,8 @@ export class WebTerminalManager {
               this.timing.ptyBootstrapDelayMs,
             )
             recordDiagnostic({ phase: "initialized", shell: pending.initialization.shell, bypass: false, pid: child.pid })
-            // Startup-file initialization can complete before zsh/ZLE emits a
-            // prompt, leaving xterm attached to an otherwise live shell with a
-            // blank screen. Request one redraw only after the authoritative
-            // overlay is verified and terminal negotiation is released.
             activeSession.initializationPending = false
             child.releasePreAttachment?.()
-            recordDiagnostic({ phase: "activation_redraw", shell: pending.initialization.shell, bypass: false, pid: child.pid })
-            child.write("\u000c")
           } catch (error) {
             const message = error instanceof Error ? error.message : "Unknown initialization failure"
             recordDiagnostic({

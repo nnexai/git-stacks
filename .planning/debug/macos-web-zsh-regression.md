@@ -17,10 +17,10 @@ updated: 2026-07-20
 
 ## Current Focus
 
-- hypothesis: Attach-first removes the startup deadlock, but the startup-file path can reach its verified ready marker without zsh/ZLE emitting a prompt; unlike the injected bootstrap path, deferred initialization never requests the post-initialization redraw already required by earlier blank-terminal failures.
-- test: After deferred zsh readiness, release terminal negotiation and send one Ctrl-L redraw request. Require prompt output and a subsequent browser input roundtrip after `initialized`, not merely the private ready marker.
-- expecting: The real trace advances from `initialized` through `activation_redraw`, `first_output`, and `first_input`, and the terminal remains usable after service restart.
-- next_action: Verify the activation-redraw regression locally and in the hosted matrix, then push a no-bypass canary for the affected Mac.
+- hypothesis: The `.zlogin` readiness marker is too early: zsh has applied the overlay but has not entered its first prompt/ZLE loop. The attempted Ctrl-L therefore becomes literal queued input (`^L`). Readiness must be emitted by a one-shot native `precmd` hook with no server-generated keystroke.
+- test: Apply and verify the overlay in `.zlogin`, install a one-shot `precmd_functions` callback that writes readiness immediately before the first prompt, and require real-zsh prompt output plus browser input roundtrip without any injected bootstrap or redraw input.
+- expecting: The real trace reaches `initialized`, then genuine prompt `first_output`, then user-driven `first_input`; no `activation_redraw` phase or visible `^L` appears.
+- next_action: Push the precmd-readiness canary after local real-zsh and hosted cross-platform verification.
 - reasoning_checkpoint: Real same-host version testing supersedes the synthetic hosted fixture as the authoritative evidence.
 - tdd_checkpoint: false
 
@@ -56,6 +56,12 @@ updated: 2026-07-20
 - timestamp: 2026-07-21T10:33:16+02:00
   observation: The affected Mac's no-bypass trace reaches `session_ready` and `attached` within 66ms and reaches `initialized` after 2.51s, but records neither `first_output` nor `first_input`; the browser remains blank at `(0,0)`.
   implication: The circular startup wait is fixed and the authoritative wrapper completes. The remaining failure is activation after readiness: no prompt is rendered and the browser never reaches a usable input roundtrip.
+- timestamp: 2026-07-21T10:47:57+02:00
+  observation: Two redraw-canary launches attach within 62ms, reach `initialized` after 2.54–2.68s, then immediately record `activation_redraw` and `first_output`; the only visible output is literal `^L`. Neither records `first_input`, and both remain non-responsive until service teardown.
+  implication: `first_output` was a false positive caused by echoing the injected control byte. `.zlogin` completion is not a safe terminal-input boundary, so timed or readiness-adjacent keystroke injection must be eliminated.
+- timestamp: 2026-07-21T10:54:10+02:00
+  observation: An isolated real zsh 5.9 run passes both the login-zsh startup regression and the full 35-test web-terminal suite with readiness moved to a one-shot `precmd_functions` hook and no redraw write.
+  implication: The shell-native first-prompt boundary is syntactically valid and preserves prompt output plus post-init input roundtrip on a real zsh host before hosted macOS verification.
 
 ## Eliminated
 
@@ -67,6 +73,6 @@ updated: 2026-07-20
 ## Resolution
 
 - root_cause: Login-zsh initialization waited for a private ready marker before creating a browser-visible session, but complex profiles can wait for terminal capability responses that only the attached xterm can provide.
-- fix: Create and expose the login-zsh session before asynchronously waiting for the startup-file readiness marker; retain the existing post-profile overlay, release negotiation after readiness, and request a post-initialization ZLE redraw.
-- verification: Bypass canary passed three same-Mac launches including service restart. Attach-first reaches verified initialization on the real Mac but remains blank; redraw-path verification is in progress.
+- fix: Create and expose the login-zsh session before asynchronously waiting; apply the overlay in `.zlogin`, but delay readiness to a self-removing zsh `precmd_functions` hook so no terminal input is injected before ZLE.
+- verification: Bypass canary passed three same-Mac launches including service restart. Attach-first and redraw variants isolated the early-readiness boundary. Local real-zsh 5.9 login and full terminal suites pass with precmd readiness; hosted and affected-Mac verification remain pending.
 - files_changed: `packages/service/src/web/terminal-manager.ts`, `tests/service/web-terminal.test.ts`, `docs/canary-macos-pty.md`
