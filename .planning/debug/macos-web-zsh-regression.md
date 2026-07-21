@@ -2,7 +2,7 @@
 status: investigating
 trigger: "macOS web zsh terminal fails or becomes non-functional after the v0.21.0-rc.6 release; later RC fixes did not restore the real browser path"
 created: 2026-07-20
-updated: 2026-07-20
+updated: 2026-07-21
 ---
 
 # Debug Session: macOS Web zsh Regression
@@ -17,10 +17,10 @@ updated: 2026-07-20
 
 ## Current Focus
 
-- hypothesis: The `.zlogin` readiness marker is too early: zsh has applied the overlay but has not entered its first prompt/ZLE loop. The attempted Ctrl-L therefore becomes literal queued input (`^L`). Readiness must be emitted by a one-shot native `precmd` hook with no server-generated keystroke.
-- test: Apply and verify the overlay in `.zlogin`, install a one-shot `precmd_functions` callback that writes readiness immediately before the first prompt, and require real-zsh prompt output plus browser input roundtrip without any injected bootstrap or redraw input.
-- expecting: The real trace reaches `initialized`, then genuine prompt `first_output`, then user-driven `first_input`; no `activation_redraw` phase or visible `^L` appears.
-- next_action: Push the precmd-readiness canary after local real-zsh and hosted cross-platform verification.
+- hypothesis: Replacing a real login zsh's `ZDOTDIR` with forwarding startup files is itself incompatible with the affected complex prompt setup. Even after `precmd` runs, zsh remains outside a working ZLE command loop.
+- test: Restore the known-good direct login-zsh spawn used by `v0.21.0-rc.6` and by the successful bypass canary. Keep the already-resolved environment at initial spawn, inject no input, and leave command terminals plus bash/fish unchanged.
+- expecting: Both initial launch and post-service-restart launch produce a real prompt and command roundtrip after the user's normal 2-5 second profile startup.
+- next_action: Verify the direct-launch implementation locally and in the hosted cross-platform matrix, push it as a canary, then require two successful launches on the affected Mac before any RC.
 - reasoning_checkpoint: Real same-host version testing supersedes the synthetic hosted fixture as the authoritative evidence.
 - tdd_checkpoint: false
 
@@ -62,6 +62,9 @@ updated: 2026-07-20
 - timestamp: 2026-07-21T10:54:10+02:00
   observation: An isolated real zsh 5.9 run passes both the login-zsh startup regression and the full 35-test web-terminal suite with readiness moved to a one-shot `precmd_functions` hook and no redraw write.
   implication: The shell-native first-prompt boundary is syntactically valid and preserves prompt output plus post-init input roundtrip on a real zsh host before hosted macOS verification.
+- timestamp: 2026-07-21T12:21:30+02:00
+  observation: Two affected-Mac launches with one-shot `precmd` readiness both attached immediately, produced shell output, reached `initialized` after 2.43-2.81 seconds, and received browser input. Nevertheless no prompt appeared and entered commands did not execute; only tty echo was visible.
+  implication: Readiness timing, browser attachment, output transport, and input transport are all functioning. The temporary `ZDOTDIR` startup-file chain leaves the real shell outside a working ZLE command loop even after `precmd`; wrapper-based login-zsh initialization must be removed rather than retimed.
 
 ## Eliminated
 
@@ -72,7 +75,7 @@ updated: 2026-07-20
 
 ## Resolution
 
-- root_cause: Login-zsh initialization waited for a private ready marker before creating a browser-visible session, but complex profiles can wait for terminal capability responses that only the attached xterm can provide.
-- fix: Create and expose the login-zsh session before asynchronously waiting; apply the overlay in `.zlogin`, but delay readiness to a self-removing zsh `precmd_functions` hook so no terminal input is injected before ZLE.
-- verification: Bypass canary passed three same-Mac launches including service restart. Attach-first and redraw variants isolated the early-readiness boundary. Local real-zsh 5.9 login and full terminal suites pass with precmd readiness; hosted and affected-Mac verification remain pending.
+- root_cause: The post-profile login-zsh wrapper introduced after `v0.21.0-rc.6` replaces `ZDOTDIR` and mediates the complete startup sequence. On the affected complex macOS configuration it can reach `.zlogin` and `precmd` while never entering a usable ZLE command loop.
+- fix: Pending verification: launch normal login zsh directly with the already-resolved spawn environment, matching `v0.21.0-rc.6` and the successful same-host bypass. Do not inject bootstrap or redraw input; preserve the existing configured-command and bash/fish paths.
+- verification: Bypass canary passed three same-Mac launches including service restart. Attach-first, redraw, and precmd variants proved that browser transport and readiness timing are not the remaining failure. Direct-launch implementation still requires local, hosted, and affected-Mac verification.
 - files_changed: `packages/service/src/web/terminal-manager.ts`, `tests/service/web-terminal.test.ts`, `docs/canary-macos-pty.md`

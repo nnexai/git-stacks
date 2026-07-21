@@ -304,6 +304,21 @@ function ptyInitializationLaunch(
   return { argv: [...argv], injectBootstrap: true }
 }
 
+function requiresDirectInteractiveLaunch(
+  argv: readonly string[],
+  shell: "bash" | "zsh" | "fish",
+): boolean {
+  // A real login zsh must own its startup files and terminal negotiation from
+  // process start through the first ZLE prompt. Replacing ZDOTDIR with a
+  // forwarding startup-file chain leaves complex macOS prompt frameworks in a
+  // half-interactive state: precmd runs and the tty echoes input, but ZLE never
+  // accepts a command. The resolved environment is already present in the
+  // initial spawn, so retain the known-good direct-launch behavior here.
+  return shell === "zsh"
+    && (argv.includes("-l") || argv.includes("--login"))
+    && !argv.includes("-f")
+}
+
 const PRIMARY_DEVICE_ATTRIBUTES_QUERY = "\u001b[0c"
 const XTERM_PRIMARY_DEVICE_ATTRIBUTES_RESPONSE = "\u001b[?1;2c"
 
@@ -555,9 +570,12 @@ export class WebTerminalManager {
         const launch = resolution.launch
         if ("argv" in launch) {
           diagnosticShell = launch.initialization?.shell
+          const directInteractiveLaunch = launch.initialization !== undefined
+            && requiresDirectInteractiveLaunch(launch.argv, launch.initialization.shell)
           const bypassInteractiveInitialization = launch.initialization !== undefined
-            && (this.timing.bypassInteractiveInitialization
-              ?? process.env[PTY_CANARY_BYPASS_ENV] === "1")
+            && (directInteractiveLaunch
+              || (this.timing.bypassInteractiveInitialization
+                ?? process.env[PTY_CANARY_BYPASS_ENV] === "1"))
           recordDiagnostic({
             phase: "launch",
             ...(diagnosticShell === undefined ? {} : { shell: diagnosticShell }),

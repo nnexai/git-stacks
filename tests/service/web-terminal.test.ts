@@ -514,31 +514,25 @@ describe("service-owned web terminal", () => {
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })
 
-  test("attaches login zsh before startup-file initialization waits for xterm", async () => {
+  test("launches login zsh directly without replacing startup files or injecting input", async () => {
     const diagnostics: Array<{ phase: string }> = []
     const writes: string[] = []
     let dataListener: (data: string) => void = () => undefined
     let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
-    let readyPath = ""
-    const spawn: PtyFactory = (_argv, options) => {
-      readyPath = join(String(options.env.ZDOTDIR), "ready")
+    let spawnedArgv: string[] = []
+    let spawnedEnvironment: Record<string, string | undefined> = {}
+    const spawn: PtyFactory = (argv, options) => {
+      spawnedArgv = argv
+      spawnedEnvironment = options.env
       return {
         pid: 921_001,
         write: (data) => {
           writes.push(data)
-          if (data === "\u001b[1;1R") queueMicrotask(() => {
-            writeFileSync(readyPath, "ready")
-            dataListener("ZSH_PROFILE_AND_OVERLAY_READY")
-          })
-          else if (data === "printf ZSH_POST_INIT_INPUT_READY\r") queueMicrotask(() => dataListener("ZSH_POST_INIT_INPUT_READY"))
+          if (data === "printf ZSH_DIRECT_INPUT_READY\r") queueMicrotask(() => dataListener("ZSH_DIRECT_INPUT_READY"))
         },
         resize: () => undefined,
         kill: () => queueMicrotask(() => exitListener({ exitCode: 0 })),
-        onData(listener) {
-          dataListener = listener
-          queueMicrotask(() => listener("\u001b[6n"))
-          return { dispose: () => { dataListener = () => undefined } }
-        },
+        onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
         onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
       }
     }
@@ -564,26 +558,25 @@ describe("service-owned web terminal", () => {
       rows: 24,
     })
     expect(terminal.state).toBe("running")
-    expect(existsSync(readyPath)).toBe(false)
-    const zlogin = readFileSync(join(dirname(readyPath), ".zlogin"), "utf8")
-    expect(zlogin).toContain("precmd_functions+=( __GS_PTY_READY_")
-    expect(zlogin).toContain("builtin unfunction __GS_PTY_READY_")
-    expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining(["initializing", "session_ready"]))
-    expect(diagnostics.map(({ phase }) => phase)).not.toContain("initialized")
+    expect(spawnedArgv).toEqual(["/bin/zsh", "-l", "-i"])
+    expect(spawnedEnvironment).toMatchObject({ HOME: "/real/home", ZDOTDIR: "/real/zsh", PATH: "/resolved/bin" })
+    expect(writes).toEqual([])
+    expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining([
+      "launch", "initialization_bypassed", "session_ready",
+    ]))
+    expect(diagnostics.map(({ phase }) => phase)).not.toEqual(expect.arrayContaining(["initializing", "initialized"]))
 
     const { sent, socket } = attach(manager, terminal.id)
+    dataListener("\u001b[6n")
     expect(sent.some((item) => item instanceof Uint8Array
       && new TextDecoder().decode(item.slice(9)).includes("\u001b[6n"))).toBe(true)
     manager.message(socket, JSON.stringify({ type: "input", data: "\u001b[1;1R" }))
-    await waitFor(() => diagnostics.some(({ phase }) => phase === "initialized"))
+    manager.message(socket, JSON.stringify({ type: "input", data: "printf ZSH_DIRECT_INPUT_READY\r" }))
     await waitFor(() => sent.some((item) => item instanceof Uint8Array
-      && new TextDecoder().decode(item.slice(9)).includes("ZSH_PROFILE_AND_OVERLAY_READY")))
-    manager.message(socket, JSON.stringify({ type: "input", data: "printf ZSH_POST_INIT_INPUT_READY\r" }))
-    await waitFor(() => sent.some((item) => item instanceof Uint8Array
-      && new TextDecoder().decode(item.slice(9)).includes("ZSH_POST_INIT_INPUT_READY")))
-    expect(writes).toEqual(["\u001b[1;1R", "printf ZSH_POST_INIT_INPUT_READY\r"])
+      && new TextDecoder().decode(item.slice(9)).includes("ZSH_DIRECT_INPUT_READY")))
+    expect(writes).toEqual(["\u001b[1;1R", "printf ZSH_DIRECT_INPUT_READY\r"])
     expect(diagnostics.map(({ phase }) => phase)).toEqual(expect.arrayContaining([
-      "initialized", "first_output", "first_input",
+      "first_output", "first_input",
     ]))
     await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "ended" })
   })

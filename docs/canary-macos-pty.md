@@ -1,15 +1,16 @@
-# macOS PTY attach-first canary
+# macOS PTY direct-login-zsh canary
 
-The first canary proved that the interactive post-profile PTY handshake
-introduced after `v0.21.0-rc.6` prevented a real macOS login zsh from reaching
-the browser attachment boundary. This revision tests the authority-preserving
-fix: publish the zsh session so xterm can answer startup queries, then let the
-existing startup-file wrapper apply and verify the post-profile environment.
+The earlier canaries proved that the interactive post-profile PTY handshake
+introduced after `v0.21.0-rc.6` is the regression. Attach-first allowed the
+wrapper to finish, but the affected zsh still never entered a working ZLE
+command loop. This revision restores the known-good direct login-zsh launch:
+the resolved environment is present at spawn, and zsh owns its real startup
+files and terminal negotiation without a temporary `ZDOTDIR` chain.
 
-No bootstrap is injected into zsh terminal input. Configured command terminals
-and other shells retain their existing initialization and execution paths.
-This remains a canary until it passes on the affected Mac; it is not a release
-candidate yet.
+No bootstrap or redraw byte is injected into zsh terminal input. Configured
+command terminals and the existing bash/fish paths are unchanged. This remains
+a canary until it passes twice on the affected Mac, including after an explicit
+service restart; it is not a release candidate yet.
 
 ## Build on the Mac
 
