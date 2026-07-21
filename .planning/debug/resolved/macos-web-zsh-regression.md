@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "macOS web zsh terminal fails or becomes non-functional after the v0.21.0-rc.6 release; later RC fixes did not restore the real browser path"
 created: 2026-07-20
 updated: 2026-07-21
@@ -17,10 +17,10 @@ updated: 2026-07-21
 
 ## Current Focus
 
-- hypothesis: Replacing a real login zsh's `ZDOTDIR` with forwarding startup files is itself incompatible with the affected complex prompt setup. Even after `precmd` runs, zsh remains outside a working ZLE command loop.
-- test: Restore the known-good direct login-zsh spawn used by `v0.21.0-rc.6` and by the successful bypass canary. Keep the already-resolved environment at initial spawn, inject no input, and leave command terminals plus bash/fish unchanged.
-- expecting: Both initial launch and post-service-restart launch produce a real prompt and command roundtrip after the user's normal 2-5 second profile startup.
-- next_action: Verify the direct-launch implementation locally and in the hosted cross-platform matrix, push it as a canary, then require two successful launches on the affected Mac before any RC.
+- hypothesis: Confirmed: the temporary login-zsh `ZDOTDIR` wrapper prevented the affected complex prompt setup from entering a working ZLE command loop.
+- test: Complete: restore direct login-zsh launch, verify locally and across hosted macOS/Linux runners, then verify prompt rendering and command execution on the affected Mac.
+- expecting: Met: the real prompt appears after normal profile startup and entered commands execute successfully.
+- next_action: Release the verified fix as the next `v0.22.0` release candidate.
 - reasoning_checkpoint: Real same-host version testing supersedes the synthetic hosted fixture as the authoritative evidence.
 - tdd_checkpoint: false
 
@@ -65,6 +65,12 @@ updated: 2026-07-21
 - timestamp: 2026-07-21T12:21:30+02:00
   observation: Two affected-Mac launches with one-shot `precmd` readiness both attached immediately, produced shell output, reached `initialized` after 2.43-2.81 seconds, and received browser input. Nevertheless no prompt appeared and entered commands did not execute; only tty echo was visible.
   implication: Readiness timing, browser attachment, output transport, and input transport are all functioning. The temporary `ZDOTDIR` startup-file chain leaves the real shell outside a working ZLE command loop even after `precmd`; wrapper-based login-zsh initialization must be removed rather than retimed.
+- timestamp: 2026-07-21T12:09:19Z
+  observation: The direct-launch canary on the affected Mac created a browser-visible zsh session in 78 ms, produced its first real output after 2.65 seconds of normal profile work, accepted browser input, rendered the command line, and executed entered commands successfully.
+  implication: Restoring direct login-zsh ownership fixes both startup and command execution in the exact environment where every wrapper-based candidate froze.
+- timestamp: 2026-07-21T12:34:10Z
+  observation: Hosted run 29822508278 passed the required real-shell acceptance jobs on macOS and Linux plus Node matrices on macOS Apple Silicon, macOS Intel, Linux x64, and Linux ARM. The first Apple Silicon attempt hit the inherited bash bootstrap-echo race and its isolated rerun passed.
+  implication: The zsh fix is cross-platform safe, and the separate bash diagnostic-output race is not a failure of the direct-zsh launch path.
 
 ## Eliminated
 
@@ -76,6 +82,6 @@ updated: 2026-07-21
 ## Resolution
 
 - root_cause: The post-profile login-zsh wrapper introduced after `v0.21.0-rc.6` replaces `ZDOTDIR` and mediates the complete startup sequence. On the affected complex macOS configuration it can reach `.zlogin` and `precmd` while never entering a usable ZLE command loop.
-- fix: Pending verification: launch normal login zsh directly with the already-resolved spawn environment, matching `v0.21.0-rc.6` and the successful same-host bypass. Do not inject bootstrap or redraw input; preserve the existing configured-command and bash/fish paths.
-- verification: Bypass canary passed three same-Mac launches including service restart. Attach-first, redraw, and precmd variants proved that browser transport and readiness timing are not the remaining failure. Direct-launch implementation still requires local, hosted, and affected-Mac verification.
+- fix: Normal login zsh now launches directly with the already-resolved spawn environment, matching `v0.21.0-rc.6` and the successful bypass probe. No bootstrap or redraw input is injected; configured-command and bash/fish paths are unchanged.
+- verification: Passed locally with real zsh 5.9 and all 35 web-terminal tests; passed hosted run 29822508278 across macOS and Linux architectures; passed on the affected Mac with a visible prompt and working command execution.
 - files_changed: `packages/service/src/web/terminal-manager.ts`, `tests/service/web-terminal.test.ts`, `docs/canary-macos-pty.md`

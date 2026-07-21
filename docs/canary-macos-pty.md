@@ -8,9 +8,9 @@ the resolved environment is present at spawn, and zsh owns its real startup
 files and terminal negotiation without a temporary `ZDOTDIR` chain.
 
 No bootstrap or redraw byte is injected into zsh terminal input. Configured
-command terminals and the existing bash/fish paths are unchanged. This remains
-a canary until it passes twice on the affected Mac, including after an explicit
-service restart; it is not a release candidate yet.
+command terminals and the existing bash/fish paths are unchanged. This canary
+passed the affected-Mac prompt and command roundtrip plus the complete hosted
+matrix and was promoted to the next release candidate.
 
 ## Build on the Mac
 
